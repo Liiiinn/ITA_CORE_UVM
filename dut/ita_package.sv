@@ -7,15 +7,15 @@ package ita_package;
 
     import cf_math_pkg::idx_width;
 
-    parameter  int unsigned N       = `ifdef ITA_N `ITA_N `else 16 `endif;
-    parameter  int unsigned M       = `ifdef ITA_M `ITA_M `else 64 `endif;
-    parameter  int unsigned S       = `ifdef ITA_S `ITA_S `else 64 `endif;
-    parameter  int unsigned P       = `ifdef ITA_P `ITA_P `else 64 `endif;
-    parameter  int unsigned E       = `ifdef ITA_E `ITA_E `else 64 `endif;
-    parameter  int unsigned H       = `ifdef ITA_H `ITA_H `else 1  `endif;
-    localparam int unsigned WI      = 8                                  ;
-    localparam int unsigned WO      = 26                                 ;
-    localparam int unsigned EMS     = 8                                  ;
+    parameter  int unsigned N       = `ifdef ITA_N `ITA_N `else 16 `endif; // Number of parallel dot product units
+    parameter  int unsigned M       = `ifdef ITA_M `ITA_M `else 64 `endif; // Matrix tile size (M x M)
+    parameter  int unsigned S       = `ifdef ITA_S `ITA_S `else 64 `endif; // Sequence length
+    parameter  int unsigned P       = `ifdef ITA_P `ITA_P `else 64 `endif; // Projection space dimension
+    parameter  int unsigned E       = `ifdef ITA_E `ITA_E `else 64 `endif; // Embedding size dimension
+    parameter  int unsigned H       = `ifdef ITA_H `ITA_H `else 1  `endif; // Number of attention heads
+    localparam int unsigned WI      = 8                                  ; // Input data word width (bits)
+    localparam int unsigned WO      = 26                                 ; // Output/computation word width (bits)
+    localparam int unsigned EMS     = 8                                  ; // Epsilon multiplier word width (bits)
     localparam int unsigned Latency = 7                                  ;
     localparam int unsigned GELU_CONSTANTS_WIDTH = 16                    ;
     localparam int unsigned GELU_OUT_WIDTH = 26                          ;
