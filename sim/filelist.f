@@ -8,7 +8,11 @@
 +incdir+../tb/tests
 
 ../dut/cf_math_pkg.sv
+../dut/tc_clk.sv
+../dut/cluster_clk_cells.sv
 ../dut/fifo_v3.sv
+../dut/tc_sram.sv
+../dut/lzc.sv
 ../dut/ita_package.sv
 ../dut/ita_register_file_1w_multi_port_read.sv
 ../dut/ita_register_file_1w_multi_port_read_we.sv
