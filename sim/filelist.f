@@ -2,6 +2,7 @@
 +incdir+../tb/if
 +incdir+../tb/agents/ita_ctrl_agent
 +incdir+../tb/agents/ita_stream_agent
++incdir+../tb/log
 +incdir+../tb/scb
 +incdir+../tb/env
 +incdir+../tb/seq

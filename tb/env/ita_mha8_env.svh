@@ -19,6 +19,7 @@ class ita_mha8_env extends uvm_env;
 
     ita_mha8_ref_model ref_model;
     ita_mha8_scoreboard scb;
+    ita_mha8_transaction_logger txn_logger;
 
     function new(string name = "ita_mha8_env", uvm_component parent = null);
         super.new(name, parent);
@@ -65,6 +66,10 @@ class ita_mha8_env extends uvm_env;
         if (cfg.has_scoreboard) begin
             scb = ita_mha8_scoreboard::type_id::create("scb", this);
         end
+
+        if (cfg.has_transaction_logger) begin
+            txn_logger = ita_mha8_transaction_logger::type_id::create("txn_logger", this);
+        end
     endfunction : build_phase
 
     function void connect_phase(uvm_phase phase);
@@ -74,14 +79,14 @@ class ita_mha8_env extends uvm_env;
             ctrl_agt.ap.connect(ref_model.ctrl_imp);
 
             for (int unsigned h = 0; h < 8; h++) begin
-                input_agt[h].ap.connect(ref_model.stream_imp);
-                weight_agt[h].ap.connect(ref_model.stream_imp);
-                bias_agt[h].ap.connect(ref_model.stream_imp);
+                input_agt[h].issued_ap.connect(ref_model.stream_imp);
+                weight_agt[h].issued_ap.connect(ref_model.stream_imp);
+                bias_agt[h].issued_ap.connect(ref_model.stream_imp);
             end
 
-            ff_input_agt.ap.connect(ref_model.stream_imp);
-            ff_weight_agt.ap.connect(ref_model.stream_imp);
-            ff_bias_agt.ap.connect(ref_model.stream_imp);
+            ff_input_agt.issued_ap.connect(ref_model.stream_imp);
+            ff_weight_agt.issued_ap.connect(ref_model.stream_imp);
+            ff_bias_agt.issued_ap.connect(ref_model.stream_imp);
         end
 
         if (scb != null) begin
@@ -95,6 +100,21 @@ class ita_mha8_env extends uvm_env;
             if (ref_model != null) begin
                 ref_model.expected_ap.connect(scb.expected_fifo.analysis_export);
             end
+        end
+
+        if (txn_logger != null) begin
+            for (int unsigned h = 0; h < 8; h++) begin
+                input_agt[h].issued_ap.connect(txn_logger.source_imp);
+                weight_agt[h].issued_ap.connect(txn_logger.source_imp);
+                bias_agt[h].issued_ap.connect(txn_logger.source_imp);
+                head_output_agt[h].ap.connect(txn_logger.stream_imp);
+            end
+
+            sum_output_agt.ap.connect(txn_logger.stream_imp);
+            ff_input_agt.issued_ap.connect(txn_logger.source_imp);
+            ff_weight_agt.issued_ap.connect(txn_logger.source_imp);
+            ff_bias_agt.issued_ap.connect(txn_logger.source_imp);
+            ff_output_agt.ap.connect(txn_logger.stream_imp);
         end
     endfunction : connect_phase
 

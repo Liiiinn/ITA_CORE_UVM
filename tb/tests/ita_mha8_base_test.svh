@@ -29,10 +29,44 @@ class ita_mha8_base_test extends uvm_test;
 
     task run_phase(uvm_phase phase);
         ita_mha8_base_seq seq;
+        ita_mha8_stream_smoke_seq input_seq;
+        ita_mha8_stream_smoke_seq weight_seq;
+        ita_mha8_stream_smoke_seq bias_seq;
 
         phase.raise_objection(this);
         seq = ita_mha8_base_seq::type_id::create("seq");
         seq.start(env.ctrl_agt.sqr);
+
+        input_seq = ita_mha8_stream_smoke_seq::type_id::create("input_seq");
+        input_seq.kind = ITA_STREAM_HEAD_INPUT;
+        input_seq.head_id = 0;
+        input_seq.step = Q;
+        input_seq.tile_id = 0;
+        input_seq.inner_tile_id = 0;
+        input_seq.beat_id = 0;
+
+        weight_seq = ita_mha8_stream_smoke_seq::type_id::create("weight_seq");
+        weight_seq.kind = ITA_STREAM_HEAD_WEIGHT;
+        weight_seq.head_id = 0;
+        weight_seq.step = Q;
+        weight_seq.tile_id = 0;
+        weight_seq.inner_tile_id = 0;
+        weight_seq.beat_id = 0;
+
+        bias_seq = ita_mha8_stream_smoke_seq::type_id::create("bias_seq");
+        bias_seq.kind = ITA_STREAM_HEAD_BIAS;
+        bias_seq.head_id = 0;
+        bias_seq.step = Q;
+        bias_seq.tile_id = 0;
+        bias_seq.inner_tile_id = 0;
+        bias_seq.beat_id = 0;
+
+        fork
+            input_seq.start(env.input_agt[0].sqr);
+            weight_seq.start(env.weight_agt[0].sqr);
+            bias_seq.start(env.bias_agt[0].sqr);
+        join_none
+
         repeat (20) begin
             @(posedge vif.clk_i);
         end

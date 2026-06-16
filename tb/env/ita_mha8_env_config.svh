@@ -7,6 +7,7 @@ class ita_mha8_env_config extends uvm_object;
     virtual ita_mha8_if vif;
     bit has_scoreboard = 1'b1;
     bit has_ref_model = 1'b1;
+    bit has_transaction_logger = 1'b1;
 
     ita_ctrl_config ctrl_cfg;
     ita_stream_config input_cfg       [8];

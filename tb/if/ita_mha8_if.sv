@@ -23,6 +23,22 @@ interface ita_mha8_if
     inp_weight_t             inp_weight_i [NumHeads];
     bias_t                   inp_bias_i   [NumHeads];
 
+    step_e                   inp_step_dbg          [NumHeads];
+    step_e                   inp_weight_step_dbg   [NumHeads];
+    step_e                   inp_bias_step_dbg     [NumHeads];
+    int unsigned             inp_tile_id_dbg       [NumHeads];
+    int unsigned             inp_weight_tile_id_dbg[NumHeads];
+    int unsigned             inp_bias_tile_id_dbg  [NumHeads];
+    int unsigned             inp_inner_id_dbg      [NumHeads];
+    int unsigned             inp_weight_inner_id_dbg[NumHeads];
+    int unsigned             inp_bias_inner_id_dbg [NumHeads];
+    int unsigned             inp_beat_id_dbg       [NumHeads];
+    int unsigned             inp_weight_beat_id_dbg[NumHeads];
+    int unsigned             inp_bias_beat_id_dbg  [NumHeads];
+    logic                    inp_lockstep_dbg      [NumHeads];
+    logic                    inp_weight_lockstep_dbg[NumHeads];
+    logic                    inp_bias_lockstep_dbg [NumHeads];
+
     logic [NumHeads-1:0]     per_head_valid_o;
     logic [NumHeads-1:0]     per_head_ready_i;
     logic [NumHeads-1:0]     per_head_busy_o;
@@ -42,6 +58,21 @@ interface ita_mha8_if
     inp_t                    ff_inp_i;
     inp_weight_t             ff_inp_weight_i;
     bias_t                   ff_inp_bias_i;
+    step_e                   ff_inp_step_dbg;
+    step_e                   ff_inp_weight_step_dbg;
+    step_e                   ff_inp_bias_step_dbg;
+    int unsigned             ff_inp_tile_id_dbg;
+    int unsigned             ff_inp_weight_tile_id_dbg;
+    int unsigned             ff_inp_bias_tile_id_dbg;
+    int unsigned             ff_inp_inner_id_dbg;
+    int unsigned             ff_inp_weight_inner_id_dbg;
+    int unsigned             ff_inp_bias_inner_id_dbg;
+    int unsigned             ff_inp_beat_id_dbg;
+    int unsigned             ff_inp_weight_beat_id_dbg;
+    int unsigned             ff_inp_bias_beat_id_dbg;
+    logic                    ff_inp_lockstep_dbg;
+    logic                    ff_inp_weight_lockstep_dbg;
+    logic                    ff_inp_bias_lockstep_dbg;
 
     logic                    ff_valid_o;
     logic                    ff_ready_i;
@@ -70,11 +101,41 @@ interface ita_mha8_if
             inp_i[h]              = '0;
             inp_weight_i[h]       = '0;
             inp_bias_i[h]         = '0;
+            inp_step_dbg[h]       = Idle;
+            inp_weight_step_dbg[h] = Idle;
+            inp_bias_step_dbg[h]  = Idle;
+            inp_tile_id_dbg[h]    = 0;
+            inp_weight_tile_id_dbg[h] = 0;
+            inp_bias_tile_id_dbg[h] = 0;
+            inp_inner_id_dbg[h]   = 0;
+            inp_weight_inner_id_dbg[h] = 0;
+            inp_bias_inner_id_dbg[h] = 0;
+            inp_beat_id_dbg[h]    = 0;
+            inp_weight_beat_id_dbg[h] = 0;
+            inp_bias_beat_id_dbg[h] = 0;
+            inp_lockstep_dbg[h]   = 1'b0;
+            inp_weight_lockstep_dbg[h] = 1'b0;
+            inp_bias_lockstep_dbg[h] = 1'b0;
         end
 
         ff_inp_i        = '0;
         ff_inp_weight_i = '0;
         ff_inp_bias_i   = '0;
+        ff_inp_step_dbg = Idle;
+        ff_inp_weight_step_dbg = Idle;
+        ff_inp_bias_step_dbg = Idle;
+        ff_inp_tile_id_dbg = 0;
+        ff_inp_weight_tile_id_dbg = 0;
+        ff_inp_bias_tile_id_dbg = 0;
+        ff_inp_inner_id_dbg = 0;
+        ff_inp_weight_inner_id_dbg = 0;
+        ff_inp_bias_inner_id_dbg = 0;
+        ff_inp_beat_id_dbg = 0;
+        ff_inp_weight_beat_id_dbg = 0;
+        ff_inp_bias_beat_id_dbg = 0;
+        ff_inp_lockstep_dbg = 1'b0;
+        ff_inp_weight_lockstep_dbg = 1'b0;
+        ff_inp_bias_lockstep_dbg = 1'b0;
     end
 
 endinterface : ita_mha8_if

@@ -9,10 +9,12 @@ class ita_stream_agent extends uvm_agent;
     ita_stream_driver drv;
     ita_stream_monitor mon;
     uvm_analysis_port #(ita_stream_item) ap;
+    uvm_analysis_port #(ita_stream_item) issued_ap;
 
     function new(string name = "ita_stream_agent", uvm_component parent = null);
         super.new(name, parent);
         ap = new("ap", this);
+        issued_ap = new("issued_ap", this);
     endfunction : new
 
     function void build_phase(uvm_phase phase);
@@ -39,6 +41,7 @@ class ita_stream_agent extends uvm_agent;
 
         if (cfg.is_active == UVM_ACTIVE) begin
             drv.seq_item_port.connect(sqr.seq_item_export);
+            drv.issued_ap.connect(issued_ap);
         end
     endfunction : connect_phase
 

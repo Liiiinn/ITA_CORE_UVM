@@ -8,8 +8,10 @@ package ita_mha8_scb_pkg;
 
     `uvm_analysis_imp_decl(_ctrl)
     `uvm_analysis_imp_decl(_stream)
+    `uvm_analysis_imp_decl(_source)
 
     `include "ita_mha8_ref_model.svh"
     `include "ita_mha8_scoreboard.svh"
+    `include "ita_mha8_transaction_logger.svh"
 
 endpackage : ita_mha8_scb_pkg
