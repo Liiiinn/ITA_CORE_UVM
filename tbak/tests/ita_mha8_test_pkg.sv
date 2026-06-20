@@ -4,9 +4,7 @@ package ita_mha8_test_pkg;
     import ita_package::*;
     import ita_ctrl_agent_pkg::*;
     import ita_stream_agent_pkg::*;
-    import ita_mha8_scb_pkg::*;
     import ita_mha8_env_pkg::*;
-    import ita_mha8_seq_pkg::*;
     `include "uvm_macros.svh"
 
     `include "ita_mha8_base_test.svh"

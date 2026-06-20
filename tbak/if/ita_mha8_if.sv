@@ -6,6 +6,11 @@ interface ita_mha8_if
     input logic clk_i
 );
 
+    // TODO Stage 1: keep all ita_mha8 DUT ports visible while the learning TB focuses on head 0.
+    // TODO Stage 2: add basic valid-ready protocol assertions for input/weight/bias/output streams.
+    // TODO Stage 3: add X/Z assertions on handshaked control and payload signals.
+    // TODO Stage 4: add output payload stability assertions while backpressured.
+    // TODO Stage 5: add explicit verification entry points for sum and feed-forward ports.
     logic                    rst_ni;
     ctrl_t                   ctrl_i;
     requant_const_array_t    head_eps_mult_i    [NumHeads];
@@ -139,3 +144,5 @@ interface ita_mha8_if
     end
 
 endinterface : ita_mha8_if
+
+

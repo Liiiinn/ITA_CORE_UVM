@@ -4,6 +4,11 @@
 class ita_stream_agent extends uvm_agent;
     `uvm_component_utils(ita_stream_agent)
 
+    // TODO Stage 1: reuse this single agent implementation for input/weight/bias/output streams.
+    // TODO Stage 2: keep source driver support for head input, head weight, and head bias.
+    // TODO Stage 3: extend sink driver behavior beyond always-ready output backpressure.
+    // TODO Stage 4: connect monitor analysis output to a logger and smoke scoreboard.
+    // TODO Stage 5: replicate configured instances per head when moving from head 0 to full MHA8 attribution.
     ita_stream_config cfg;
     ita_stream_sequencer sqr;
     ita_stream_driver drv;

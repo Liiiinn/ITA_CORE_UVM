@@ -34,5 +34,3 @@ class ita_stream_item extends uvm_sequence_item;
 endclass : ita_stream_item
 
 `endif // ITA_STREAM_ITEM_SVH
-
-

@@ -1,12 +1,9 @@
 +incdir+../dut
-+incdir+../tb/if
-+incdir+../tb/agents/ita_ctrl_agent
-+incdir+../tb/agents/ita_stream_agent
-+incdir+../tb/log
-+incdir+../tb/scb
-+incdir+../tb/env
-+incdir+../tb/seq
-+incdir+../tb/tests
++incdir+../tbak/if
++incdir+../tbak/agents/ita_ctrl_agent
++incdir+../tbak/agents/ita_stream_agent
++incdir+../tbak/env
++incdir+../tbak/tests
 
 ../dut/cf_math_pkg.sv
 ../dut/tc_clk.sv
@@ -41,11 +38,9 @@
 ../dut/ita_head_sum.sv
 ../dut/ita_mha8.sv
 
-../tb/if/ita_mha8_if.sv
-../tb/agents/ita_ctrl_agent/ita_ctrl_agent_pkg.sv
-../tb/agents/ita_stream_agent/ita_stream_agent_pkg.sv
-../tb/scb/ita_mha8_scb_pkg.sv
-../tb/env/ita_mha8_env_pkg.sv
-../tb/seq/ita_mha8_seq_pkg.sv
-../tb/tests/ita_mha8_test_pkg.sv
-../tb/top/ita_mha8_tb_top.sv
+../tbak/if/ita_mha8_if.sv
+../tbak/agents/ita_ctrl_agent/ita_ctrl_agent_pkg.sv
+../tbak/agents/ita_stream_agent/ita_stream_agent_pkg.sv
+../tbak/env/ita_mha8_env_pkg.sv
+../tbak/tests/ita_mha8_test_pkg.sv
+../tbak/top/ita_mha8_tb_top.sv

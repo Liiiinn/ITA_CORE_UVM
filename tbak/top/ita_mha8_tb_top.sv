@@ -3,9 +3,7 @@ module ita_mha8_tb_top;
     import ita_package::*;
     import ita_ctrl_agent_pkg::*;
     import ita_stream_agent_pkg::*;
-    import ita_mha8_scb_pkg::*;
     import ita_mha8_env_pkg::*;
-    import ita_mha8_seq_pkg::*;
     import ita_mha8_test_pkg::*;
     `include "uvm_macros.svh"
 

@@ -26,14 +26,14 @@ class ita_stream_driver extends uvm_driver #(ita_stream_item);
         drive_idle();
         wait (cfg.vif.rst_ni === 1'b1);
 
-        if (cfg.is_sink()) begin
-            drive_sink_ready();
-        end else begin
-            forever begin
-                seq_item_port.get_next_item(tr);
+        forever begin
+            seq_item_port.get_next_item(tr);
+            if (cfg.direction == ITA_STREAM_SINK) begin
+                drive_sink_item(tr);
+            end else begin
                 drive_source_item(tr);
-                seq_item_port.item_done();
             end
+            seq_item_port.item_done();
         end
     endtask : run_phase
 
@@ -52,77 +52,52 @@ class ita_stream_driver extends uvm_driver #(ita_stream_item);
                 cfg.vif.inp_bias_i[cfg.head_id] <= '0;
             end
             ITA_STREAM_HEAD_OUTPUT: begin
-                cfg.vif.per_head_ready_i[cfg.head_id] <= 1'b0;
-            end
-            ITA_STREAM_SUM_OUTPUT: begin
-                cfg.vif.sum_ready_i <= 1'b0;
-            end
-            ITA_STREAM_FF_INPUT: begin
-                cfg.vif.ff_inp_valid_i <= 1'b0;
-                cfg.vif.ff_inp_i <= '0;
-            end
-            ITA_STREAM_FF_WEIGHT: begin
-                cfg.vif.ff_inp_weight_valid_i <= 1'b0;
-                cfg.vif.ff_inp_weight_i <= '0;
-            end
-            ITA_STREAM_FF_BIAS: begin
-                cfg.vif.ff_inp_bias_valid_i <= 1'b0;
-                cfg.vif.ff_inp_bias_i <= '0;
-            end
-            ITA_STREAM_FF_OUTPUT: begin
-                cfg.vif.ff_ready_i <= 1'b0;
+                cfg.vif.per_head_ready_i[cfg.head_id] <= 1'b1;
             end
             default: ;
         endcase
     endtask : drive_idle
-
-    task drive_sink_ready();
-        forever begin
-            @(posedge cfg.vif.clk_i);
-            case (cfg.kind)
-                ITA_STREAM_HEAD_OUTPUT: cfg.vif.per_head_ready_i[cfg.head_id] <= sink_ready_value();
-                ITA_STREAM_SUM_OUTPUT:  cfg.vif.sum_ready_i <= sink_ready_value();
-                ITA_STREAM_FF_OUTPUT:   cfg.vif.ff_ready_i <= sink_ready_value();
-                default: ;
-            endcase
-        end
-    endtask : drive_sink_ready
-
-    function bit sink_ready_value();
-        if (!cfg.enable_random_stall) begin
-            return 1'b1;
-        end
-        return ($urandom_range(cfg.max_stall_cycles + 1, 0) == 0);
-    endfunction : sink_ready_value
 
     task drive_source_item(ita_stream_item tr);
         tr.kind = cfg.kind;
         tr.head_id = cfg.head_id;
         issued_ap.write(tr);
         apply_source_metadata(tr);
-        wait_source_prestall();
+        wait_stream_prestall();
 
         case (cfg.kind)
             ITA_STREAM_HEAD_INPUT:  drive_head_input(tr);
             ITA_STREAM_HEAD_WEIGHT: drive_head_weight(tr);
             ITA_STREAM_HEAD_BIAS:   drive_head_bias(tr);
-            ITA_STREAM_FF_INPUT:    drive_ff_input(tr);
-            ITA_STREAM_FF_WEIGHT:   drive_ff_weight(tr);
-            ITA_STREAM_FF_BIAS:     drive_ff_bias(tr);
             default: begin
                 `uvm_error("STR_DRV_KIND", "Unsupported source stream kind")
             end
         endcase
     endtask : drive_source_item
 
-    task wait_source_prestall();
+    task drive_sink_item(ita_stream_item tr);
+        tr.kind = cfg.kind;
+        tr.head_id = cfg.head_id;
+        issued_ap.write(tr);
+        wait_stream_prestall();
+
+        if (cfg.kind != ITA_STREAM_HEAD_OUTPUT) begin
+            `uvm_error("STR_DRV_KIND", "Sink stream direction is only supported for head output")
+            return;
+        end
+
+        cfg.vif.per_head_ready_i[cfg.head_id] <= 1'b1;
+        @(posedge cfg.vif.clk_i);
+    endtask : drive_sink_item
+
+    task wait_stream_prestall();
         int unsigned stall_cycles;
 
         stall_cycles = cfg.next_stall_cycles();
         repeat (stall_cycles) begin
             @(posedge cfg.vif.clk_i);
         end
-    endtask : wait_source_prestall
+    endtask : wait_stream_prestall
 
     task apply_source_metadata(ita_stream_item tr);
         case (cfg.kind)
@@ -146,27 +121,6 @@ class ita_stream_driver extends uvm_driver #(ita_stream_item);
                 cfg.vif.inp_bias_inner_id_dbg[cfg.head_id] = tr.inner_tile_id;
                 cfg.vif.inp_bias_beat_id_dbg[cfg.head_id] = tr.beat_id;
                 cfg.vif.inp_bias_lockstep_dbg[cfg.head_id] = tr.is_lockstep;
-            end
-            ITA_STREAM_FF_INPUT: begin
-                cfg.vif.ff_inp_step_dbg = tr.step;
-                cfg.vif.ff_inp_tile_id_dbg = tr.tile_id;
-                cfg.vif.ff_inp_inner_id_dbg = tr.inner_tile_id;
-                cfg.vif.ff_inp_beat_id_dbg = tr.beat_id;
-                cfg.vif.ff_inp_lockstep_dbg = tr.is_lockstep;
-            end
-            ITA_STREAM_FF_WEIGHT: begin
-                cfg.vif.ff_inp_weight_step_dbg = tr.step;
-                cfg.vif.ff_inp_weight_tile_id_dbg = tr.tile_id;
-                cfg.vif.ff_inp_weight_inner_id_dbg = tr.inner_tile_id;
-                cfg.vif.ff_inp_weight_beat_id_dbg = tr.beat_id;
-                cfg.vif.ff_inp_weight_lockstep_dbg = tr.is_lockstep;
-            end
-            ITA_STREAM_FF_BIAS: begin
-                cfg.vif.ff_inp_bias_step_dbg = tr.step;
-                cfg.vif.ff_inp_bias_tile_id_dbg = tr.tile_id;
-                cfg.vif.ff_inp_bias_inner_id_dbg = tr.inner_tile_id;
-                cfg.vif.ff_inp_bias_beat_id_dbg = tr.beat_id;
-                cfg.vif.ff_inp_bias_lockstep_dbg = tr.is_lockstep;
             end
             default: ;
         endcase
@@ -198,33 +152,6 @@ class ita_stream_driver extends uvm_driver #(ita_stream_item);
         end while (!cfg.vif.inp_bias_ready_o[cfg.head_id]);
         cfg.vif.inp_bias_valid_i[cfg.head_id] <= 1'b0;
     endtask : drive_head_bias
-
-    task drive_ff_input(ita_stream_item tr);
-        cfg.vif.ff_inp_i <= tr.inp;
-        cfg.vif.ff_inp_valid_i <= 1'b1;
-        do begin
-            @(posedge cfg.vif.clk_i);
-        end while (!cfg.vif.ff_inp_ready_o);
-        cfg.vif.ff_inp_valid_i <= 1'b0;
-    endtask : drive_ff_input
-
-    task drive_ff_weight(ita_stream_item tr);
-        cfg.vif.ff_inp_weight_i <= tr.weight;
-        cfg.vif.ff_inp_weight_valid_i <= 1'b1;
-        do begin
-            @(posedge cfg.vif.clk_i);
-        end while (!cfg.vif.ff_inp_weight_ready_o);
-        cfg.vif.ff_inp_weight_valid_i <= 1'b0;
-    endtask : drive_ff_weight
-
-    task drive_ff_bias(ita_stream_item tr);
-        cfg.vif.ff_inp_bias_i <= tr.bias;
-        cfg.vif.ff_inp_bias_valid_i <= 1'b1;
-        do begin
-            @(posedge cfg.vif.clk_i);
-        end while (!cfg.vif.ff_inp_bias_ready_o);
-        cfg.vif.ff_inp_bias_valid_i <= 1'b0;
-    endtask : drive_ff_bias
 
 endclass : ita_stream_driver
 
