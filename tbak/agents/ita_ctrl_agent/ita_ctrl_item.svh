@@ -5,19 +5,17 @@ class ita_ctrl_item extends uvm_sequence_item;
     `uvm_object_utils(ita_ctrl_item)
 
     ctrl_t ctrl;
+    // TODO Stage 2: choose the minimal shared MHA8 ctrl fields for the first ctrl smoke item.
+
     requant_const_array_t head_eps_mult    [8];
     requant_const_array_t head_right_shift [8];
     requant_array_t       head_add         [8];
+    // TODO Stage 2: initialize head0 requant defaults first; keep the per-head shape for Stage 11.
 
     function new(string name = "ita_ctrl_item");
         super.new(name);
         ctrl = '0;
-        ctrl.layer = Attention;
-        ctrl.activation = Identity;
-        ctrl.tile_s = 1;
-        ctrl.tile_e = 1;
-        ctrl.tile_p = 1;
-        ctrl.tile_f = 1;
+        // TODO Stage 2: set ctrl.layer, ctrl.activation, tile_s/e/p/f, and ctrl.start in the sequence or item helper.
 
         for (int unsigned h = 0; h < 8; h++) begin
             head_eps_mult[h]    = '0;

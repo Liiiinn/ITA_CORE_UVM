@@ -21,20 +21,11 @@ class ita_ctrl_monitor extends uvm_monitor;
     endfunction : build_phase
 
     task run_phase(uvm_phase phase);
-        ita_ctrl_item tr;
-
         forever begin
             @(posedge cfg.vif.clk_i);
-            if (cfg.vif.rst_ni && cfg.vif.ctrl_i.start) begin
-                tr = ita_ctrl_item::type_id::create("tr");
-                tr.ctrl = cfg.vif.ctrl_i;
-                for (int unsigned h = 0; h < 8; h++) begin
-                    tr.head_eps_mult[h]    = cfg.vif.head_eps_mult_i[h];
-                    tr.head_right_shift[h] = cfg.vif.head_right_shift_i[h];
-                    tr.head_add[h]         = cfg.vif.head_add_i[h];
-                end
-                ap.write(tr);
-                // TODO Stage 7-8: connect this ap to logger/smoke scoreboard when those components exist.
+            if (cfg.vif.rst_ni) begin
+                // TODO Stage 2: sample cfg.vif.ctrl_i when start is observed and publish it on ap.
+                // TODO Stage 7-8: connect this analysis port to logger/scoreboard once those components exist.
             end
         end
     endtask : run_phase

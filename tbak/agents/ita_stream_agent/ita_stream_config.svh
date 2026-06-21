@@ -5,15 +5,15 @@ class ita_stream_config extends uvm_object;
     `uvm_object_utils(ita_stream_config)
 
     virtual ita_mha8_if vif;
-    uvm_active_passive_enum is_active = UVM_ACTIVE;
+    uvm_active_passive_enum is_active = UVM_PASSIVE;
     ita_stream_kind_e kind = ITA_STREAM_HEAD_INPUT;
     int unsigned head_id = 0;
-    // TODO Stage 3-5: keep kind/head_id as the per-head attribution key; start with head_id == 0.
+    // TODO Stage 3-5: use kind + head_id to bind one reusable agent to input/weight/bias/output.
 
     bit enable_random_stall = 1'b0;
-    // TODO Stage 5: enable random sink backpressure after deterministic head0 output works.
     int unsigned min_stall_cycles = 0;
     int unsigned max_stall_cycles = 0;
+    // TODO Stage 5: add deterministic ready first, then optional random backpressure.
 
     function new(string name = "ita_stream_config");
         super.new(name);
@@ -32,13 +32,8 @@ class ita_stream_config extends uvm_object;
     endfunction : is_source
 
     function int unsigned next_stall_cycles();
-        if (!enable_random_stall || max_stall_cycles == 0) begin
-            return 0;
-        end
-        if (max_stall_cycles <= min_stall_cycles) begin
-            return min_stall_cycles;
-        end
-        return $urandom_range(max_stall_cycles, min_stall_cycles);
+        // TODO Stage 5: implement stall generation after the always-ready output path works.
+        return 0;
     endfunction : next_stall_cycles
 
 endclass : ita_stream_config

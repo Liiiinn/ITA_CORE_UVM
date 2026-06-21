@@ -12,6 +12,6 @@ typedef enum int unsigned {
     ITA_STREAM_FF_BIAS,
     ITA_STREAM_FF_OUTPUT
 } ita_stream_kind_e;
-// TODO Stage 3-5: reuse this enum and one ita_stream_agent implementation for input, weight, bias, and output.
+// TODO Stage 3-5: reuse this one stream agent for head0 input, weight, bias, and output before expanding heads 1-7.
 
 `endif // ITA_STREAM_COMMON_SVH

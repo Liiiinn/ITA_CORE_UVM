@@ -26,13 +26,11 @@ class ita_stream_agent extends uvm_agent;
 
         uvm_config_db#(ita_stream_config)::set(this, "mon", "cfg", cfg);
         mon = ita_stream_monitor::type_id::create("mon", this);
-        // TODO Stage 3-5: keep monitor always present so passive heads can still be observed.
 
         if (cfg.is_active == UVM_ACTIVE) begin
             uvm_config_db#(ita_stream_config)::set(this, "drv", "cfg", cfg);
             sqr = ita_stream_sequencer::type_id::create("sqr", this);
             drv = ita_stream_driver::type_id::create("drv", this);
-            // TODO Stage 11: make heads 1-7 active only when expanding beyond head0.
         end
     endfunction : build_phase
 
@@ -40,12 +38,10 @@ class ita_stream_agent extends uvm_agent;
         super.connect_phase(phase);
 
         mon.ap.connect(ap);
-        // TODO Stage 7-8: connect this agent-level ap to logger/scoreboard in env.
 
         if (cfg.is_active == UVM_ACTIVE) begin
             drv.seq_item_port.connect(sqr.seq_item_export);
             drv.issued_ap.connect(issued_ap);
-            // TODO Stage 8: use issued_ap for expected transaction counting before numeric compare.
         end
     endfunction : connect_phase
 

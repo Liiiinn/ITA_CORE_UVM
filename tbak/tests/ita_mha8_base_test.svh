@@ -22,14 +22,14 @@ class ita_mha8_base_test extends uvm_test;
         cfg = ita_mha8_env_config::type_id::create("cfg");
         cfg.vif = vif;
         cfg.create_default_agent_configs();
-        // TODO Stage 2-5: override cfg from derived tests or plusargs before env is created.
+        // TODO Stage 2-5: override cfg from derived tests before env is created.
 
         uvm_config_db#(ita_mha8_env_config)::set(this, "env", "cfg", cfg);
         env = ita_mha8_env::type_id::create("env", this);
     endfunction : build_phase
 
     task run_phase(uvm_phase phase);
-        // TODO Stage 1: keep base test build-only; do not start ctrl or stream sequences here.
+        // TODO Stage 1: keep this base test build-only; do not start ctrl or stream sequences here.
     endtask : run_phase
 
 endclass : ita_mha8_base_test
@@ -52,9 +52,10 @@ class ita_linear_directed_test extends ita_mha8_base_test;
 
     task run_phase(uvm_phase phase);
         // TODO Stage 9: create one ita_mha8_core_item for a small Linear head0 testcase.
-        // TODO Stage 9: start shared ctrl on env.ctrl_agt.sqr before stream payloads.
-        // TODO Stage 9: drive env.input_agt[0], env.weight_agt[0], and env.bias_agt[0].
-        // TODO Stage 9: observe env.head_output_agt[0] and pass actual output to logger/compare.
+        // TODO Stage 9: start shared ctrl before input/weight/bias streams.
+        // TODO Stage 9: drive head0 input, weight, and bias payloads through stream sequences.
+        // TODO Stage 9: enable head0 output ready and collect actual output.
+        // TODO Stage 10: pass expected/actual/compare paths into the Phase 2 compare flow.
     endtask : run_phase
 
 endclass : ita_linear_directed_test

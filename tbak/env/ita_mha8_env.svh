@@ -7,20 +7,20 @@ class ita_mha8_env extends uvm_env;
     ita_mha8_env_config cfg;
 
     ita_ctrl_agent ctrl_agt;
+    // TODO Stage 2: complete the shared ctrl path before adding stream stimulus.
+
     ita_stream_agent input_agt       [8];
     ita_stream_agent weight_agt      [8];
     ita_stream_agent bias_agt        [8];
     ita_stream_agent head_output_agt [8];
-    // TODO Stage 3-5: use the same array names as tb, but exercise only index 0 first.
+    // TODO Stage 3-5: implement head0 input, weight, bias, and output agents first; keep MHA8 array shape.
 
     ita_stream_agent sum_output_agt;
     ita_stream_agent ff_input_agt;
     ita_stream_agent ff_weight_agt;
     ita_stream_agent ff_bias_agt;
     ita_stream_agent ff_output_agt;
-    // TODO Stage 11: create active sum/ff stimulus only after full-head MHA flow is stable.
-
-    // TODO Stage 7-8: add txn_logger, smoke scoreboard, and ref_model handles here when those stages begin.
+    // TODO Stage 11: connect sum and feed-forward agents after full head path coverage exists.
 
     function new(string name = "ita_mha8_env", uvm_component parent = null);
         super.new(name, parent);
@@ -35,7 +35,6 @@ class ita_mha8_env extends uvm_env;
 
         uvm_config_db#(ita_ctrl_config)::set(this, "ctrl_agt", "cfg", cfg.ctrl_cfg);
         ctrl_agt = ita_ctrl_agent::type_id::create("ctrl_agt", this);
-        // TODO Stage 2: start shared MHA8 ctrl stimulus from a derived test, not from env.
 
         for (int unsigned h = 0; h < 8; h++) begin
             uvm_config_db#(ita_stream_config)::set(this, $sformatf("input_agt_%0d", h), "cfg", cfg.input_cfg[h]);
@@ -47,7 +46,7 @@ class ita_mha8_env extends uvm_env;
             weight_agt[h] = ita_stream_agent::type_id::create($sformatf("weight_agt_%0d", h), this);
             bias_agt[h] = ita_stream_agent::type_id::create($sformatf("bias_agt_%0d", h), this);
             head_output_agt[h] = ita_stream_agent::type_id::create($sformatf("head_output_agt_%0d", h), this);
-            // TODO Stage 3-5: drive and observe only h == 0 until head0 input/weight/bias/output pass.
+            // TODO Stage 3-5: fill only head0 behavior first; the loop exists to preserve MHA8 shape.
         end
 
         uvm_config_db#(ita_stream_config)::set(this, "sum_output_agt", "cfg", cfg.sum_output_cfg);
@@ -61,14 +60,15 @@ class ita_mha8_env extends uvm_env;
         ff_weight_agt = ita_stream_agent::type_id::create("ff_weight_agt", this);
         ff_bias_agt = ita_stream_agent::type_id::create("ff_bias_agt", this);
         ff_output_agt = ita_stream_agent::type_id::create("ff_output_agt", this);
-        // TODO Stage 11: keep sum/ff passive until MHA head-output flow and logger are stable.
     endfunction : build_phase
 
     function void connect_phase(uvm_phase phase);
         super.connect_phase(phase);
-        // TODO Stage 7: connect monitor analysis ports to a logger here.
-        // TODO Stage 8: connect monitor/issued analysis ports to a smoke scoreboard here.
-        // TODO Stage 11: connect ref_model and golden compare after full MHA8 expansion.
+
+        // TODO Stage 7: connect head_output_agt[0].ap to a passive actual-output logger.
+        // TODO Stage 8: connect monitor analysis ports to a smoke scoreboard for count/X/Z/timeout checks.
+        // TODO Stage 10: connect logger output to the Phase 2 compare path.
+        // TODO Stage 11: fan in heads 1-7, sum, and feed-forward analysis ports.
     endfunction : connect_phase
 
 endclass : ita_mha8_env
