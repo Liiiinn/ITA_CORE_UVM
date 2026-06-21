@@ -9,6 +9,10 @@ interface ita_mha8_if
     logic                    rst_ni;
     ctrl_t                   ctrl_i;
     // TODO Stage 2: add ctrl_i X/Z checks when a minimal ctrl sequence starts driving real transactions.
+    function automatic bit ctrl_has_xz();
+        return $isunknown(ctrl_i);
+    endfunction : ctrl_has_xz
+    
     requant_const_array_t    head_eps_mult_i    [NumHeads];
     requant_const_array_t    head_right_shift_i [NumHeads];
     requant_array_t          head_add_i         [NumHeads];
