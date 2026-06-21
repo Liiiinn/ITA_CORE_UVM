@@ -43,6 +43,7 @@ class ita_stream_monitor extends uvm_monitor;
             default:
                 return 1'b0;
         endcase
+        // TODO Stage 5: keep protocol policy in interface assertions; monitor should only sample observed handshakes.
     endfunction : is_handshake
 
     function void sample_item();
@@ -60,6 +61,7 @@ class ita_stream_monitor extends uvm_monitor;
                 tr.inner_tile_id = cfg.vif.inp_inner_id_dbg[cfg.head_id];
                 tr.beat_id = cfg.vif.inp_beat_id_dbg[cfg.head_id];
                 tr.is_lockstep = cfg.vif.inp_lockstep_dbg[cfg.head_id];
+                // TODO Stage 5: use input metadata for scoreboard count and stream attribution.
             end
             ITA_STREAM_HEAD_WEIGHT: begin
                 tr.weight = cfg.vif.inp_weight_i[cfg.head_id];
@@ -68,6 +70,7 @@ class ita_stream_monitor extends uvm_monitor;
                 tr.inner_tile_id = cfg.vif.inp_weight_inner_id_dbg[cfg.head_id];
                 tr.beat_id = cfg.vif.inp_weight_beat_id_dbg[cfg.head_id];
                 tr.is_lockstep = cfg.vif.inp_weight_lockstep_dbg[cfg.head_id];
+                // TODO Stage 6: preserve weight beat ordering for Linear directed compare debug.
             end
             ITA_STREAM_HEAD_BIAS: begin
                 tr.bias = cfg.vif.inp_bias_i[cfg.head_id];
@@ -76,16 +79,19 @@ class ita_stream_monitor extends uvm_monitor;
                 tr.inner_tile_id = cfg.vif.inp_bias_inner_id_dbg[cfg.head_id];
                 tr.beat_id = cfg.vif.inp_bias_beat_id_dbg[cfg.head_id];
                 tr.is_lockstep = cfg.vif.inp_bias_lockstep_dbg[cfg.head_id];
+                // TODO Stage 6: preserve bias beat ordering for Linear directed compare debug.
             end
             ITA_STREAM_HEAD_OUTPUT: begin
                 tr.oup = cfg.vif.per_head_oup_o[cfg.head_id];
                 tr.step = cfg.vif.per_head_step_o[cfg.head_id];
+                // TODO Stage 5: dump this output sample through the logger before adding numeric compare.
             end
             default: ;
         endcase
 
         ap.write(tr);
         sample_count++;
+        // TODO Stage 5: expose sample_count through the smoke scoreboard report, not through monitor messages.
     endfunction : sample_item
 
 endclass : ita_stream_monitor

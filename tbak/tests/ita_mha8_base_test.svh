@@ -22,17 +22,16 @@ class ita_mha8_base_test extends uvm_test;
         cfg = ita_mha8_env_config::type_id::create("cfg");
         cfg.vif = vif;
         cfg.create_default_agent_configs();
+        // TODO Stage 6: override cfg paths and head selection from plusargs before env is created.
 
         uvm_config_db#(ita_mha8_env_config)::set(this, "env", "cfg", cfg);
         env = ita_mha8_env::type_id::create("env", this);
     endfunction : build_phase
 
     task run_phase(uvm_phase phase);
-        // TODO Stage 1: keep this base test as build-only smoke for learning the UVM hierarchy.
-        // TODO Stage 2: add a minimal ctrl sequence that drives ctrl_i and start behavior.
-        // TODO Stage 3: add one head-0 stream transaction through input/weight/bias agents.
-        // TODO Stage 4: move Linear directed stimulus into ita_linear_directed_test.
-        // TODO Stage 5: pass actual/expected/compare paths into the logger and Python compare flow.
+        // TODO Stage 1: keep this base test build-only; do not start sequences here.
+        // TODO Stage 2: create a derived ctrl smoke test when ready to drive ctrl_i.
+        // TODO Stage 5: add a timeout only after at least one sequence can produce expected activity.
     endtask : run_phase
 
 endclass : ita_mha8_base_test
@@ -54,8 +53,11 @@ class ita_linear_directed_test extends ita_mha8_base_test;
     endfunction : new
 
     task run_phase(uvm_phase phase);
-        // TODO Stage 4: drive a small manually-checkable Linear testcase on head 0.
-        // TODO Stage 5: dump actual output and pass paths to the Phase 2 compare scripts.
+        // TODO Stage 6: create one ita_mha8_core_item with layer=Linear and activation=Identity.
+        // TODO Stage 6: start a ctrl item on env.ctrl_agt.sqr before driving stream payloads.
+        // TODO Stage 6: drive input, weight, and bias payloads on head 0 through the three source agents.
+        // TODO Stage 6: keep env.output_stream_agt ready while collecting actual output samples.
+        // TODO Stage 7: pass expected_path, actual_path, and compare_path into the logger/compare flow.
     endtask : run_phase
 
 endclass : ita_linear_directed_test

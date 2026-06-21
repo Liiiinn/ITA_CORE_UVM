@@ -11,6 +11,7 @@ class ita_mha8_env_config extends uvm_object;
     ita_stream_config weight_stream_cfg;
     ita_stream_config bias_stream_cfg;
     ita_stream_config output_stream_cfg;
+    // TODO Stage 8: replace the four head-0 stream configs with per-head config arrays or a config list.
 
     function new(string name = "ita_mha8_env_config");
         super.new(name);
@@ -20,11 +21,13 @@ class ita_mha8_env_config extends uvm_object;
         ctrl_cfg = ita_ctrl_config::type_id::create("ctrl_cfg");
         ctrl_cfg.vif = vif;
         ctrl_cfg.is_active = UVM_ACTIVE;
+        // TODO Stage 2: add ctrl-agent knobs for reset/start timing and default Linear ctrl fields.
 
         input_stream_cfg = create_stream_cfg("input_stream_cfg", ITA_STREAM_HEAD_INPUT, ITA_STREAM_SOURCE, 0, UVM_ACTIVE);
         weight_stream_cfg = create_stream_cfg("weight_stream_cfg", ITA_STREAM_HEAD_WEIGHT, ITA_STREAM_SOURCE, 0, UVM_ACTIVE);
         bias_stream_cfg = create_stream_cfg("bias_stream_cfg", ITA_STREAM_HEAD_BIAS, ITA_STREAM_SOURCE, 0, UVM_ACTIVE);
         output_stream_cfg = create_stream_cfg("output_stream_cfg", ITA_STREAM_HEAD_OUTPUT, ITA_STREAM_SINK, 0, UVM_ACTIVE);
+        // TODO Stage 3: keep these defaults on head 0 until the first directed stream testcase passes.
     endfunction : create_default_agent_configs
 
     function ita_stream_config create_stream_cfg(
@@ -42,6 +45,7 @@ class ita_mha8_env_config extends uvm_object;
         stream_cfg.kind = kind;
         stream_cfg.direction = direction;
         stream_cfg.head_id = head_id;
+        // TODO Stage 5: pass logger/scoreboard attribution fields here if kind/head_id is not enough.
         return stream_cfg;
     endfunction : create_stream_cfg
 

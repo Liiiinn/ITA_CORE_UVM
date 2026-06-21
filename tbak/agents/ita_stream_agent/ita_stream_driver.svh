@@ -53,6 +53,7 @@ class ita_stream_driver extends uvm_driver #(ita_stream_item);
             end
             ITA_STREAM_HEAD_OUTPUT: begin
                 cfg.vif.per_head_ready_i[cfg.head_id] <= 1'b1;
+                // TODO Stage 4: replace always-ready output behavior with configurable backpressure patterns.
             end
             default: ;
         endcase
@@ -73,6 +74,7 @@ class ita_stream_driver extends uvm_driver #(ita_stream_item);
                 `uvm_error("STR_DRV_KIND", "Unsupported source stream kind")
             end
         endcase
+        // TODO Stage 3: extend source driving from one item per handshake to burst/beat sequences.
     endtask : drive_source_item
 
     task drive_sink_item(ita_stream_item tr);
@@ -88,6 +90,7 @@ class ita_stream_driver extends uvm_driver #(ita_stream_item);
 
         cfg.vif.per_head_ready_i[cfg.head_id] <= 1'b1;
         @(posedge cfg.vif.clk_i);
+        // TODO Stage 4: add sink sequence items that control ready low/high duration explicitly.
     endtask : drive_sink_item
 
     task wait_stream_prestall();
@@ -97,6 +100,7 @@ class ita_stream_driver extends uvm_driver #(ita_stream_item);
         repeat (stall_cycles) begin
             @(posedge cfg.vif.clk_i);
         end
+        // TODO Stage 5: report applied stalls through issued_ap if scoreboard timing checks need them.
     endtask : wait_stream_prestall
 
     task apply_source_metadata(ita_stream_item tr);
@@ -124,6 +128,7 @@ class ita_stream_driver extends uvm_driver #(ita_stream_item);
             end
             default: ;
         endcase
+        // TODO Stage 5: keep metadata consistent with logger fields before adding golden compare.
     endtask : apply_source_metadata
 
     task drive_head_input(ita_stream_item tr);
@@ -133,6 +138,7 @@ class ita_stream_driver extends uvm_driver #(ita_stream_item);
             @(posedge cfg.vif.clk_i);
         end while (!cfg.vif.inp_ready_o[cfg.head_id]);
         cfg.vif.inp_valid_i[cfg.head_id] <= 1'b0;
+        // TODO Stage 3: add payload hold checks in the interface while valid is high and ready is low.
     endtask : drive_head_input
 
     task drive_head_weight(ita_stream_item tr);
@@ -142,6 +148,7 @@ class ita_stream_driver extends uvm_driver #(ita_stream_item);
             @(posedge cfg.vif.clk_i);
         end while (!cfg.vif.inp_weight_ready_o[cfg.head_id]);
         cfg.vif.inp_weight_valid_i[cfg.head_id] <= 1'b0;
+        // TODO Stage 6: map Linear testcase weight payloads into the exact RTL write order here.
     endtask : drive_head_weight
 
     task drive_head_bias(ita_stream_item tr);
@@ -151,6 +158,7 @@ class ita_stream_driver extends uvm_driver #(ita_stream_item);
             @(posedge cfg.vif.clk_i);
         end while (!cfg.vif.inp_bias_ready_o[cfg.head_id]);
         cfg.vif.inp_bias_valid_i[cfg.head_id] <= 1'b0;
+        // TODO Stage 6: map Linear testcase bias payloads into the exact RTL write order here.
     endtask : drive_head_bias
 
 endclass : ita_stream_driver

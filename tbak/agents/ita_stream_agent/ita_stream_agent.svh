@@ -4,11 +4,6 @@
 class ita_stream_agent extends uvm_agent;
     `uvm_component_utils(ita_stream_agent)
 
-    // TODO Stage 1: reuse this single agent implementation for input/weight/bias/output streams.
-    // TODO Stage 2: keep source driver support for head input, head weight, and head bias.
-    // TODO Stage 3: extend sink driver behavior beyond always-ready output backpressure.
-    // TODO Stage 4: connect monitor analysis output to a logger and smoke scoreboard.
-    // TODO Stage 5: replicate configured instances per head when moving from head 0 to full MHA8 attribution.
     ita_stream_config cfg;
     ita_stream_sequencer sqr;
     ita_stream_driver drv;
@@ -31,11 +26,13 @@ class ita_stream_agent extends uvm_agent;
 
         uvm_config_db#(ita_stream_config)::set(this, "mon", "cfg", cfg);
         mon = ita_stream_monitor::type_id::create("mon", this);
+        // TODO Stage 4: keep monitor always present so passive output observation works before full stimulus exists.
 
         if (cfg.is_active == UVM_ACTIVE) begin
             uvm_config_db#(ita_stream_config)::set(this, "drv", "cfg", cfg);
             sqr = ita_stream_sequencer::type_id::create("sqr", this);
             drv = ita_stream_driver::type_id::create("drv", this);
+            // TODO Stage 8: when adding passive agents for non-target heads, gate sequencer/driver creation by config.
         end
     endfunction : build_phase
 
@@ -43,10 +40,12 @@ class ita_stream_agent extends uvm_agent;
         super.connect_phase(phase);
 
         mon.ap.connect(ap);
+        // TODO Stage 5: connect this ap at env level to logger and smoke scoreboard; keep checks out of the agent.
 
         if (cfg.is_active == UVM_ACTIVE) begin
             drv.seq_item_port.connect(sqr.seq_item_export);
             drv.issued_ap.connect(issued_ap);
+            // TODO Stage 5: use issued_ap for expected-count bookkeeping before adding numeric comparison.
         end
     endfunction : connect_phase
 
