@@ -8,27 +8,24 @@ class ita_stream_config extends uvm_object;
     uvm_active_passive_enum is_active = UVM_PASSIVE;
     ita_stream_kind_e kind = ITA_STREAM_HEAD_INPUT;
     int unsigned head_id = 0;
-    // TODO Stage 3-5: use kind + head_id to bind one reusable agent to input/weight/bias/output.
 
     bit enable_random_stall = 1'b0;
     int unsigned min_stall_cycles = 0;
     int unsigned max_stall_cycles = 0;
-    // TODO Stage 5: add deterministic ready first, then optional random backpressure.
+    // TODO Stage 5: implement ready/backpressure configuration after the deterministic output-ready path works.
 
     function new(string name = "ita_stream_config");
         super.new(name);
     endfunction : new
 
     function bit is_sink();
-        return kind inside {
-            ITA_STREAM_HEAD_OUTPUT,
-            ITA_STREAM_SUM_OUTPUT,
-            ITA_STREAM_FF_OUTPUT
-        };
+        // TODO Stage 5: return true for output sink streams after output ready driving is implemented.
+        return 1'b0;
     endfunction : is_sink
 
     function bit is_source();
-        return !is_sink();
+        // TODO Stage 3-4: return true for input/weight/bias source streams after source driving is implemented.
+        return 1'b0;
     endfunction : is_source
 
     function int unsigned next_stall_cycles();

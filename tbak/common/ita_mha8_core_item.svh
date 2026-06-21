@@ -10,7 +10,7 @@ class ita_mha8_core_item extends uvm_sequence_item;
     tile_t       tile_e;
     tile_t       tile_p;
     tile_t       tile_f;
-    // TODO Stage 6: keep testcase intent here before splitting into ctrl and stream items.
+    // TODO Stage 6: choose testcase intent fields before splitting into ctrl and stream items.
 
     inp_t        input_payload[$];
     inp_weight_t weight_payload[$];
@@ -24,16 +24,16 @@ class ita_mha8_core_item extends uvm_sequence_item;
 
     function new(string name = "ita_mha8_core_item");
         super.new(name);
-        layer = Linear;
-        activation = Identity;
-        tile_s = 1;
-        tile_e = 1;
-        tile_p = 1;
-        tile_f = 1;
+        layer = layer_e'('0);
+        activation = activation_e'('0);
+        tile_s = '0;
+        tile_e = '0;
+        tile_p = '0;
+        tile_f = '0;
         expected_path = "";
         actual_path = "";
         compare_path = "";
-        // TODO Stage 9: seed a small manually checkable Linear transaction here or in the derived test.
+        // TODO Stage 9: seed a small manually checkable Linear transaction in the derived test.
     endfunction : new
 
 endclass : ita_mha8_core_item

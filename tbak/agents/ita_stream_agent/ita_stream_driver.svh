@@ -38,43 +38,10 @@ class ita_stream_driver extends uvm_driver #(ita_stream_item);
     endtask : run_phase
 
     task drive_idle();
-        case (cfg.kind)
-            ITA_STREAM_HEAD_INPUT: begin
-                cfg.vif.inp_valid_i[cfg.head_id] <= 1'b0;
-                cfg.vif.inp_i[cfg.head_id] <= '0;
-            end
-            ITA_STREAM_HEAD_WEIGHT: begin
-                cfg.vif.inp_weight_valid_i[cfg.head_id] <= 1'b0;
-                cfg.vif.inp_weight_i[cfg.head_id] <= '0;
-            end
-            ITA_STREAM_HEAD_BIAS: begin
-                cfg.vif.inp_bias_valid_i[cfg.head_id] <= 1'b0;
-                cfg.vif.inp_bias_i[cfg.head_id] <= '0;
-            end
-            ITA_STREAM_HEAD_OUTPUT: begin
-                cfg.vif.per_head_ready_i[cfg.head_id] <= 1'b0;
-            end
-            ITA_STREAM_SUM_OUTPUT: begin
-                cfg.vif.sum_ready_i <= 1'b0;
-            end
-            ITA_STREAM_FF_INPUT: begin
-                cfg.vif.ff_inp_valid_i <= 1'b0;
-                cfg.vif.ff_inp_i <= '0;
-            end
-            ITA_STREAM_FF_WEIGHT: begin
-                cfg.vif.ff_inp_weight_valid_i <= 1'b0;
-                cfg.vif.ff_inp_weight_i <= '0;
-            end
-            ITA_STREAM_FF_BIAS: begin
-                cfg.vif.ff_inp_bias_valid_i <= 1'b0;
-                cfg.vif.ff_inp_bias_i <= '0;
-            end
-            ITA_STREAM_FF_OUTPUT: begin
-                cfg.vif.ff_ready_i <= 1'b0;
-            end
-            default: ;
-        endcase
-        // TODO Stage 3-5: keep all stream pins idle until each stream exercise is implemented.
+        // TODO Stage 3: idle head0 input stream pins before source driving is implemented.
+        // TODO Stage 4: idle head0 weight/bias stream pins before those sources are implemented.
+        // TODO Stage 5: idle head0 output ready before sink driving is implemented.
+        // TODO Stage 11: idle sum and feed-forward pins before those paths are implemented.
     endtask : drive_idle
 
     task drive_sink_ready();

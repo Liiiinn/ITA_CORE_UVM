@@ -38,7 +38,6 @@ class ita_ctrl_driver extends uvm_driver #(ita_ctrl_item);
             cfg.vif.head_right_shift_i[h] <= '0;
             cfg.vif.head_add_i[h]         <= '0;
         end
-        // TODO Stage 2: keep shared ctrl and per-head requant fields in a known idle state.
     endtask : drive_idle
 
     task drive_item(ita_ctrl_item tr);

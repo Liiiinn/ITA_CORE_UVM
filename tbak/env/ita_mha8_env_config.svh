@@ -7,47 +7,31 @@ class ita_mha8_env_config extends uvm_object;
     virtual ita_mha8_if vif;
 
     ita_ctrl_config ctrl_cfg;
-    // TODO Stage 2: add shared MHA8 ctrl defaults for layer, activation, tiles, requant, and start timing.
+    // TODO Stage 2: create ctrl_cfg, set vif/is_active, and add shared ctrl timing knobs.
 
     ita_stream_config input_cfg       [8];
     ita_stream_config weight_cfg      [8];
     ita_stream_config bias_cfg        [8];
     ita_stream_config head_output_cfg [8];
-    // TODO Stage 3-5: keep the per-head config shape, but implement and enable head0 streams first.
+    // TODO Stage 3-5: create per-head stream configs; enable only head0 while learning.
 
     ita_stream_config sum_output_cfg;
     ita_stream_config ff_input_cfg;
     ita_stream_config ff_weight_cfg;
     ita_stream_config ff_bias_cfg;
     ita_stream_config ff_output_cfg;
-    // TODO Stage 11: enable sum and feed-forward paths after the head0 MHA path is understood.
+    // TODO Stage 11: create sum/feed-forward configs after the head0 path works.
 
     function new(string name = "ita_mha8_env_config");
         super.new(name);
     endfunction : new
 
     function void create_default_agent_configs();
-        ctrl_cfg = ita_ctrl_config::type_id::create("ctrl_cfg");
-        ctrl_cfg.vif = vif;
-        ctrl_cfg.is_active = UVM_ACTIVE;
-
-        for (int unsigned h = 0; h < 8; h++) begin
-            uvm_active_passive_enum head_mode;
-
-            head_mode = (h == 0) ? UVM_ACTIVE : UVM_PASSIVE;
-            // TODO Stage 3: use head0 as the first exercise target; keep heads 1-7 passive until Stage 11.
-
-            input_cfg[h] = create_stream_cfg($sformatf("input_cfg_%0d", h), ITA_STREAM_HEAD_INPUT, h, head_mode);
-            weight_cfg[h] = create_stream_cfg($sformatf("weight_cfg_%0d", h), ITA_STREAM_HEAD_WEIGHT, h, head_mode);
-            bias_cfg[h] = create_stream_cfg($sformatf("bias_cfg_%0d", h), ITA_STREAM_HEAD_BIAS, h, head_mode);
-            head_output_cfg[h] = create_stream_cfg($sformatf("head_output_cfg_%0d", h), ITA_STREAM_HEAD_OUTPUT, h, head_mode);
-        end
-
-        sum_output_cfg = create_stream_cfg("sum_output_cfg", ITA_STREAM_SUM_OUTPUT, 0, UVM_PASSIVE);
-        ff_input_cfg = create_stream_cfg("ff_input_cfg", ITA_STREAM_FF_INPUT, 0, UVM_PASSIVE);
-        ff_weight_cfg = create_stream_cfg("ff_weight_cfg", ITA_STREAM_FF_WEIGHT, 0, UVM_PASSIVE);
-        ff_bias_cfg = create_stream_cfg("ff_bias_cfg", ITA_STREAM_FF_BIAS, 0, UVM_PASSIVE);
-        ff_output_cfg = create_stream_cfg("ff_output_cfg", ITA_STREAM_FF_OUTPUT, 0, UVM_PASSIVE);
+        // TODO Stage 2: allocate ctrl_cfg and bind cfg.vif to the ctrl agent config.
+        // TODO Stage 3: allocate input_cfg[0] for ITA_STREAM_HEAD_INPUT with head_id 0.
+        // TODO Stage 4: allocate weight_cfg[0] and bias_cfg[0] for head_id 0.
+        // TODO Stage 5: allocate head_output_cfg[0] for output ready/monitoring.
+        // TODO Stage 11: expand config creation to heads 1-7, sum, and feed-forward paths.
     endfunction : create_default_agent_configs
 
     function ita_stream_config create_stream_cfg(

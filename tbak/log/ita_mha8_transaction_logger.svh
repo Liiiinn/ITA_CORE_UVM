@@ -6,104 +6,50 @@ class ita_mha8_transaction_logger extends uvm_component;
 
     uvm_analysis_imp_source #(ita_stream_item, ita_mha8_transaction_logger) source_imp;
     uvm_analysis_imp_stream #(ita_stream_item, ita_mha8_transaction_logger) stream_imp;
+    // TODO Stage 7: define which analysis imp receives driver-issued source items.
+    // TODO Stage 7: define which analysis imp receives monitor-sampled accepted/output items.
 
-    bit [2:0] source_mask_by_key[string];
-    int unsigned complete_lockstep_count;
     int unsigned source_count;
-    int unsigned accepted_count;
+    int unsigned stream_count;
     int unsigned output_count;
+    // TODO Stage 7: implement counters after deciding the first logger report format.
+
+    string actual_path;
+    // TODO Stage 10: pass actual_path from ita_mha8_core_item or test config before adding file output.
 
     function new(string name = "ita_mha8_transaction_logger", uvm_component parent = null);
         super.new(name, parent);
         source_imp = new("source_imp", this);
         stream_imp = new("stream_imp", this);
+        // TODO Stage 7: keep imps allocated; connect them from env only after agent ap forwarding is implemented.
     endfunction : new
 
     function void write_source(ita_stream_item tr);
-        string key;
-
-        source_count++;
-        if (is_head_source(tr.kind) || is_ff_source(tr.kind)) begin
-            key = beat_key(tr);
-            if (!source_mask_by_key.exists(key)) begin
-                source_mask_by_key[key] = 3'b000;
-            end
-            source_mask_by_key[key] |= source_mask(tr.kind);
-            if (source_mask_by_key[key] == 3'b111) begin
-                complete_lockstep_count++;
-                `uvm_info("ITA_TXN_LOG", $sformatf(
-                    "Complete lockstep input/weight/bias beat key=%s",
-                    key
-                ), UVM_LOW)
-            end
-        end
+        // TODO Stage 7: implement optional input/weight/bias source logging for head0 debug.
+        // TODO Stage 7: update source_count only after the source log contract is defined.
+        // TODO Stage 11: add per-head attribution once heads 1-7 are enabled.
     endfunction : write_source
 
     function void write_stream(ita_stream_item tr);
-        accepted_count++;
-        if (tr.kind inside {ITA_STREAM_HEAD_OUTPUT, ITA_STREAM_SUM_OUTPUT, ITA_STREAM_FF_OUTPUT}) begin
-            output_count++;
-            `uvm_info("ITA_TXN_LOG", $sformatf(
-                "Observed output kind=%s head=%0d step=%0d beat=%0d",
-                stream_kind_name(tr.kind), tr.head_id, tr.step, tr.beat_id
-            ), UVM_MEDIUM)
-        end
+        // TODO Stage 7: detect ITA_STREAM_HEAD_OUTPUT for head0 and dump tr.oup as actual output.
+        // TODO Stage 7: update stream_count/output_count only after output sampling is implemented.
+        // TODO Stage 8: leave protocol/count checking to the smoke scoreboard, not the logger.
+        // TODO Stage 10: write actual output to actual_path in the format expected by the Python compare flow.
     endfunction : write_stream
 
-    function bit is_head_source(ita_stream_kind_e kind);
-        return kind inside {
-            ITA_STREAM_HEAD_INPUT,
-            ITA_STREAM_HEAD_WEIGHT,
-            ITA_STREAM_HEAD_BIAS
-        };
-    endfunction : is_head_source
-
-    function bit is_ff_source(ita_stream_kind_e kind);
-        return kind inside {
-            ITA_STREAM_FF_INPUT,
-            ITA_STREAM_FF_WEIGHT,
-            ITA_STREAM_FF_BIAS
-        };
-    endfunction : is_ff_source
-
-    function bit [2:0] source_mask(ita_stream_kind_e kind);
-        case (kind)
-            ITA_STREAM_HEAD_INPUT,
-            ITA_STREAM_FF_INPUT:  return 3'b001;
-            ITA_STREAM_HEAD_WEIGHT,
-            ITA_STREAM_FF_WEIGHT: return 3'b010;
-            ITA_STREAM_HEAD_BIAS,
-            ITA_STREAM_FF_BIAS:   return 3'b100;
-            default:              return 3'b000;
-        endcase
-    endfunction : source_mask
-
-    function string beat_key(ita_stream_item tr);
-        return $sformatf("head=%0d step=%0d tile=%0d inner=%0d beat=%0d lockstep=%0d",
-            tr.head_id, tr.step, tr.tile_id, tr.inner_tile_id, tr.beat_id, tr.is_lockstep);
-    endfunction : beat_key
+    function bit is_output_stream(ita_stream_kind_e kind);
+        // TODO Stage 7: return true for ITA_STREAM_HEAD_OUTPUT first; add sum/ff outputs in Stage 11.
+        return 1'b0;
+    endfunction : is_output_stream
 
     function string stream_kind_name(ita_stream_kind_e kind);
-        case (kind)
-            ITA_STREAM_HEAD_INPUT:  return "head_input";
-            ITA_STREAM_HEAD_WEIGHT: return "head_weight";
-            ITA_STREAM_HEAD_BIAS:   return "head_bias";
-            ITA_STREAM_HEAD_OUTPUT: return "head_output";
-            ITA_STREAM_SUM_OUTPUT:  return "sum_output";
-            ITA_STREAM_FF_INPUT:    return "ff_input";
-            ITA_STREAM_FF_WEIGHT:   return "ff_weight";
-            ITA_STREAM_FF_BIAS:     return "ff_bias";
-            ITA_STREAM_FF_OUTPUT:   return "ff_output";
-            default:                return "unknown";
-        endcase
+        // TODO Stage 7: convert stream kind to a stable debug string for log messages or output files.
+        return "unimplemented";
     endfunction : stream_kind_name
 
     function void report_phase(uvm_phase phase);
         super.report_phase(phase);
-        `uvm_info("ITA_TXN_LOG", $sformatf(
-            "source_issued=%0d accepted=%0d outputs=%0d complete_lockstep_beats=%0d",
-            source_count, accepted_count, output_count, complete_lockstep_count
-        ), UVM_LOW)
+        // TODO Stage 7: print logger counters after actual-output logging is implemented.
     endfunction : report_phase
 
 endclass : ita_mha8_transaction_logger
