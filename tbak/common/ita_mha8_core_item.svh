@@ -10,17 +10,17 @@ class ita_mha8_core_item extends uvm_sequence_item;
     tile_t       tile_e;
     tile_t       tile_p;
     tile_t       tile_f;
-    // TODO Stage 6: add constraints for the small Linear directed testcase before randomizing these fields.
+    // TODO Stage 6: keep testcase intent here before splitting into ctrl and stream items.
 
     inp_t        input_payload[$];
     inp_weight_t weight_payload[$];
     bias_t       bias_payload[$];
-    // TODO Stage 3: define beat ordering and payload packing rules used by the stream sequences.
+    // TODO Stage 6: define head0 payload ordering before adding random or full-head payloads.
 
     string       expected_path;
     string       actual_path;
     string       compare_path;
-    // TODO Stage 7: route these paths to the logger and post-simulation Python compare flow.
+    // TODO Stage 10: pass these paths to logger and post-simulation Python compare flow.
 
     function new(string name = "ita_mha8_core_item");
         super.new(name);
@@ -33,7 +33,7 @@ class ita_mha8_core_item extends uvm_sequence_item;
         expected_path = "";
         actual_path = "";
         compare_path = "";
-        // TODO Stage 6: replace default empty payloads with a manually checkable Linear seed transaction.
+        // TODO Stage 9: seed a small manually checkable Linear transaction here or in the derived test.
     endfunction : new
 
 endclass : ita_mha8_core_item

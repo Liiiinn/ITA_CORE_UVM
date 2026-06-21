@@ -1,182 +1,131 @@
 # ITA MHA8 UVM learning skeleton
 
-This directory is intentionally minimal. It is a learning copy of `tb`, not the
-full MHA8 verification environment.
+This directory is the learning copy of `tb`. It keeps the MHA8 wrapper as the
+DUT target, but the learning flow starts with `head_id == 0` before expanding to
+all heads, sum, feed-forward, logger, scoreboard, and golden compare.
 
 ## Current scope
 
-- Keep only the basic UVM hierarchy: top, interface, test, env, ctrl agent, and
-  reusable stream agent instances.
-- Keep `ita_mha8` as the DUT target. Do not switch this learning skeleton to the
-  single-core `ita` DUT unless the learning goal changes.
-- Do not add a reference model, coverage, virtual sequence, or full MHA8
-  multi-head expansion until the previous learning stage is clear.
+- Keep the MHA8 wrapper naming and structure from `tb`.
+- Keep `ctrl_i` as shared MHA8 control across all heads.
+- Keep stream and output configuration shaped as MHA8 per-head arrays.
+- Enable only head 0 first; heads 1-7, sum, and feed-forward remain later stages.
+- Do not compile or instantiate `seq`, `scb`, reference model, or logger until
+  their stage is reached.
 - Compile only package `.sv` files, interfaces, top modules, and RTL. Do not add
-  `.svh` files directly to `sim/filelist.f`.
+  ordinary class `.svh` files directly to `sim/filelist.f`.
 
-## Growth path
+## Stage order
 
-1. Stage 1: Build-only smoke
-   - Keep `ita_mha8_tb_top` instantiating the MHA8 DUT and `ita_mha8_if`.
-   - Keep `ita_base_test` as a build-only test that creates `ita_mha8_env`.
-   - Confirm the hierarchy contains `ctrl_agt`, `input_stream_agt`,
-     `weight_stream_agt`, `bias_stream_agt`, and `output_stream_agt`.
-   - Acceptance: compile and run with zero UVM errors or fatals.
+1. Stage 1: Baseline smoke
+   - `ita_mha8_tb_top` instantiates `ita_mha8` and `ita_mha8_if`.
+   - `ita_mha8_base_test` and `ita_base_test` build the env only.
+   - No sequence starts in the base test.
+   - Acceptance: compile/run with zero UVM errors or fatals.
 
-2. Stage 2: Minimal ctrl sequence
-   - Add one ctrl sequence item with `layer`, `activation`, and tile fields.
-   - Drive `ctrl_i` through `ctrl_agt`.
-   - Keep all stream agents idle.
-   - Acceptance: test can drive ctrl after reset without changing DUT outputs.
+2. Stage 2: Shared MHA8 ctrl
+   - Add minimal ctrl defaults for layer, activation, and tile shape.
+   - Drive shared `ctrl_i` through `ctrl_agt`.
+   - Keep stream agents idle.
+   - Acceptance: ctrl can be driven after reset without requiring stream data.
 
-3. Stage 3: One head-0 stream transaction
-   - Use the reusable `ita_stream_agent` implementation for input, weight, and
-     bias.
-   - Drive only `head_id == 0`.
-   - Keep heads 1-7 tied off.
-   - Acceptance: input, weight, and bias monitors observe valid-ready handshakes
-     on head 0.
+3. Stage 3: Head0 input stream
+   - Use `input_agt[0]` only.
+   - Keep the reusable stream agent implementation.
+   - Acceptance: head0 input monitor observes a valid-ready handshake.
 
-4. Stage 4: Output stream monitor and ready driver
-   - Use `output_stream_agt` as a sink agent for `per_head_ready_i[0]`.
-   - Monitor `per_head_valid_o[0] && per_head_ready_i[0]`.
+4. Stage 4: Head0 weight and bias streams
+   - Use `weight_agt[0]` and `bias_agt[0]` only.
+   - Keep heads 1-7 passive.
+   - Acceptance: head0 input/weight/bias handshakes are observed.
+
+5. Stage 5: Head0 output stream
+   - Use `head_output_agt[0]` as the first output sink/monitor.
    - Capture `per_head_oup_o[0]` and `per_head_step_o[0]`.
-   - Acceptance: output samples can be observed without adding a scoreboard.
+   - Acceptance: output samples can be observed without scoreboard compare.
 
-5. Stage 5: Logger and smoke scoreboard
-   - Add a small logger that dumps actual output samples to a deterministic
-     path.
-   - Add a smoke scoreboard for transaction counts, X/Z checks, timeout, and
-     valid-ready protocol checks.
-   - Do not add numeric golden comparison here.
-   - Acceptance: protocol mistakes are reported as UVM errors.
+6. Stage 6: Core transaction
+   - Use `ita_mha8_core_item` as the testcase-level transaction.
+   - Split it into ctrl item and stream items.
+   - Acceptance: directed testcase intent is represented in one common item.
 
-6. Stage 6: Linear directed testcase
-   - Implement `ita_linear_directed_test`.
-   - Use a small, manually checkable Linear case on head 0.
-   - Drive ctrl, input, weight, bias, and output ready through existing agents.
-   - Acceptance: the test produces an actual output dump and passes smoke
-     scoreboard checks.
+7. Stage 7: Logger
+   - Add actual-output dump after monitors are stable.
+   - Do not add numeric golden compare here.
+   - Acceptance: actual output is written to a deterministic path.
 
-7. Stage 7: Phase 2 compare path
-   - Pass expected, actual, and compare paths through the core transaction or
-     test config.
-   - Reuse the Python compare flow after simulation.
-   - Keep compare integration outside the basic smoke scoreboard.
-   - Acceptance: the Linear directed testcase can run simulation and compare in
-     one scripted flow.
+8. Stage 8: Smoke scoreboard and early assertions
+   - Add transaction count, X/Z, timeout, valid-ready, and backpressure checks.
+   - Keep checks protocol-focused.
+   - Acceptance: protocol mistakes report UVM errors.
 
-8. Stage 8: Expand from head 0 to MHA8
-   - Replicate stream agent configs across all 8 heads.
-   - Add per-head attribution in monitor, logger, and scoreboard reports.
-   - Add coverage only after the protocol and compare path are stable.
-   - Acceptance: a mismatch clearly identifies stream kind, head id, step, and
-     beat.
+9. Stage 9: Linear directed testcase
+   - Implement `ita_linear_directed_test` for a small head0 Linear case.
+   - Drive ctrl, input, weight, bias, output ready, then dump actual output.
+   - Acceptance: simulation completes and produces actual output.
 
-9. Stage 9: MHA8-specific reference or golden comparison
-   - Add the MHA8 reference model or golden compare only after the directed
-     Linear path is stable.
-   - Include attention, sum, and feed-forward paths incrementally.
-   - Acceptance: the environment can distinguish protocol failures from numeric
-     mismatches.
+10. Stage 10: Phase 2 compare path
+    - Route expected, actual, and compare paths through config/core item.
+    - Reuse the Python compare flow after simulation.
+    - Acceptance: Linear directed simulation and compare run in one scripted flow.
 
-## Suggested TODO workflow
-
-1. Pick the next TODO from the current stage only.
-   - Prefer the lowest stage number that is not complete.
-   - Do not jump to scoreboard, compare, coverage, or 8-head expansion while
-     ctrl and one head-0 stream path are still unproven.
-
-2. Add the smallest useful code block directly below the matching TODO.
-   - Keep edits local to the file named by the TODO.
-   - If a change needs a new package, class, or filelist entry, stop and update
-     this path first so the dependency is explicit.
-   - Leave the TODO in place until the stage acceptance criteria passes.
-
-3. Run dry-run after every structural change.
-   ```powershell
-   powershell -NoProfile -ExecutionPolicy Bypass -File ITA_CORE_UVM\sim\scripts\smoke.ps1 -DryRun
-   ```
-   - Dry-run only checks the command/filelist shape.
-   - Dry-run does not compile SystemVerilog and does not run UVM.
-
-4. Run real smoke after dry-run.
-   ```powershell
-   powershell -NoProfile -ExecutionPolicy Bypass -File ITA_CORE_UVM\sim\scripts\smoke.ps1
-   ```
-   - Treat `UVM_ERROR` or `UVM_FATAL` as a failed step.
-   - Existing DUT relaxed-port warnings are acceptable unless a new warning is
-     tied to the files changed in this step.
-
-5. Debug in this order.
-   - Compile errors: check package include order, type visibility, class names,
-     and whether a `.svh` was incorrectly added to `filelist.f`.
-   - Build/connect errors: check `uvm_config_db` set/get names, agent instance
-     names, and virtual interface propagation.
-   - Runtime errors: check reset timing, sequencer start order, valid-ready
-     handshake, and monitor sample conditions.
-   - Protocol issues: add temporary `uvm_info` near the driver/monitor branch
-     for the current stream kind and head id.
-
-6. Commit the learning state mentally before moving on.
-   - Record what passed in the stage acceptance line or keep a short note near
-     the relevant TODO.
-   - Remove or rewrite a TODO only when the code below it is stable and the next
-     stage has a clearer action.
+11. Stage 11: Full MHA8 expansion
+    - Enable heads 1-7 using the existing per-head config shape.
+    - Add sum and feed-forward paths.
+    - Add MHA8-specific reference/golden compare.
+    - Acceptance: mismatch reports identify stream kind, head id, step, and beat.
 
 ## TODO edit order
 
-Use this file order when implementing a stage. Do not edit later files until the
-current file compiles or the dependency is explicitly needed.
+1. Interface: `tbak/if/ita_mha8_if.sv`
+   - Add only signal helpers/assertion hooks needed by the current stage.
+   - Keep sum and feed-forward tied off until later stages.
 
-1. Interface first: `tbak/if/ita_mha8_if.sv`
-   - Add or expose only the signals/assertion hooks needed by the current stage.
-   - Keep unused MHA8, sum, and feed-forward signals tied off until their stage.
-   - Run dry-run after changing interface ports or signal names.
+2. Common transaction and config
+   - `tbak/common/ita_mha8_core_item.svh`
+   - `tbak/env/ita_mha8_env_config.svh`
+   - Add fields before tests, drivers, or monitors read them.
 
-2. Transaction/config second: `tbak/env/ita_mha8_core_item.svh` and
-   `tbak/env/ita_mha8_env_config.svh`
-   - Add fields to `ita_mha8_core_item` before using them in tests or drivers.
-   - Add config knobs in `ita_mha8_env_config` before reading them in env/agents.
-   - Keep defaults on `head_id == 0` until the directed head-0 path passes.
+3. Ctrl agent
+   - `ita_ctrl_item.svh`
+   - `ita_ctrl_driver.svh`
+   - `ita_ctrl_monitor.svh`
+   - Implement shared MHA8 ctrl before stream stimulus.
 
-3. Agent config and item third: `tbak/agents/ita_stream_agent/ita_stream_config.svh`
-   and `tbak/agents/ita_stream_agent/ita_stream_item.svh`
-   - Add stream item fields before driver/monitor code uses them.
-   - Add stream config fields before env config assigns them.
-   - Keep source/sink behavior selected by config, not by hard-coded agent names.
+4. Stream agent
+   - `ita_stream_common.svh`
+   - `ita_stream_config.svh`
+   - `ita_stream_item.svh`
+   - `ita_stream_driver.svh`
+   - `ita_stream_monitor.svh`
+   - Implement head0 input, then weight/bias, then output.
 
-4. Driver fourth: `tbak/agents/ita_ctrl_agent/ita_ctrl_driver.svh` and
-   `tbak/agents/ita_stream_agent/ita_stream_driver.svh`
-   - Implement ctrl driving before stream driving for a new testcase.
-   - Implement input, weight, and bias source driving before output backpressure.
-   - Keep each driver change small enough that compile errors identify one branch.
+5. Environment: `tbak/env/ita_mha8_env.svh`
+   - Create/connect components only after leaf agents compile.
+   - Add logger/scoreboard/reference-model handles here when their stages begin.
 
-5. Monitor fifth: `tbak/agents/ita_ctrl_agent/ita_ctrl_monitor.svh` and
-   `tbak/agents/ita_stream_agent/ita_stream_monitor.svh`
-   - Sample only real handshakes.
-   - Add metadata capture before connecting logger or scoreboard.
-   - Do not put scoreboard policy inside the monitor.
+6. Tests: `tbak/tests/ita_mha8_base_test.svh`
+   - Keep base test build-only.
+   - Add active stimulus only in derived tests.
 
-6. Agent wrapper sixth: `tbak/agents/ita_ctrl_agent/ita_ctrl_agent.svh` and
-   `tbak/agents/ita_stream_agent/ita_stream_agent.svh`
-   - Connect sequencer, driver, monitor, and analysis ports after their leaf code
-     compiles.
-   - Keep analysis ports generic so logger and scoreboard can both subscribe.
+7. Package/filelist
+   - Update `*_pkg.sv` only when adding a new include dependency.
+   - Update `sim/filelist.f` only for package `.sv`, interface `.sv`, top `.sv`, or RTL.
 
-7. Environment seventh: `tbak/env/ita_mha8_env.svh`
-   - Create new components only after their packages compile.
-   - Connect analysis ports in `connect_phase` after monitors expose the needed
-     transaction fields.
-   - Add logger/scoreboard handles here, not inside agents.
+## Verification workflow
 
-8. Test last: `tbak/tests/ita_mha8_base_test.svh`
-   - Keep `ita_base_test` build-only.
-   - Put active stimulus in a derived test such as `ita_linear_directed_test`.
-   - Start ctrl sequence first, then source streams, then output ready/sink flow.
+1. Run dry-run after structural edits.
+   ```powershell
+   powershell -NoProfile -ExecutionPolicy Bypass -File ITA_CORE_UVM\sim\scripts\smoke.ps1 -DryRun
+   ```
 
-9. Package and filelist only when needed
-   - Update `*_pkg.sv` when adding a new `.svh` include.
-   - Update `sim/filelist.f` only for new package `.sv`, interface `.sv`, top
-     module `.sv`, or RTL files.
-   - Do not add ordinary class `.svh` files directly to `sim/filelist.f`.
+2. Run real smoke after dry-run.
+   ```powershell
+   powershell -NoProfile -ExecutionPolicy Bypass -File ITA_CORE_UVM\sim\scripts\smoke.ps1
+   ```
+
+3. Debug order:
+   - Compile errors: package order, imports, class names, include paths.
+   - Build/connect errors: `uvm_config_db`, instance names, virtual interface.
+   - Runtime errors: reset timing, sequencer start order, valid-ready handshake.
+   - Protocol errors: driver/monitor branch for stream kind and head id.

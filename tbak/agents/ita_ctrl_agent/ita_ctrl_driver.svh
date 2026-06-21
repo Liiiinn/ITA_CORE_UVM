@@ -38,6 +38,7 @@ class ita_ctrl_driver extends uvm_driver #(ita_ctrl_item);
             cfg.vif.head_right_shift_i[h] <= '0;
             cfg.vif.head_add_i[h]         <= '0;
         end
+        // TODO Stage 2: keep shared ctrl and all per-head requant defaults idle before first ctrl item.
     endtask : drive_idle
 
     task drive_item(ita_ctrl_item tr);
@@ -48,6 +49,7 @@ class ita_ctrl_driver extends uvm_driver #(ita_ctrl_item);
             cfg.vif.head_right_shift_i[h] <= tr.head_right_shift[h];
             cfg.vif.head_add_i[h]         <= tr.head_add[h];
         end
+        // TODO Stage 2: verify ctrl_i start pulse timing here before adding stream stimulus.
         @(posedge cfg.vif.clk_i);
         cfg.vif.ctrl_i.start <= 1'b0;
     endtask : drive_item

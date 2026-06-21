@@ -7,11 +7,20 @@ class ita_mha8_env_config extends uvm_object;
     virtual ita_mha8_if vif;
 
     ita_ctrl_config ctrl_cfg;
-    ita_stream_config input_stream_cfg;
-    ita_stream_config weight_stream_cfg;
-    ita_stream_config bias_stream_cfg;
-    ita_stream_config output_stream_cfg;
-    // TODO Stage 8: replace the four head-0 stream configs with per-head config arrays or a config list.
+    // TODO Stage 2: keep ctrl_cfg as shared MHA8 control config; ctrl_i is not per-head.
+
+    ita_stream_config input_cfg       [8];
+    ita_stream_config weight_cfg      [8];
+    ita_stream_config bias_cfg        [8];
+    ita_stream_config head_output_cfg [8];
+    // TODO Stage 3-5: keep these arrays MHA8-shaped, but enable and test head_id 0 first.
+
+    ita_stream_config sum_output_cfg;
+    ita_stream_config ff_input_cfg;
+    ita_stream_config ff_weight_cfg;
+    ita_stream_config ff_bias_cfg;
+    ita_stream_config ff_output_cfg;
+    // TODO Stage 11: enable sum and feed-forward configs after full-head MHA flow is stable.
 
     function new(string name = "ita_mha8_env_config");
         super.new(name);
@@ -21,32 +30,39 @@ class ita_mha8_env_config extends uvm_object;
         ctrl_cfg = ita_ctrl_config::type_id::create("ctrl_cfg");
         ctrl_cfg.vif = vif;
         ctrl_cfg.is_active = UVM_ACTIVE;
-        // TODO Stage 2: add ctrl-agent knobs for reset/start timing and default Linear ctrl fields.
+        // TODO Stage 2: add shared defaults for layer, activation, tile_s/e/p/f, and ctrl start timing.
 
-        input_stream_cfg = create_stream_cfg("input_stream_cfg", ITA_STREAM_HEAD_INPUT, ITA_STREAM_SOURCE, 0, UVM_ACTIVE);
-        weight_stream_cfg = create_stream_cfg("weight_stream_cfg", ITA_STREAM_HEAD_WEIGHT, ITA_STREAM_SOURCE, 0, UVM_ACTIVE);
-        bias_stream_cfg = create_stream_cfg("bias_stream_cfg", ITA_STREAM_HEAD_BIAS, ITA_STREAM_SOURCE, 0, UVM_ACTIVE);
-        output_stream_cfg = create_stream_cfg("output_stream_cfg", ITA_STREAM_HEAD_OUTPUT, ITA_STREAM_SINK, 0, UVM_ACTIVE);
-        // TODO Stage 3: keep these defaults on head 0 until the first directed stream testcase passes.
+        for (int unsigned h = 0; h < 8; h++) begin
+            input_cfg[h] = create_stream_cfg($sformatf("input_cfg_%0d", h), ITA_STREAM_HEAD_INPUT, h, (h == 0) ? UVM_ACTIVE : UVM_PASSIVE);
+            weight_cfg[h] = create_stream_cfg($sformatf("weight_cfg_%0d", h), ITA_STREAM_HEAD_WEIGHT, h, (h == 0) ? UVM_ACTIVE : UVM_PASSIVE);
+            bias_cfg[h] = create_stream_cfg($sformatf("bias_cfg_%0d", h), ITA_STREAM_HEAD_BIAS, h, (h == 0) ? UVM_ACTIVE : UVM_PASSIVE);
+            head_output_cfg[h] = create_stream_cfg($sformatf("head_output_cfg_%0d", h), ITA_STREAM_HEAD_OUTPUT, h, (h == 0) ? UVM_ACTIVE : UVM_PASSIVE);
+            // TODO Stage 11: switch heads 1-7 from passive to active when expanding beyond head0.
+        end
+
+        sum_output_cfg = create_stream_cfg("sum_output_cfg", ITA_STREAM_SUM_OUTPUT, 0, UVM_PASSIVE);
+        ff_input_cfg = create_stream_cfg("ff_input_cfg", ITA_STREAM_FF_INPUT, 0, UVM_PASSIVE);
+        ff_weight_cfg = create_stream_cfg("ff_weight_cfg", ITA_STREAM_FF_WEIGHT, 0, UVM_PASSIVE);
+        ff_bias_cfg = create_stream_cfg("ff_bias_cfg", ITA_STREAM_FF_BIAS, 0, UVM_PASSIVE);
+        ff_output_cfg = create_stream_cfg("ff_output_cfg", ITA_STREAM_FF_OUTPUT, 0, UVM_PASSIVE);
+        // TODO Stage 11: make sum/ff active only after head output and logger flow are proven.
     endfunction : create_default_agent_configs
 
     function ita_stream_config create_stream_cfg(
         string name,
         ita_stream_kind_e kind,
-        ita_stream_direction_e direction,
         int unsigned head_id,
         uvm_active_passive_enum is_active
     );
-        ita_stream_config stream_cfg;
+        ita_stream_config cfg;
 
-        stream_cfg = ita_stream_config::type_id::create(name);
-        stream_cfg.vif = vif;
-        stream_cfg.is_active = is_active;
-        stream_cfg.kind = kind;
-        stream_cfg.direction = direction;
-        stream_cfg.head_id = head_id;
-        // TODO Stage 5: pass logger/scoreboard attribution fields here if kind/head_id is not enough.
-        return stream_cfg;
+        cfg = ita_stream_config::type_id::create(name);
+        cfg.vif = vif;
+        cfg.kind = kind;
+        cfg.head_id = head_id;
+        cfg.is_active = is_active;
+        // TODO Stage 7-8: add logger/scoreboard attribution fields here only if kind/head_id are not enough.
+        return cfg;
     endfunction : create_stream_cfg
 
 endclass : ita_mha8_env_config

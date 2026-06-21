@@ -46,4 +46,3 @@
 ../tbak/env/ita_mha8_env_pkg.sv
 ../tbak/tests/ita_mha8_test_pkg.sv
 ../tbak/top/ita_mha8_tb_top.sv
-

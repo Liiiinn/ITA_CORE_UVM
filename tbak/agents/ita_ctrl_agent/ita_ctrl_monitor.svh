@@ -34,6 +34,7 @@ class ita_ctrl_monitor extends uvm_monitor;
                     tr.head_add[h]         = cfg.vif.head_add_i[h];
                 end
                 ap.write(tr);
+                // TODO Stage 7-8: connect this ap to logger/smoke scoreboard when those components exist.
             end
         end
     endtask : run_phase

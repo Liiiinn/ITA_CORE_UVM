@@ -6,6 +6,8 @@ class ita_stream_item extends uvm_sequence_item;
 
     ita_stream_kind_e kind;
     int unsigned      head_id;
+    // TODO Stage 3-5: use kind/head_id to route one reusable stream item through MHA8 agents.
+
     int unsigned      tile_id;
     int unsigned      inner_tile_id;
     int unsigned      beat_id;
@@ -14,6 +16,7 @@ class ita_stream_item extends uvm_sequence_item;
     inp_weight_t      weight;
     bias_t            bias;
     requant_oup_t     oup;
+    // TODO Stage 6: map ita_mha8_core_item payload queues into these beat-level stream items.
     step_e            step;
 
     function new(string name = "ita_stream_item");

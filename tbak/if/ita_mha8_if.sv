@@ -8,15 +8,12 @@ interface ita_mha8_if
 
     logic                    rst_ni;
     ctrl_t                   ctrl_i;
-    // TODO Stage 2: add ctrl_i X/Z checks when a minimal ctrl sequence starts driving real transactions.
-    function automatic bit ctrl_has_xz();
-        return $isunknown(ctrl_i);
-    endfunction : ctrl_has_xz
-    
+    // TODO Stage 2: add shared MHA8 ctrl helpers/assertions here; ctrl_i is broadcast to all heads.
+
     requant_const_array_t    head_eps_mult_i    [NumHeads];
     requant_const_array_t    head_right_shift_i [NumHeads];
     requant_array_t          head_add_i         [NumHeads];
-    // TODO Stage 6: decide whether requant config stays per-head static config or becomes part of each core item.
+    // TODO Stage 2: add per-head requant defaults here; initialize only head 0 before full MHA8 expansion.
 
     logic [NumHeads-1:0]     inp_valid_i;
     logic [NumHeads-1:0]     inp_ready_o;
@@ -24,12 +21,12 @@ interface ita_mha8_if
     logic [NumHeads-1:0]     inp_weight_ready_o;
     logic [NumHeads-1:0]     inp_bias_valid_i;
     logic [NumHeads-1:0]     inp_bias_ready_o;
-    // TODO Stage 3: add valid-ready stability assertions for input, weight, and bias source streams.
+    // TODO Stage 3-4: add valid-ready stability assertions for head0 input/weight/bias first.
 
     inp_t                    inp_i        [NumHeads];
     inp_weight_t             inp_weight_i [NumHeads];
     bias_t                   inp_bias_i   [NumHeads];
-    // TODO Stage 3: add X/Z assertions on handshaked input, weight, and bias payloads.
+    // TODO Stage 8: add X/Z checks on handshaked source payloads after head0 streams are active.
 
     step_e                   inp_step_dbg          [NumHeads];
     step_e                   inp_weight_step_dbg   [NumHeads];
@@ -46,19 +43,19 @@ interface ita_mha8_if
     logic                    inp_lockstep_dbg      [NumHeads];
     logic                    inp_weight_lockstep_dbg[NumHeads];
     logic                    inp_bias_lockstep_dbg [NumHeads];
-    // TODO Stage 5: use debug metadata in logger and smoke scoreboard attribution.
+    // TODO Stage 7-8: use debug metadata for logger and smoke scoreboard attribution.
 
     logic [NumHeads-1:0]     per_head_valid_o;
     logic [NumHeads-1:0]     per_head_ready_i;
     logic [NumHeads-1:0]     per_head_busy_o;
     requant_oup_t            per_head_oup_o  [NumHeads];
     step_e                   per_head_step_o [NumHeads];
-    // TODO Stage 4: add output stable-under-backpressure assertions for per_head_oup_o and per_head_step_o.
+    // TODO Stage 5: add head0 output ready/valid observation and output-stable-under-backpressure assertions.
 
     logic                    sum_valid_o;
     logic                    sum_ready_i;
     requant_oup_t            sum_oup_o;
-    // TODO Stage 8: add sum stream monitor/checker only after head-0 output is stable.
+    // TODO Stage 11: add sum output monitor/checker after all per-head outputs are stable.
 
     logic                    ff_inp_valid_i;
     logic                    ff_inp_ready_o;
@@ -91,7 +88,7 @@ interface ita_mha8_if
     requant_oup_t            ff_oup_o;
     step_e                   ff_step_o;
     logic                    phase_mismatch_o;
-    // TODO Stage 9: add feed-forward stream agents and phase_mismatch_o checks after MHA head flow is working.
+    // TODO Stage 11: add feed-forward agents and phase_mismatch_o checks after MHA head flow is proven.
 
     initial begin
         rst_ni                = 1'b0;
@@ -105,7 +102,7 @@ interface ita_mha8_if
         ff_inp_weight_valid_i = 1'b0;
         ff_inp_bias_valid_i   = 1'b0;
         ff_ready_i            = 1'b0;
-        // TODO Stage 1: keep non-driven streams tied off until their agents are intentionally added.
+        // TODO Stage 1: keep non-driven heads, sum, and feed-forward tied off during baseline smoke.
 
         for (int unsigned h = 0; h < NumHeads; h++) begin
             head_eps_mult_i[h]    = '0;
@@ -129,7 +126,7 @@ interface ita_mha8_if
             inp_lockstep_dbg[h]   = 1'b0;
             inp_weight_lockstep_dbg[h] = 1'b0;
             inp_bias_lockstep_dbg[h] = 1'b0;
-            // TODO Stage 8: when expanding beyond head 0, replace passive tie-off assumptions with per-head configs.
+            // TODO Stage 11: keep interface shape unchanged when enabling heads 1-7 through env config.
         end
 
         ff_inp_i        = '0;
@@ -150,7 +147,7 @@ interface ita_mha8_if
         ff_inp_lockstep_dbg = 1'b0;
         ff_inp_weight_lockstep_dbg = 1'b0;
         ff_inp_bias_lockstep_dbg = 1'b0;
-        // TODO Stage 9: replace feed-forward tie-offs with active stimulus when testing Feedforward layer.
+        // TODO Stage 11: replace feed-forward tie-offs with active stimulus only in Feedforward tests.
     end
 
 endinterface : ita_mha8_if
