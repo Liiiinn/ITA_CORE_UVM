@@ -90,7 +90,62 @@ interface ita_mha8_if
     logic                    phase_mismatch_o;
     // TODO Stage 11: add feed-forward stream assertions after the FF path is added to active tests.
 
-    // TODO Stage 1: initialize or tie off driver-owned pins needed for an idle smoke shell.
+    // TODO ·: initialize or tie off driver-owned pins needed for an idle smoke shell.
+    initial begin
+        rst_ni = 0;
+        ctrl_i = '0;
+        inp_valid_i = '0;
+        inp_weight_valid_i = '0;
+        inp_bias_valid_i = '0;
+        per_head_ready_i = '0;
+        sum_ready_i = '0;
+
+        for (int unsigned h = 0; h < NumHeads; h++) begin
+            head_eps_mult_i[h]    = '0;
+            head_right_shift_i[h] = '0;
+            head_add_i[h]         = '0;
+            inp_i[h]              = '0;
+            inp_weight_i[h]       = '0;
+            inp_bias_i[h]         = '0;
+            inp_step_dbg[h]       = Idle;
+            inp_weight_step_dbg[h] = Idle;
+            inp_bias_step_dbg[h]  = Idle;
+            inp_tile_id_dbg[h]    = 0;
+            inp_weight_tile_id_dbg[h] = 0;
+            inp_bias_tile_id_dbg[h] = 0;
+            inp_inner_id_dbg[h]   = 0;
+            inp_weight_inner_id_dbg[h] = 0;
+            inp_bias_inner_id_dbg[h] = 0;
+            inp_beat_id_dbg[h]    = 0;
+            inp_weight_beat_id_dbg[h] = 0;
+            inp_bias_beat_id_dbg[h] = 0;
+            inp_lockstep_dbg[h]   = 1'b0;
+            inp_weight_lockstep_dbg[h] = 1'b0;
+            inp_bias_lockstep_dbg[h] = 1'b0;
+        end
+
+        ff_inp_valid_i = 0;
+        ff_inp_weight_valid_i = 0;
+        ff_inp_bias_valid_i = 0;
+        ff_inp_i        = '0;
+        ff_inp_weight_i = '0;
+        ff_inp_bias_i   = '0;
+        ff_inp_step_dbg = Idle;
+        ff_inp_weight_step_dbg = Idle;
+        ff_inp_bias_step_dbg = Idle;
+        ff_inp_tile_id_dbg = 0;
+        ff_inp_weight_tile_id_dbg = 0;
+        ff_inp_bias_tile_id_dbg = 0;
+        ff_inp_inner_id_dbg = 0;
+        ff_inp_weight_inner_id_dbg = 0;
+        ff_inp_bias_inner_id_dbg = 0;
+        ff_inp_beat_id_dbg = 0;
+        ff_inp_weight_beat_id_dbg = 0;
+        ff_inp_bias_beat_id_dbg = 0;
+        ff_inp_lockstep_dbg = 1'b0;
+        ff_inp_weight_lockstep_dbg = 1'b0;
+        ff_inp_bias_lockstep_dbg = 1'b0;
+    end
     // TODO Stage 8: implement early assertion blocks for X/Z, timeout, valid-ready, and backpressure.
 
 endinterface : ita_mha8_if
