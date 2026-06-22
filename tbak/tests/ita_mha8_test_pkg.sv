@@ -10,6 +10,6 @@ package ita_mha8_test_pkg;
     `include "uvm_macros.svh"
 
     `include "ita_mha8_base_test.svh"
-    `include "ita_mha8_ctrl_test.svh"
+    `include "ita_mha8_smoke_test.svh"
 
 endpackage : ita_mha8_test_pkg

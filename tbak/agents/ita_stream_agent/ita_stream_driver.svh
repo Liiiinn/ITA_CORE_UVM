@@ -38,10 +38,27 @@ class ita_stream_driver extends uvm_driver #(ita_stream_item);
     endtask : run_phase
 
     task drive_idle();
-        // TODO Stage 3: idle head0 input stream pins before source driving is implemented.
-        // TODO Stage 4: idle head0 weight/bias stream pins before those sources are implemented.
+        // Stage 3: idle head0 input stream pins before source driving is implemented.
+        // Stage 4: idle head0 weight/bias stream pins before those sources are implemented.
         // TODO Stage 5: idle head0 output ready before sink driving is implemented.
         // TODO Stage 11: idle sum and feed-forward pins before those paths are implemented.
+        case(cfg.kind)
+            ITA_STREAM_HEAD_INPUT:
+            begin
+                cfg.vif.inp_valid_i[cfg.head_id] <= 1'b0;
+                cfg.vif.inp_i[cfg.head_id] <= '0;
+            end
+            ITA_STREAM_HEAD_WEIGHT:
+            begin
+                cfg.vif.inp_weight_valid_i[cfg.head_id] <= 1'b0;
+                cfg.vif.inp_weight_i[cfg.head_id] <= '0;
+            end
+            ITA_STREAM_HEAD_BIAS:
+            begin
+                cfg.vif.inp_bias_valid_i[cfg.head_id] <= 1'b0;
+                cfg.vif.inp_bias_i[cfg.head_id] <= '0;
+            end
+        endcase
     endtask : drive_idle
 
     task drive_sink_ready();
@@ -52,10 +69,10 @@ class ita_stream_driver extends uvm_driver #(ita_stream_item);
     endtask : drive_sink_ready
 
     task drive_source_item(ita_stream_item tr);
-        tr.kind = cfg.kind;
-        tr.head_id = cfg.head_id;
+        if (tr.kind != cfg.kind || tr.head_id != cfg.head_id)
+            `uvm_error("STREAM_DRV", "item kind/head_id doesn't match with driver config!")
         // TODO Stage 7: publish issued_ap only after the source transaction format is stable.
-        // TODO Stage 3: implement head0 input source driving.
+        // Stage 3: implement head0 input source driving.
         // TODO Stage 4: implement head0 weight and bias source driving.
 
         case (cfg.kind)
@@ -65,13 +82,20 @@ class ita_stream_driver extends uvm_driver #(ita_stream_item);
             ITA_STREAM_FF_INPUT:    drive_ff_input(tr);
             ITA_STREAM_FF_WEIGHT:   drive_ff_weight(tr);
             ITA_STREAM_FF_BIAS:     drive_ff_bias(tr);
-            default: ;
+            default: 
+                `uvm_error("STREAM DRV", $sformatf("Unsupporetd source stream kind %s", cfg.kind.name()))
         endcase
     endtask : drive_source_item
 
     task drive_head_input(ita_stream_item tr);
         @(posedge cfg.vif.clk_i);
-        // TODO Stage 3: drive inp_i/inp_valid_i for head0 and wait for inp_ready_o.
+        // Stage 3: drive inp_i/inp_valid_i for head0 and wait for inp_ready_o.
+        cfg.vif.inp_i[cfg.head_id] <= tr.inp;
+        cfg.vif.inp_valid_i[cfg.head_id] <= 1'b1;
+        do begin
+            @(posedge cfg.vif.clk_i);
+        end while (!cfg.vif.inp_ready_o[cfg.head_id]);
+        cfg.vif.inp_valid_i[cfg.head_id] <= 1'b0;
     endtask : drive_head_input
 
     task drive_head_weight(ita_stream_item tr);

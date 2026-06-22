@@ -20,12 +20,19 @@ class ita_stream_config extends uvm_object;
 
     function bit is_sink();
         // TODO Stage 5: return true for output sink streams after output ready driving is implemented.
-        return 1'b0;
+        return !is_source();
     endfunction : is_sink
 
     function bit is_source();
-        // TODO Stage 3-4: return true for input/weight/bias source streams after source driving is implemented.
-        return 1'b0;
+        // Stage 3-4: return true for input/weight/bias source streams after source driving is implemented.
+        return kind inside {
+            ITA_STREAM_HEAD_INPUT,
+            ITA_STREAM_HEAD_WEIGHT,
+            ITA_STREAM_HEAD_BIAS,
+            ITA_STREAM_FF_INPUT,
+            ITA_STREAM_FF_WEIGHT,
+            ITA_STREAM_FF_BIAS
+        };
     endfunction : is_source
 
     function int unsigned next_stall_cycles();

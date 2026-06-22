@@ -43,6 +43,17 @@ class ita_mha8_stream_smoke_seq extends uvm_sequence #(ita_stream_item);
 
     task body();
         // TODO Stage 3: create and send one head0 input stream item.
+        ita_stream_item inp;
+        inp = ita_stream_item::type_id::create("inp");
+        start_item(inp);
+
+        inp.kind = ITA_STREAM_HEAD_INPUT;
+        inp.head_id = 0;
+        inp.beat_id = 0;
+        inp.inp = '0;
+        
+        finish_item(inp);
+        
         // TODO Stage 4: extend this sequence for head0 weight and bias items.
         // TODO Stage 5: use output stream monitoring instead of source sequence items for output.
     endtask : body

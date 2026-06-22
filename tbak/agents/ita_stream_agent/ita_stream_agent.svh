@@ -41,6 +41,7 @@ class ita_stream_agent extends uvm_agent;
         super.connect_phase(phase);
 
         // TODO Stage 3-5: connect mon.ap to this agent ap after accepted-beat sampling is implemented.
+        mon.ap.connect(ap);
 
         if (cfg.is_active == UVM_ACTIVE) begin
             drv.seq_item_port.connect(sqr.seq_item_export);
