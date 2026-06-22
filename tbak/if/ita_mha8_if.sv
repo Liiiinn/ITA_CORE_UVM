@@ -8,12 +8,12 @@ interface ita_mha8_if
 
     logic                    rst_ni;
     ctrl_t                   ctrl_i;
-    // TODO Stage 2: add ctrl_i.start X/Z and one-cycle pulse assertions after ctrl_driver implements the pulse.
+    // TODO Stage 8: add ctrl_i.start X/Z and one-cycle pulse assertions after ctrl_driver implements the pulse.
 
     requant_const_array_t    head_eps_mult_i    [NumHeads];
     requant_const_array_t    head_right_shift_i [NumHeads];
     requant_array_t          head_add_i         [NumHeads];
-    // TODO Stage 2: add head0 requant X/Z assertions while ctrl_i.start is asserted.
+    // TODO Stage 8: add head0 requant X/Z assertions while ctrl_i.start is asserted.
 
     logic [NumHeads-1:0]     inp_valid_i;
     logic [NumHeads-1:0]     inp_ready_o;

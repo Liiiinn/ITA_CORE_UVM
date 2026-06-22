@@ -7,8 +7,6 @@ class ita_mha8_env extends uvm_env;
     ita_mha8_env_config cfg;
 
     ita_ctrl_agent ctrl_agt;
-    // TODO Stage 2: create and configure ctrl_agt after ctrl_cfg is allocated.
-
     ita_stream_agent input_agt       [8];
     ita_stream_agent weight_agt      [8];
     ita_stream_agent bias_agt        [8];
@@ -33,7 +31,9 @@ class ita_mha8_env extends uvm_env;
             `uvm_fatal("ITA_ENV_CFG", "ita_mha8_env_config was not set")
         end
 
-        // TODO Stage 2: set ctrl_cfg into uvm_config_db and create ctrl_agt.
+        // Stage 2: set ctrl_cfg into uvm_config_db and create ctrl_agt.
+        uvm_config_db#(ita_ctrl_config)::set(this, "ctrl_agt", "cfg", cfg.ctrl_cfg);
+        ctrl_agt = ita_ctrl_agent::type_id::create("ctrl_agt", this);
         // TODO Stage 3: set input_cfg[0] into uvm_config_db and create input_agt[0].
         // TODO Stage 4: set weight_cfg[0]/bias_cfg[0] and create weight_agt[0]/bias_agt[0].
         // TODO Stage 5: set head_output_cfg[0] and create head_output_agt[0].

@@ -9,12 +9,10 @@ class ita_ctrl_agent extends uvm_agent;
     ita_ctrl_driver drv;
     ita_ctrl_monitor mon;
     uvm_analysis_port #(ita_ctrl_item) ap;
-    // TODO Stage 2: expose monitored ctrl transactions through this analysis port after ctrl_monitor sampling works.
 
     function new(string name = "ita_ctrl_agent", uvm_component parent = null);
         super.new(name, parent);
         ap = new("ap", this);
-        // TODO Stage 2: keep the port allocated; implement forwarding in connect_phase when monitor output is meaningful.
     endfunction : new
 
     function void build_phase(uvm_phase phase);
@@ -37,7 +35,8 @@ class ita_ctrl_agent extends uvm_agent;
     function void connect_phase(uvm_phase phase);
         super.connect_phase(phase);
 
-        // TODO Stage 2: connect mon.ap to this agent ap after ctrl_monitor publishes sampled ctrl items.
+        // Stage 2: connect mon.ap to this agent ap after ctrl_monitor publishes sampled ctrl items.
+        mon.ap.connect(ap);
 
         if (cfg.is_active == UVM_ACTIVE) begin
             drv.seq_item_port.connect(sqr.seq_item_export);

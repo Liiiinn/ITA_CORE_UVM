@@ -7,8 +7,6 @@ class ita_mha8_env_config extends uvm_object;
     virtual ita_mha8_if vif;
 
     ita_ctrl_config ctrl_cfg;
-    // TODO Stage 2: create ctrl_cfg, set vif/is_active, and add shared ctrl timing knobs.
-
     ita_stream_config input_cfg       [8];
     ita_stream_config weight_cfg      [8];
     ita_stream_config bias_cfg        [8];
@@ -27,7 +25,10 @@ class ita_mha8_env_config extends uvm_object;
     endfunction : new
 
     function void create_default_agent_configs();
-        // TODO Stage 2: allocate ctrl_cfg and bind cfg.vif to the ctrl agent config.
+        // Stage 2: allocate ctrl_cfg and bind cfg.vif to the ctrl agent config.
+        ctrl_cfg = ita_ctrl_config::type_id::create("ctrl_cfg");
+        ctrl_cfg.vif = vif;
+        ctrl_cfg.is_active = UVM_ACTIVE;
         // TODO Stage 3: allocate input_cfg[0] for ITA_STREAM_HEAD_INPUT with head_id 0.
         // TODO Stage 4: allocate weight_cfg[0] and bias_cfg[0] for head_id 0.
         // TODO Stage 5: allocate head_output_cfg[0] for output ready/monitoring.

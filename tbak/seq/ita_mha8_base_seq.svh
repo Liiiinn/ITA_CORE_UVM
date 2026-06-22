@@ -9,7 +9,20 @@ class ita_mha8_base_seq extends uvm_sequence #(ita_ctrl_item);
     endfunction : new
 
     task body();
-        // TODO Stage 2: create an ita_ctrl_item, set minimal ctrl fields, and call start_item/finish_item.
+        // Stage 2: create an ita_ctrl_item, set minimal ctrl fields, and call start_item/finish_item.
+        ita_ctrl_item ctrl;
+        ctrl = ita_ctrl_item::type_id::create("ctrl");
+        start_item(ctrl);
+        
+        ctrl.ctrl.start = 1'b1;
+        ctrl.ctrl.layer = Attention;
+        ctrl.ctrl.activation = Identity;
+        ctrl.ctrl.tile_s = 1;
+        ctrl.ctrl.tile_e = 1;
+        ctrl.ctrl.tile_p = 1;
+        ctrl.ctrl.tile_f = 1;
+
+        finish_item(ctrl);
     endtask : body
 
 endclass : ita_mha8_base_seq
