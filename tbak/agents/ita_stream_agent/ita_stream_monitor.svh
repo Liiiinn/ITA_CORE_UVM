@@ -41,7 +41,7 @@ class ita_stream_monitor extends uvm_monitor;
             ITA_STREAM_HEAD_INPUT:
                 return cfg.vif.inp_valid_i[cfg.head_id] && cfg.vif.inp_ready_o[cfg.head_id];
             ITA_STREAM_HEAD_WEIGHT:
-                return cfg.vif.inp_weight_i[cfg.head_id] && cfg.vif.inp_weight_ready_o[cfg.head_id];
+                return cfg.vif.inp_weight_valid_i[cfg.head_id] && cfg.vif.inp_weight_ready_o[cfg.head_id];
             ITA_STREAM_HEAD_BIAS:
                 return cfg.vif.inp_bias_valid_i[cfg.head_id] && cfg.vif.inp_bias_ready_o[cfg.head_id];
         endcase
@@ -55,7 +55,7 @@ class ita_stream_monitor extends uvm_monitor;
         tr.kind = cfg.kind;
         tr.head_id = cfg.head_id;
         tr.beat_id = sample_count;
-        // TODO Stage 3-5: sample the payload selected by cfg.kind and cfg.head_id.
+        // Stage 3-5: sample the payload selected by cfg.kind and cfg.head_id.
         case(cfg.kind)
             ITA_STREAM_HEAD_INPUT: begin
                 tr.inp = cfg.vif.inp_i[cfg.head_id];

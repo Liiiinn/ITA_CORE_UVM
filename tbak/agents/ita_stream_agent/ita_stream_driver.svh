@@ -22,6 +22,7 @@ class ita_stream_driver extends uvm_driver #(ita_stream_item);
 
     task run_phase(uvm_phase phase);
         ita_stream_item tr;
+        int unsigned wait_cycles;
 
         drive_idle();
         wait (cfg.vif.rst_ni === 1'b1);
@@ -33,6 +34,15 @@ class ita_stream_driver extends uvm_driver #(ita_stream_item);
                 seq_item_port.get_next_item(tr);
                 drive_source_item(tr);
                 seq_item_port.item_done();
+            end
+        end
+
+        wait_cycles = 0;
+        while (!cfg.vif.inp_ready_o[cfg.head_id] || ! cfg.vif.inp_weight_ready_o[cfg.head_id] || !cfg.vif.inp_bias_ready_o[cfg.head_id]) begin
+            @ (posedge cfg.vif.clk_i);
+            wait_cycles ++;
+            if (wait_cycles > 10000) begin
+                `uvm_fatal("STREAM DRV", "Timeout wait for ready out");
             end
         end
     endtask : run_phase
@@ -73,7 +83,7 @@ class ita_stream_driver extends uvm_driver #(ita_stream_item);
             `uvm_error("STREAM_DRV", "item kind/head_id doesn't match with driver config!")
         // TODO Stage 7: publish issued_ap only after the source transaction format is stable.
         // Stage 3: implement head0 input source driving.
-        // TODO Stage 4: implement head0 weight and bias source driving.
+        // Stage 4: implement head0 weight and bias source driving.
 
         case (cfg.kind)
             ITA_STREAM_HEAD_INPUT:  drive_head_input(tr);
@@ -88,24 +98,75 @@ class ita_stream_driver extends uvm_driver #(ita_stream_item);
     endtask : drive_source_item
 
     task drive_head_input(ita_stream_item tr);
+        int unsigned wait_cycles;
+
         @(posedge cfg.vif.clk_i);
         // Stage 3: drive inp_i/inp_valid_i for head0 and wait for inp_ready_o.
         cfg.vif.inp_i[cfg.head_id] <= tr.inp;
         cfg.vif.inp_valid_i[cfg.head_id] <= 1'b1;
-        do begin
+
+        wait_cycles = 0;
+        while (!cfg.vif.inp_ready_o[cfg.head_id]) begin
             @(posedge cfg.vif.clk_i);
-        end while (!cfg.vif.inp_ready_o[cfg.head_id]);
+            wait_cycles++;
+
+            if (wait_cycles > 10000) begin
+                `uvm_fatal("STREAM_DRV", "timeout waiting for inp_ready_o")
+            end
+        end
+
         cfg.vif.inp_valid_i[cfg.head_id] <= 1'b0;
+        // do begin
+        //     @(posedge cfg.vif.clk_i);
+        // end while (!cfg.vif.inp_ready_o[cfg.head_id]);
+        // cfg.vif.inp_valid_i[cfg.head_id] <= 1'b0;
     endtask : drive_head_input
 
     task drive_head_weight(ita_stream_item tr);
+        int unsigned wait_cycles;
         @(posedge cfg.vif.clk_i);
-        // TODO Stage 4: drive inp_weight_i/inp_weight_valid_i for head0 and wait for inp_weight_ready_o.
+        // Stage 4: drive inp_weight_i/inp_weight_valid_i for head0 and wait for inp_weight_ready_o.
+        cfg.vif.inp_weight_i[cfg.head_id] <= tr.weight;
+        cfg.vif.inp_weight_valid_i[cfg.head_id] <= 1'b1;
+        
+        wait_cycles = 0;
+        while (!cfg.vif.inp_weight_ready_o[cfg.head_id]) begin
+            @(posedge cfg.vif.clk_i);
+            wait_cycles++;
+
+            if (wait_cycles > 10000) begin
+                `uvm_fatal("STREAM_DRV", "timeout waiting for inp_weight_ready_o")
+            end
+        end
+
+        cfg.vif.inp_valid_i[cfg.head_id] <= 1'b0;
+
+        // do begin
+        //     @ (posedge cfg.vif.clk_i);
+        // end while (!cfg.vif.inp_weight_ready_o[cfg.head_id]);
+        // cfg.vif.inp_weight_valid_i[cfg.head_id] <= 1'b0;
     endtask : drive_head_weight
 
     task drive_head_bias(ita_stream_item tr);
+        int unsigned wait_cycles;
         @(posedge cfg.vif.clk_i);
-        // TODO Stage 4: drive inp_bias_i/inp_bias_valid_i for head0 and wait for inp_bias_ready_o.
+        // Stage 4: drive inp_bias_i/inp_bias_valid_i for head0 and wait for inp_bias_ready_o.
+        cfg.vif.inp_bias_i[cfg.head_id] <= tr.bias;
+        cfg.vif.inp_bias_valid_i[cfg.head_id] <= 1'b1;
+
+        wait_cycles = 0;
+        while (!cfg.vif.inp_bias_ready_o[cfg.head_id]) begin
+            @(posedge cfg.vif.clk_i);
+            wait_cycles++;
+
+            if (wait_cycles > 10000) begin
+                `uvm_fatal("STREAM_DRV", "timeout waiting for inp_bias_ready_o")
+            end
+        end
+        // do begin
+        //     @ (posedge cfg.vif.clk_i);
+        // end while (!cfg.vif.inp_bias_ready_o[cfg.head_id]);
+        cfg.vif.inp_bias_valid_i[cfg.head_id] <= 1'b0;
     endtask : drive_head_bias
 
     task drive_ff_input(ita_stream_item tr);

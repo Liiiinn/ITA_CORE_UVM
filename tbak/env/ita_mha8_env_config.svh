@@ -33,8 +33,8 @@ class ita_mha8_env_config extends uvm_object;
         // Stage 5: allocate head_output_cfg[0] for output ready/monitoring.
         for (int unsigned h; h < 8; h++) begin
             input_cfg[h] = create_stream_cfg($sformatf("input_cfg_%0d", h), ITA_STREAM_HEAD_INPUT, h, UVM_ACTIVE);
-            weight_cfg[h] = create_stream_cfg($sformatf("weight_cfg_%0d", h), ITA_STREAM_HEAD_WEIGHT, h, UVM_PASSIVE);
-            bias_cfg[h] = create_stream_cfg($sformatf("bias_cfg_%0d", h), ITA_STREAM_HEAD_BIAS, h, UVM_PASSIVE);
+            weight_cfg[h] = create_stream_cfg($sformatf("weight_cfg_%0d", h), ITA_STREAM_HEAD_WEIGHT, h, UVM_ACTIVE);
+            bias_cfg[h] = create_stream_cfg($sformatf("bias_cfg_%0d", h), ITA_STREAM_HEAD_BIAS, h, UVM_ACTIVE);
             head_output_cfg[h] = create_stream_cfg($sformatf("head_output_cfg_%0d", h), ITA_STREAM_HEAD_OUTPUT, h, UVM_ACTIVE);
         end
         // TODO Stage 11: expand config creation to heads 1-7, sum, and feed-forward paths.
