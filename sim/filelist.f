@@ -5,6 +5,7 @@
 +incdir+../tbak/common
 +incdir+../tbak/env
 +incdir+../tbak/seq
++incdir+../tbak/vseq
 +incdir+../tbak/tests
 
 ../dut/cf_math_pkg.sv
@@ -46,5 +47,6 @@
 ../tbak/common/ita_mha8_common_pkg.sv
 ../tbak/env/ita_mha8_env_pkg.sv
 ../tbak/seq/ita_mha8_seq_pkg.sv
+../tbak/vseq/ita_mha8_vseq_pkg.sv
 ../tbak/tests/ita_mha8_test_pkg.sv
 ../tbak/top/ita_mha8_tb_top.sv

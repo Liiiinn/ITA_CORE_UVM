@@ -5,7 +5,6 @@ package ita_mha8_seq_pkg;
     import ita_ctrl_agent_pkg::*;
     import ita_stream_agent_pkg::*;
     import ita_mha8_common_pkg::*;
-    import ita_mha8_vsequence_pkg::*;
     `include "uvm_macros.svh"
 
     `include "ita_mha8_base_seq.svh"
