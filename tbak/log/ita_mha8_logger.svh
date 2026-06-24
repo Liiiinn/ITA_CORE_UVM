@@ -1,11 +1,11 @@
-`ifndef ITA_MHA8_TRANSACTION_LOGGER_SVH
-`define ITA_MHA8_TRANSACTION_LOGGER_SVH
+`ifndef ITA_MHA8_LOGGER_SVH
+`define ITA_MHA8_LOGGER_SVH
 
-class ita_mha8_transaction_logger extends uvm_component;
-    `uvm_component_utils(ita_mha8_transaction_logger)
+class ita_mha8_logger extends uvm_component;
+    `uvm_component_utils(ita_mha8_logger)
 
-    uvm_analysis_imp_source #(ita_stream_item, ita_mha8_transaction_logger) source_imp;
-    uvm_analysis_imp_stream #(ita_stream_item, ita_mha8_transaction_logger) stream_imp;
+    uvm_analysis_imp_source #(ita_stream_item, ita_mha8_logger) source_imp;
+    uvm_analysis_imp_stream #(ita_stream_item, ita_mha8_logger) stream_imp;
     // TODO Stage 7: define which analysis imp receives driver-issued source items.
     // TODO Stage 7: define which analysis imp receives monitor-sampled accepted/output items.
 
@@ -17,7 +17,7 @@ class ita_mha8_transaction_logger extends uvm_component;
     string actual_path;
     // TODO Stage 10: pass actual_path from ita_mha8_core_item or test config before adding file output.
 
-    function new(string name = "ita_mha8_transaction_logger", uvm_component parent = null);
+    function new(string name = "ita_mha8_logger", uvm_component parent = null);
         super.new(name, parent);
         source_imp = new("source_imp", this);
         stream_imp = new("stream_imp", this);
@@ -52,6 +52,6 @@ class ita_mha8_transaction_logger extends uvm_component;
         // TODO Stage 7: print logger counters after actual-output logging is implemented.
     endfunction : report_phase
 
-endclass : ita_mha8_transaction_logger
+endclass : ita_mha8_logger
 
-`endif // ITA_MHA8_TRANSACTION_LOGGER_SVH
+`endif // ITA_MHA8_LOGGER_SVH
