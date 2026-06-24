@@ -1,5 +1,6 @@
 `ifndef ITA_MHA8_VSEQUENCE_SVH
 `define ITA_MHA8_VSEQUENCE_SVH
+
 class ita_mha8_vsequence extends uvm_sequence;
     `uvm_object_utils(ita_mha8_vsequence)
     `uvm_declare_p_sequencer(ita_mha8_vsequencer)
@@ -11,7 +12,17 @@ class ita_mha8_vsequence extends uvm_sequence;
     endfunction : new
 
     virtual task body();
+        ita_ctrl_single_seq ctrl_seq;
+        ita_stream_single_seq inp_seq;
+        ita_stream_single_seq weight_seq;
+        ita_stream_single_seq bias_seq;
+
+        if (core == null)
+            core = ita_mha8_core_item::type_id::create("core");
         
+        ctrl_seq = ita_mha8_base_seq::type_id::create("ctrl_seq");
+
+
     endtask : body
 
     function ita_ctrl_item make_ctrl_item(ita_mha8_core_item core);
@@ -49,9 +60,13 @@ class ita_mha8_vsequence extends uvm_sequence;
         tr.step = step;
 
         case(kind)
-            ITA_STREAM_HEAD_INPUT: tr.inp = core.input_payload[beat_id];
-            ITA_STREAM_HEAD_WEIGHT: tr.weight = core.input_payload[beat_id];
-            ITA_STREAM_HEAD_BIAS: tr.bias = core.input_payload[beat_id];
+            ITA_STREAM_HEAD_INPUT: 
+                if (core.input_payload.size() > beat_id)
+                    tr.inp = core.input_payload[beat_id];
+                else
+                    tr.inp = '0;
+            ITA_STREAM_HEAD_WEIGHT: tr.weight = core.weight_payload[beat_id];
+            ITA_STREAM_HEAD_BIAS: tr.bias = core.bias_payload[beat_id];
             default:
                 `uvm_warning(get_type_name(), $sformatf("Unhandles stream kind: %s", kind.name()));
         endcase
