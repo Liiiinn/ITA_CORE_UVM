@@ -8,7 +8,7 @@ class ita_mha8_vsequence extends uvm_sequence;
     ita_mha8_core_item core;
 
     function new(string name = "ita_mha8_vsequence");
-        super.new();
+        super.new(name);
     endfunction : new
 
     virtual task body();
@@ -20,8 +20,27 @@ class ita_mha8_vsequence extends uvm_sequence;
         if (core == null)
             core = ita_mha8_core_item::type_id::create("core");
         
-        ctrl_seq = ita_mha8_base_seq::type_id::create("ctrl_seq");
+        ctrl_seq = ita_ctrl_single_seq::type_id::create("ctrl_seq");
+        ctrl_seq.ctrl = make_ctrl_item(core);
+        ctrl_seq.start(p_sequencer.ctrl_sqr);
 
+        for (int unsigned beat = 0; beat < core.input_payload.size(); beat ++) begin
+            inp_seq = ita_stream_single_seq::type_id::create($sformatf("inp_seq_%0d", beat));
+            inp_seq.stream = make_stream_item(core, ITA_STREAM_HEAD_INPUT, 0, beat, 1'b1, Q);
+            inp_seq.start(p_sequencer.inp_sqr);
+        end
+
+        for (int unsigned beat = 0; beat < core.weight_payload.size(); beat ++) begin
+            weight_seq = ita_stream_single_seq::type_id::create($sformatf("weight_seq_%0d", beat));
+            weight_seq.stream = make_stream_item(core, ITA_STREAM_HEAD_WEIGHT, 0, beat, 1'b1, Q);
+            weight_seq.start(p_sequencer.weight_sqr);
+        end
+
+        for (int unsigned beat = 0; beat < core.bias_payload.size(); beat ++) begin
+            bias_seq = ita_stream_single_seq::type_id::create($sformatf("bias_seq_%0d", beat));
+            bias_seq.stream = make_stream_item(core, ITA_STREAM_HEAD_BIAS, 0, beat, 1'b1, Q);
+            bias_seq.start(p_sequencer.bias_sqr);
+        end
 
     endtask : body
 
@@ -65,10 +84,18 @@ class ita_mha8_vsequence extends uvm_sequence;
                     tr.inp = core.input_payload[beat_id];
                 else
                     tr.inp = '0;
-            ITA_STREAM_HEAD_WEIGHT: tr.weight = core.weight_payload[beat_id];
-            ITA_STREAM_HEAD_BIAS: tr.bias = core.bias_payload[beat_id];
+            ITA_STREAM_HEAD_WEIGHT: 
+                if (core.weight_payload.size() > beat_id)
+                    tr.weight = core.weight_payload[beat_id];
+                else
+                    tr.weight = '0;
+            ITA_STREAM_HEAD_BIAS:
+                if (core.bias_payload.size() > beat_id)
+                    tr.bias = core.bias_payload[beat_id];
+                else
+                    tr.bias = '0;
             default:
-                `uvm_warning(get_type_name(), $sformatf("Unhandles stream kind: %s", kind.name()));
+                `uvm_warning(get_type_name(), $sformatf("Unhandles stream kind: %s", kind.name()))
         endcase
 
         return tr;

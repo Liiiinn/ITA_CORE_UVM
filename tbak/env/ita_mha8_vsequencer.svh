@@ -13,6 +13,7 @@ class ita_mha8_vsequencer extends uvm_sequencer;
         super.new(name, parent);
     endfunction : new
 
+
 endclass : ita_mha8_vsequencer
 
 `endif // ITA_MHA8_VSEQUENCER_SVH

@@ -5,6 +5,7 @@ class ita_mha8_env extends uvm_env;
     `uvm_component_utils(ita_mha8_env)
 
     ita_mha8_env_config cfg;
+    ita_mha8_vsequencer vsqr;
 
     ita_ctrl_agent ctrl_agt;
     ita_stream_agent input_agt       [8];
@@ -50,10 +51,18 @@ class ita_mha8_env extends uvm_env;
             uvm_config_db#(ita_stream_config)::set(this, $sformatf("head_output_agt[%0d]", h), "cfg", cfg.head_output_cfg[h]);
             head_output_agt[h] = ita_stream_agent::type_id::create($sformatf("head_output_agt[%0d]", h), this);
         end
+
+        vsqr = ita_mha8_vsequencer::type_id::create("vsqr", this);
     endfunction : build_phase
 
     function void connect_phase(uvm_phase phase);
         super.connect_phase(phase);
+
+        vsqr.ctrl_sqr = ctrl_agt.sqr;
+
+        vsqr.inp_sqr = input_agt[0].sqr;
+        vsqr.weight_sqr = weight_agt[0].sqr;
+        vsqr.bias_sqr = bias_agt[0].sqr;
 
         // TODO Stage 7: connect head_output_agt[0].ap to a passive actual-output logger.
         // TODO Stage 8: connect monitor analysis ports to a smoke scoreboard for count/X/Z/timeout checks.

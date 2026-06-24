@@ -16,7 +16,7 @@ class ita_mha8_core_item extends uvm_sequence_item;
     inp_t        input_payload[$];
     inp_weight_t weight_payload[$];
     bias_t       bias_payload[$];
-    // TODO Stage 6: define head0 payload ordering before adding random or full-head payloads.
+    // Stage 6: define head0 payload ordering before adding random or full-head payloads.
 
     string       expected_path;
     string       actual_path;
