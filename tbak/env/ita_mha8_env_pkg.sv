@@ -8,6 +8,7 @@ package ita_mha8_env_pkg;
     `include "uvm_macros.svh"
 
     `include "ita_mha8_env_config.svh"
+    `include "ita_mha8_vsequencer.svh"
     `include "ita_mha8_env.svh"
 
 endpackage : ita_mha8_env_pkg

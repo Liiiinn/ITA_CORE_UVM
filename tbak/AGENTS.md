@@ -254,3 +254,6 @@ Do not mix per-head MHA traffic and feed-forward traffic in the early head0 stag
 - Stage 5 should make head0 output ready always high and monitor `per_head_valid_o[0] && per_head_ready_i[0]`.
 - Stage 8 should add assertions for X/Z, valid-ready stability, timeout, and output stability under backpressure.
 - Stage 11 should handle heads 1-7, OW sum, feed-forward, and full MHA8 attribution.
+
+
+VSEQ & VSQR
