@@ -11,7 +11,6 @@ class ita_mha8_env extends uvm_env;
     ita_stream_agent weight_agt      [8];
     ita_stream_agent bias_agt        [8];
     ita_stream_agent head_output_agt [8];
-    // TODO Stage 3-5: create head0 input, weight, bias, and output agents first.
 
     ita_stream_agent sum_output_agt;
     ita_stream_agent ff_input_agt;
@@ -36,6 +35,8 @@ class ita_mha8_env extends uvm_env;
         ctrl_agt = ita_ctrl_agent::type_id::create("ctrl_agt", this);
         // Stage 3: set input_cfg[0] into uvm_config_db and create input_agt[0].
         // Stage 4: set weight_cfg[0]/bias_cfg[0] and create weight_agt[0]/bias_agt[0].
+        // Stage 5: set head_output_cfg[0] and create head_output_agt[0].
+        // TODO Stage 11: create heads 1-7, sum_output_agt, and ff_* agents.
         for (int unsigned h = 0; h < 8; h ++) begin
             uvm_config_db#(ita_stream_config)::set(this, $sformatf("input_agt[%0d]", h), "cfg", cfg.input_cfg[h]);
             input_agt[h] = ita_stream_agent::type_id::create($sformatf("input_agt[%0d]", h), this);
@@ -45,10 +46,10 @@ class ita_mha8_env extends uvm_env;
             
             uvm_config_db#(ita_stream_config)::set(this, $sformatf("bias_agt[%0d]", h), "cfg", cfg.bias_cfg[h]);
             bias_agt[h] = ita_stream_agent::type_id::create($sformatf("bias_agt[%0d]", h), this);                 
+        
+            uvm_config_db#(ita_stream_config)::set(this, $sformatf("head_output_agt[%0d]", h), "cfg", cfg.head_output_cfg[h]);
+            head_output_agt[h] = ita_stream_agent::type_id::create($sformatf("head_output_agt[%0d]", h), this);
         end
-
-        // TODO Stage 5: set head_output_cfg[0] and create head_output_agt[0].
-        // TODO Stage 11: create heads 1-7, sum_output_agt, and ff_* agents.
     endfunction : build_phase
 
     function void connect_phase(uvm_phase phase);

@@ -10,7 +10,7 @@ class ita_stream_agent extends uvm_agent;
     ita_stream_monitor mon;
     uvm_analysis_port #(ita_stream_item) ap;
     uvm_analysis_port #(ita_stream_item) issued_ap;
-    // TODO Stage 3-5: use ap for monitored accepted beats after stream_monitor sampling works.
+    // Stage 3-5: use ap for monitored accepted beats after stream_monitor sampling works.
     // TODO Stage 7: use issued_ap for optional source logging after source driver behavior is stable.
 
     function new(string name = "ita_stream_agent", uvm_component parent = null);
@@ -40,7 +40,7 @@ class ita_stream_agent extends uvm_agent;
     function void connect_phase(uvm_phase phase);
         super.connect_phase(phase);
 
-        // TODO Stage 3-5: connect mon.ap to this agent ap after accepted-beat sampling is implemented.
+        // Stage 3-5: connect mon.ap to this agent ap after accepted-beat sampling is implemented.
         mon.ap.connect(ap);
 
         if (cfg.is_active == UVM_ACTIVE) begin

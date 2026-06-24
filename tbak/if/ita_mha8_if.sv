@@ -21,12 +21,12 @@ interface ita_mha8_if
     logic [NumHeads-1:0]     inp_weight_ready_o;
     logic [NumHeads-1:0]     inp_bias_valid_i;
     logic [NumHeads-1:0]     inp_bias_ready_o;
-    // TODO Stage 3-4: add valid-ready stability assertions for head0 input/weight/bias streams.
+    // TODO Stage 8: add valid-ready stability assertions for head0 input/weight/bias streams.
 
     inp_t                    inp_i        [NumHeads];
     inp_weight_t             inp_weight_i [NumHeads];
     bias_t                   inp_bias_i   [NumHeads];
-    // TODO Stage 3-4: add head0 payload stability assertions while valid is high and ready is low.
+    // TODO Stage 8: add head0 payload stability assertions while valid is high and ready is low.
 
     step_e                   inp_step_dbg           [NumHeads];
     step_e                   inp_weight_step_dbg    [NumHeads];
@@ -50,7 +50,7 @@ interface ita_mha8_if
     logic [NumHeads-1:0]     per_head_busy_o;
     requant_oup_t            per_head_oup_o  [NumHeads];
     step_e                   per_head_step_o [NumHeads];
-    // TODO Stage 5: add head0 output backpressure stability assertion after output ready driving exists.
+    // TODO Stage 8: add head0 output backpressure stability assertion after output ready driving exists.
 
     logic                    sum_valid_o;
     logic                    sum_ready_i;

@@ -22,7 +22,7 @@ class ita_mha8_base_test extends uvm_test;
         cfg = ita_mha8_env_config::type_id::create("cfg");
         cfg.vif = vif;
         cfg.create_default_agent_configs();
-        // TODO Stage 2-5: override cfg from derived tests before env is created.
+        // Stage 2-5: override cfg from derived tests before env is created.
 
         uvm_config_db#(ita_mha8_env_config)::set(this, "env", "cfg", cfg);
         env = ita_mha8_env::type_id::create("env", this);

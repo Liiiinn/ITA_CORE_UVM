@@ -35,7 +35,7 @@ class ita_stream_monitor extends uvm_monitor;
     function bit is_handshake();
         // Stage 3: return input valid/ready for head0 input stream.
         // Stage 4: add weight and bias valid/ready checks.
-        // TODO Stage 5: add head0 output valid/ready check.
+        // Stage 5: add head0 output valid/ready check.
         // TODO Stage 11: add heads 1-7, sum, and feed-forward handshake checks.
         case(cfg.kind)
             ITA_STREAM_HEAD_INPUT:
@@ -44,6 +44,8 @@ class ita_stream_monitor extends uvm_monitor;
                 return cfg.vif.inp_weight_valid_i[cfg.head_id] && cfg.vif.inp_weight_ready_o[cfg.head_id];
             ITA_STREAM_HEAD_BIAS:
                 return cfg.vif.inp_bias_valid_i[cfg.head_id] && cfg.vif.inp_bias_ready_o[cfg.head_id];
+            ITA_STREAM_HEAD_OUTPUT:
+                return cfg.vif.per_head_valid_o[cfg.head_id] && cfg.vif.per_head_ready_i[cfg.head_id];
         endcase
         return 1'b0;
     endfunction : is_handshake
@@ -77,6 +79,10 @@ class ita_stream_monitor extends uvm_monitor;
                 tr.inner_tile_id = cfg.vif.inp_inner_id_dbg[cfg.head_id];
                 tr.is_lockstep = cfg.vif.inp_lockstep_dbg[cfg.head_id];
                 tr.step = cfg.vif.inp_step_dbg[cfg.head_id];
+            end
+            ITA_STREAM_HEAD_OUTPUT: begin
+                tr.oup = cfg.vif.per_head_oup_o[cfg.head_id];
+                tr.step = cfg.vif.per_head_step_o[cfg.head_id];
             end
 
         endcase

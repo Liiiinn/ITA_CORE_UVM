@@ -44,10 +44,8 @@ class ita_mha8_stream_smoke_seq extends uvm_sequence #(ita_stream_item);
     task body();
         // Stage 3: create and send one head0 input stream item.
         // Stage 4: extend this sequence for head0 weight and bias items.
-        send_item(ITA_STREAM_HEAD_INPUT, 0, 0);
-        send_item(ITA_STREAM_HEAD_WEIGHT, 0, 0);
-        send_item(ITA_STREAM_HEAD_BIAS, 0, 0);
-        // TODO Stage 5: use output stream monitoring instead of source sequence items for output.
+        send_item(kind, head_id, beat_id);
+        // Stage 5: use output stream monitoring instead of source sequence items for output.
     endtask : body
 
     task send_item(
@@ -64,25 +62,15 @@ class ita_mha8_stream_smoke_seq extends uvm_sequence #(ita_stream_item);
         tr.beat_id = beat_id;
 
         case (kind)
-            ITA_STREAM_HEAD_INPUT: begin
-                tr.inp = '0;
-            end
-
-            ITA_STREAM_HEAD_WEIGHT: begin
-                tr.weight = '0;
-            end
-
-            ITA_STREAM_HEAD_BIAS: begin
-                tr.bias = '0;
-            end
-
-            default: begin
+            ITA_STREAM_HEAD_INPUT:  tr.inp    = '0;
+            ITA_STREAM_HEAD_WEIGHT: tr.weight = '0;
+            ITA_STREAM_HEAD_BIAS:   tr.bias   = '0;
+            default:
                 `uvm_warning(get_type_name(), $sformatf("Unhandled stream kind: %0d", kind))
-            end
         endcase
 
         finish_item(tr);
-    endtask
+    endtask : send_item
 
 endclass : ita_mha8_stream_smoke_seq
 

@@ -50,7 +50,7 @@ class ita_stream_driver extends uvm_driver #(ita_stream_item);
     task drive_idle();
         // Stage 3: idle head0 input stream pins before source driving is implemented.
         // Stage 4: idle head0 weight/bias stream pins before those sources are implemented.
-        // TODO Stage 5: idle head0 output ready before sink driving is implemented.
+        // Stage 5: idle head0 output ready before sink driving is implemented.
         // TODO Stage 11: idle sum and feed-forward pins before those paths are implemented.
         case(cfg.kind)
             ITA_STREAM_HEAD_INPUT:
@@ -68,13 +68,30 @@ class ita_stream_driver extends uvm_driver #(ita_stream_item);
                 cfg.vif.inp_bias_valid_i[cfg.head_id] <= 1'b0;
                 cfg.vif.inp_bias_i[cfg.head_id] <= '0;
             end
+            ITA_STREAM_HEAD_OUTPUT:
+            begin
+                cfg.vif.per_head_ready_i[cfg.head_id] <= 1'b0;
+            end
+            ITA_STREAM_SUM_OUTPUT:
+            begin
+                cfg.vif.sum_ready_i <= 1'b0;
+            end
         endcase
     endtask : drive_idle
 
     task drive_sink_ready();
+        cfg.vif.per_head_ready_i[cfg.head_id] <= 1'b0;
+
+        wait (cfg.vif.rst_ni == 1'b1);
         forever begin
             @(posedge cfg.vif.clk_i);
-            // TODO Stage 5: drive head0 output ready, then add deterministic and random backpressure modes.
+            // Stage 5: drive head0 output ready, then add deterministic and random backpressure modes.
+            case (cfg.kind)
+                ITA_STREAM_HEAD_OUTPUT:
+                    cfg.vif.per_head_ready_i[cfg.head_id] <= 1'b1;
+                default:
+                    `uvm_error("STREAM DRV", "drive_sink_ready called for non-output stream")
+            endcase
         end
     endtask : drive_sink_ready
 
@@ -139,7 +156,7 @@ class ita_stream_driver extends uvm_driver #(ita_stream_item);
             end
         end
 
-        cfg.vif.inp_valid_i[cfg.head_id] <= 1'b0;
+        cfg.vif.inp_weight_valid_i[cfg.head_id] <= 1'b0;
 
         // do begin
         //     @ (posedge cfg.vif.clk_i);

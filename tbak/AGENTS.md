@@ -82,3 +82,175 @@ Smoke:
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File ITA_CORE_UVM\sim\scripts\smoke.ps1
 ```
+
+## MHA8 Ready/Valid Notes
+
+Use this section as the protocol reference for Stage 3-5 work.
+
+### Per-head input, weight, and bias streams
+
+The MHA8 wrapper instantiates one independent `ita` core per head. The stream ports are per-head:
+
+```systemverilog
+inp_valid_i[h]         // TB -> DUT
+inp_ready_o[h]         // DUT -> TB
+inp_weight_valid_i[h]  // TB -> DUT
+inp_weight_ready_o[h]  // DUT -> TB
+inp_bias_valid_i[h]    // TB -> DUT
+inp_bias_ready_o[h]    // DUT -> TB
+```
+
+Each head connects directly to one `ita` instance:
+
+```systemverilog
+.inp_valid_i       (inp_valid_i[h])
+.inp_ready_o       (inp_ready_o[h])
+.inp_weight_valid_i(inp_weight_valid_i[h])
+.inp_weight_ready_o(inp_weight_ready_o[h])
+.inp_bias_valid_i  (inp_bias_valid_i[h])
+.inp_bias_ready_o  (inp_bias_ready_o[h])
+```
+
+The testbench stream driver should wait on the wrapper-level ready for the stream it owns:
+
+```systemverilog
+cfg.vif.inp_ready_o[cfg.head_id]
+cfg.vif.inp_weight_ready_o[cfg.head_id]
+cfg.vif.inp_bias_ready_o[cfg.head_id]
+```
+
+### Weight has an external and internal handshake
+
+`inp_weight_valid_i/inp_weight_ready_o` is the external handshake used by the testbench to write weights into the DUT weight buffer.
+
+Inside `ita`, the weight buffer exposes another handshake to the controller:
+
+```systemverilog
+weight_valid
+weight_ready
+```
+
+These are connected as:
+
+```systemverilog
+ita_controller i_controller (
+    .weight_valid_i(weight_valid),
+    .weight_ready_o(weight_ready)
+);
+
+ita_weight_controller i_weight_controller (
+    .inp_weight_valid_i(inp_weight_valid_i),
+    .inp_weight_ready_o(inp_weight_ready_o),
+    .weight_valid_o    (weight_valid),
+    .weight_ready_i    (weight_ready)
+);
+```
+
+So `inp_weight_ready_o` means the external weight stream can write into the DUT. `weight_valid/weight_ready` is the internal read side used by the controller.
+
+### Input and bias ready depend on internal weight availability
+
+In `ita_controller.sv`, during active non-idle steps, the key default handshake is:
+
+```systemverilog
+inp_ready_o    = weight_valid_i;
+weight_ready_o = inp_valid_i;
+bias_ready_o   = weight_valid_i;
+```
+
+A compute beat starts only when all three are valid at the controller level:
+
+```systemverilog
+if (inp_valid_i && weight_valid_i && bias_valid_i) begin
+    calc_en_o = 1;
+end
+```
+
+`weight_valid_i` here is the internal controller input from the weight buffer, not the external `inp_weight_valid_i` pin. This means `inp_ready_o` and `inp_bias_ready_o` may stay low until enough weight data has been accepted and the internal weight buffer can provide `weight_valid`.
+
+For Stage 3, sending only input can legitimately timeout waiting for `inp_ready_o`. Stage 4 should add head0 weight and bias traffic before expecting the input path to make progress.
+
+### Per-head output stream
+
+Each `ita` core outputs:
+
+```systemverilog
+valid_o
+ready_i
+oup_o
+oup_step_o
+```
+
+The MHA8 wrapper exposes these as:
+
+```systemverilog
+per_head_valid_o[h]  // DUT -> TB
+per_head_ready_i[h]  // TB -> DUT
+per_head_oup_o[h]
+per_head_step_o[h]
+```
+
+For non-`OW` steps, the wrapper passes testbench ready through directly:
+
+```systemverilog
+head_ready[h] = per_head_ready_i[h];
+```
+
+Stage 5 should start with deterministic always-ready output sink behavior:
+
+```systemverilog
+per_head_ready_i[0] <= 1'b1;
+```
+
+Random ready stalls and backpressure checks belong later, after the always-ready path works.
+
+### OW sum aggregation is special
+
+For `OW` output, MHA8 does not let each head complete independently. The wrapper requires all heads to be valid and phase-aligned before sending data into `ita_head_sum`:
+
+```systemverilog
+all_head_valid     = &per_head_valid_o;
+all_per_head_ready = &per_head_ready_i;
+sum_valid          = all_head_valid && all_head_ow && !phase_mismatch_o;
+sum_valid_to_sum   = sum_valid && all_per_head_ready;
+```
+
+When a head output is `OW`, ready is gated by the sum path:
+
+```systemverilog
+head_ready[h] = sum_valid_to_sum && sum_ready;
+```
+
+So a head0-only Attention test can stall at OW because the wrapper expects all 8 heads to participate. For early head0 learning, a small Linear testcase is usually easier than full Attention.
+
+### Feed-forward path
+
+Feed-forward uses the separate `i_ffn` `ita` instance and separate wrapper ports:
+
+```systemverilog
+ff_inp_valid_i
+ff_inp_ready_o
+ff_inp_weight_valid_i
+ff_inp_weight_ready_o
+ff_inp_bias_valid_i
+ff_inp_bias_ready_o
+ff_valid_o
+ff_ready_i
+```
+
+The wrapper routes `ctrl_i.start` by layer:
+
+```systemverilog
+head_ctrl[h].start = ctrl_i.start && (ctrl_i.layer != Feedforward);
+ff_ctrl.start      = ctrl_i.start && (ctrl_i.layer == Feedforward);
+```
+
+Do not mix per-head MHA traffic and feed-forward traffic in the early head0 stages.
+
+### Stage implications
+
+- Stage 3 only proves the input agent can drive and wait safely; it may timeout if weight is not available.
+- Stage 4 should add head0 weight and bias source traffic, with timeout inside each per-stream driver task.
+- Stage 5 should make head0 output ready always high and monitor `per_head_valid_o[0] && per_head_ready_i[0]`.
+- Stage 8 should add assertions for X/Z, valid-ready stability, timeout, and output stability under backpressure.
+- Stage 11 should handle heads 1-7, OW sum, feed-forward, and full MHA8 attribution.

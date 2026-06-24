@@ -12,15 +12,19 @@ class ita_stream_config extends uvm_object;
     bit enable_random_stall = 1'b0;
     int unsigned min_stall_cycles = 0;
     int unsigned max_stall_cycles = 0;
-    // TODO Stage 5: implement ready/backpressure configuration after the deterministic output-ready path works.
+    // Stage 5: implement ready/backpressure configuration after the deterministic output-ready path works.
 
     function new(string name = "ita_stream_config");
         super.new(name);
     endfunction : new
 
     function bit is_sink();
-        // TODO Stage 5: return true for output sink streams after output ready driving is implemented.
-        return !is_source();
+        // Stage 5: return true for output sink streams after output ready driving is implemented.
+        return kind inside {
+            ITA_STREAM_HEAD_OUTPUT,
+            ITA_STREAM_SUM_OUTPUT,
+            ITA_STREAM_FF_OUTPUT
+        };
     endfunction : is_sink
 
     function bit is_source();
@@ -36,8 +40,12 @@ class ita_stream_config extends uvm_object;
     endfunction : is_source
 
     function int unsigned next_stall_cycles();
-        // TODO Stage 5: implement stall generation after the always-ready output path works.
-        return 0;
+        // Stage 5: implement stall generation after the always-ready output path works.
+        if (!enable_random_stall || max_stall_cycles == 0)
+            return 0;
+        if (max_stall_cycles <= min_stall_cycles)
+            return min_stall_cycles;
+        return $urandom_range(max_stall_cycles, min_stall_cycles);
     endfunction : next_stall_cycles
 
 endclass : ita_stream_config

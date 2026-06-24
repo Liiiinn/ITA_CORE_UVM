@@ -12,6 +12,5 @@ typedef enum int unsigned {
     ITA_STREAM_FF_BIAS,
     ITA_STREAM_FF_OUTPUT
 } ita_stream_kind_e;
-// TODO Stage 3-5: add kind-specific driver and monitor behavior for this shared stream kind enum.
 
 `endif // ITA_STREAM_COMMON_SVH

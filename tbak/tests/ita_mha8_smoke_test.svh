@@ -17,11 +17,21 @@ class ita_mha8_smoke_test extends ita_mha8_base_test;
         phase.raise_objection(this);
 
         ctrl_seq = ita_mha8_base_seq::type_id::create("ctrl_seq");
+
         inp_seq = ita_mha8_stream_smoke_seq::type_id::create("inp_seq");
+        inp_seq.kind = ITA_STREAM_HEAD_INPUT;
+        inp_seq.beat_id = 0;
+
         weight_seq = ita_mha8_stream_smoke_seq::type_id::create("weight_seq");
+        weight_seq.kind = ITA_STREAM_HEAD_WEIGHT;
+        weight_seq.beat_id = 0;
+
         bias_seq = ita_mha8_stream_smoke_seq::type_id::create("bias_seq");
-        
+        bias_seq.kind = ITA_STREAM_HEAD_BIAS;
+        bias_seq.beat_id = 0;
+
         ctrl_seq.start(env.ctrl_agt.sqr);
+        
         inp_seq.start(env.input_agt[0].sqr);
         weight_seq.start(env.weight_agt[0].sqr);
         bias_seq.start(env.bias_agt[0].sqr);
