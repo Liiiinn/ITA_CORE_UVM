@@ -18,6 +18,8 @@ class ita_mha8_env extends uvm_env;
     ita_stream_agent ff_weight_agt;
     ita_stream_agent ff_bias_agt;
     ita_stream_agent ff_output_agt;
+
+    ita_mha8_logger logger;
     // TODO Stage 11: create sum and feed-forward agents after full head-path coverage exists.
 
     function new(string name = "ita_mha8_env", uvm_component parent = null);
@@ -52,6 +54,7 @@ class ita_mha8_env extends uvm_env;
             head_output_agt[h] = ita_stream_agent::type_id::create($sformatf("head_output_agt[%0d]", h), this);
         end
 
+        logger = ita_mha8_logger::type_id::create("logger", this);
         vsqr = ita_mha8_vsequencer::type_id::create("vsqr", this);
     endfunction : build_phase
 
@@ -65,6 +68,10 @@ class ita_mha8_env extends uvm_env;
         vsqr.bias_sqr = bias_agt[0].sqr;
 
         // TODO Stage 7: connect head_output_agt[0].ap to a passive actual-output logger.
+        input_agt[0].ap.connect(logger.stream_imp);
+        weight_agt[0].ap.connect(logger.stream_imp);
+        bias_agt[0].ap.connect(logger.stream_imp);
+        output_agt[0].ap.connect(logger.output_imp);        
         // TODO Stage 8: connect monitor analysis ports to a smoke scoreboard for count/X/Z/timeout checks.
         // TODO Stage 10: connect logger output to the Phase 2 compare path.
         // TODO Stage 11: fan in heads 1-7, sum, and feed-forward analysis ports.

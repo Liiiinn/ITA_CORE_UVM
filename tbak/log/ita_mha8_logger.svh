@@ -136,7 +136,11 @@ class ita_mha8_logger extends uvm_component;
     function void report_phase(uvm_phase phase);
         super.report_phase(phase);
         // Stage 7: print logger counters after actual-output logging is implemented.
-        `uvm_info("LOGGER", $sformatf("stream count: %0d, output count: %0d", stream_count, output_count), UVM_LOW)
+        `uvm_info(
+            "LOGGER",
+            $sformatf("%0d stream items observed, %0d output items received", stream_count, output_count),
+            UVM_LOW
+        )
     endfunction : report_phase
 
     function void final_phase(uvm_phase phase);
