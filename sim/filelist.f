@@ -45,7 +45,7 @@
 ../tbak/if/ita_mha8_if.sv
 ../tbak/agents/ita_ctrl_agent/ita_ctrl_agent_pkg.sv
 ../tbak/agents/ita_stream_agent/ita_stream_agent_pkg.sv
-../tbak/log/ita_mha8_log_pkg.sv
+../tbak/log/ita_mha8_logger_pkg.sv
 ../tbak/common/ita_mha8_common_pkg.sv
 ../tbak/env/ita_mha8_env_pkg.sv
 ../tbak/seq/ita_mha8_seq_pkg.sv
