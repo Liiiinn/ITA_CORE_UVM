@@ -21,12 +21,12 @@ interface ita_mha8_if
     logic [NumHeads-1:0]     inp_weight_ready_o;
     logic [NumHeads-1:0]     inp_bias_valid_i;
     logic [NumHeads-1:0]     inp_bias_ready_o;
-    // TODO Stage 8: add valid-ready stability assertions for head0 input/weight/bias streams.
+    // Stage 8: add valid-ready stability assertions for head0 input/weight/bias streams.
 
     inp_t                    inp_i        [NumHeads];
     inp_weight_t             inp_weight_i [NumHeads];
     bias_t                   inp_bias_i   [NumHeads];
-    // TODO Stage 8: add head0 payload stability assertions while valid is high and ready is low.
+    // Stage 8: add head0 payload stability assertions while valid is high and ready is low.
 
     step_e                   inp_step_dbg           [NumHeads];
     step_e                   inp_weight_step_dbg    [NumHeads];
@@ -50,7 +50,7 @@ interface ita_mha8_if
     logic [NumHeads-1:0]     per_head_busy_o;
     requant_oup_t            per_head_oup_o  [NumHeads];
     step_e                   per_head_step_o [NumHeads];
-    // TODO Stage 8: add head0 output backpressure stability assertion after output ready driving exists.
+    // Stage 8: add head0 output backpressure stability assertion after output ready driving exists.
 
     logic                    sum_valid_o;
     logic                    sum_ready_i;
@@ -146,10 +146,10 @@ interface ita_mha8_if
         ff_inp_weight_lockstep_dbg = 1'b0;
         ff_inp_bias_lockstep_dbg = 1'b0;
     end
-    // TODO Stage 8: implement early assertion blocks for X/Z, timeout, valid-ready, and backpressure.
+    // Stage 8: implement early assertion blocks for X/Z, timeout, valid-ready, and backpressure.
 
     generate
-        for (genvar h = 0; h < NumHeads; h ++) begin
+        for (genvar h = 0; h < NumHeads; h ++) begin : gen_head_assertion
         
             property stream_ctrl_known;
                 @(posedge clk_i) disable iff (!rst_ni)
@@ -224,9 +224,27 @@ interface ita_mha8_if
     property ctrl_start_known;
         @(posedge clk_i) disable iff (!rst_ni)
             !$isunknown(ctrl_i.start);
-    endproperty
+    endproperty : ctrl_start_known
+
+    property ctrl_known;
+        @(posedge clk_i) disable iff (!rst_ni)
+            ctrl_i.start |-> !$isunknown({
+                ctrl_i.layer,
+                ctrl_i.activation,
+                ctrl_i.tile_s,
+                ctrl_i.tile_e,
+                ctrl_i.tile_p,
+                ctrl_i.tile_f
+            });
+    endproperty : ctrl_known
+
+    property ctrl_start_pulse;
+        @posedge(clk_i) disable iff (!rst_ni)
+            ctrl_i.start |=> !ctrl_i.start;
+    endproperty : ctrl_start_pulse
 
     ctrl_start_known_a: assert property(ctrl_start_known);
-
+    ctrl_known_a: assert property(ctrl_known);
+    ctrl_start_pulse_a: assert product(ctrl_start_pulse);
 
 endinterface : ita_mha8_if
