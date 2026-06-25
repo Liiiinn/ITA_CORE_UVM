@@ -67,11 +67,11 @@ class ita_mha8_env extends uvm_env;
         vsqr.weight_sqr = weight_agt[0].sqr;
         vsqr.bias_sqr = bias_agt[0].sqr;
 
-        // TODO Stage 7: connect head_output_agt[0].ap to a passive actual-output logger.
+        // Stage 7: connect head_output_agt[0].ap to a passive actual-output logger.
         input_agt[0].ap.connect(logger.stream_imp);
         weight_agt[0].ap.connect(logger.stream_imp);
         bias_agt[0].ap.connect(logger.stream_imp);
-        output_agt[0].ap.connect(logger.output_imp);        
+        head_output_agt[0].ap.connect(logger.output_imp);        
         // TODO Stage 8: connect monitor analysis ports to a smoke scoreboard for count/X/Z/timeout checks.
         // TODO Stage 10: connect logger output to the Phase 2 compare path.
         // TODO Stage 11: fan in heads 1-7, sum, and feed-forward analysis ports.

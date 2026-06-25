@@ -14,7 +14,7 @@ class ita_mha8_logger extends uvm_component;
 
     int unsigned stream_count;
     int unsigned output_count;
-    // TODO Stage 7: implement counters after deciding the first logger report format.
+    // Stage 7: implement counters after deciding the first logger report format.
     int stream_fd;
     int output_fd;
 
@@ -38,18 +38,18 @@ class ita_mha8_logger extends uvm_component;
         super.build_phase(phase);
 
         if (stream_path == "")
-            stream_path = "ita_mha8_stream.csv";
+            stream_path = "logger/ita_mha8_stream.csv";
         
-        stream_fd = $fopen(stream_fd, "w");
+        stream_fd = $fopen(stream_path, "w");
         if (stream_fd == 0)
             `uvm_error("LOGGER", $sformatf("failed to open stream csv: %s", stream_path))
         else
             $fwrite(stream_fd, "time,kind,head_id,tile_id,inner_tile_id,beat_id,step,is_lockstep,payload\n");
 
         if (output_path == "")
-            output_path = "ita_mha8_stream.csv";
+            output_path = "logger/ita_mha8_output.csv";
 
-        output_fd = $fopen(output_fd, "w");
+        output_fd = $fopen(output_path, "w");
         if (output_fd == 0)
             `uvm_error("LOGGER", $sformatf("failed to open output csv: %s", output_path))
         else
@@ -89,7 +89,7 @@ class ita_mha8_logger extends uvm_component;
 
     function void write_output(ita_stream_item tr);
         // Stage 7: detect ITA_STREAM_HEAD_OUTPUT for head0 and dump tr.oup as actual output.
-        // TODO Stage 7: update stream_count/output_count only after output sampling is implemented.
+        // Stage 7: update stream_count/output_count only after output sampling is implemented.
         if (output_fd == 0) begin
             `uvm_warning("LOGGER", "output csv file is not open");
             return;

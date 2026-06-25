@@ -1,4 +1,4 @@
-package ita_mha8_log_pkg;
+package ita_mha8_logger_pkg;
 
     import uvm_pkg::*;
     import ita_package::*;
@@ -7,4 +7,4 @@ package ita_mha8_log_pkg;
 
     `include "ita_mha8_logger.svh"
 
-endpackage : ita_mha8_log_pkg
+endpackage : ita_mha8_logger_pkg

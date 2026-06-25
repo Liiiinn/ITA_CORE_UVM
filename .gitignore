@@ -8,6 +8,7 @@ _site/
 .jekyll-metadata
 sim/output
 sim/modelsim.ini
+sim/logger
 
 
 # Additional Ruby/bundler ignore for when you run: bundle install

@@ -5,11 +5,9 @@ class ita_stream_driver extends uvm_driver #(ita_stream_item);
     `uvm_component_utils(ita_stream_driver)
 
     ita_stream_config cfg;
-    uvm_analysis_port #(ita_stream_item) issued_ap;
 
     function new(string name = "ita_stream_driver", uvm_component parent = null);
         super.new(name, parent);
-        issued_ap = new("issued_ap", this);
     endfunction : new
 
     function void build_phase(uvm_phase phase);
@@ -98,7 +96,6 @@ class ita_stream_driver extends uvm_driver #(ita_stream_item);
     task drive_source_item(ita_stream_item tr);
         if (tr.kind != cfg.kind || tr.head_id != cfg.head_id)
             `uvm_error("STREAM_DRV", "item kind/head_id doesn't match with driver config!")
-        // TODO Stage 7: publish issued_ap only after the source transaction format is stable.
         // Stage 3: implement head0 input source driving.
         // Stage 4: implement head0 weight and bias source driving.
 
