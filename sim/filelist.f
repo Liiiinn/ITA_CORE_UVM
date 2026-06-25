@@ -4,6 +4,7 @@
 +incdir+../tbak/agents/ita_stream_agent
 +incdir+../tbak/log
 +incdir+../tbak/common
++incdir+../tbak/scb
 +incdir+../tbak/env
 +incdir+../tbak/seq
 +incdir+../tbak/vseq
@@ -47,6 +48,7 @@
 ../tbak/agents/ita_stream_agent/ita_stream_agent_pkg.sv
 ../tbak/log/ita_mha8_logger_pkg.sv
 ../tbak/common/ita_mha8_common_pkg.sv
+../tbak/scb/ita_mha8_scb_pkg.sv
 ../tbak/env/ita_mha8_env_pkg.sv
 ../tbak/seq/ita_mha8_seq_pkg.sv
 ../tbak/vseq/ita_mha8_vseq_pkg.sv

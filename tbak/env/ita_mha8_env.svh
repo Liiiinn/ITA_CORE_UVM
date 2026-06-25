@@ -20,6 +20,7 @@ class ita_mha8_env extends uvm_env;
     ita_stream_agent ff_output_agt;
 
     ita_mha8_logger logger;
+    ita_mha8_scoreboard scb;
     // TODO Stage 11: create sum and feed-forward agents after full head-path coverage exists.
 
     function new(string name = "ita_mha8_env", uvm_component parent = null);
@@ -73,6 +74,10 @@ class ita_mha8_env extends uvm_env;
         bias_agt[0].ap.connect(logger.stream_imp);
         head_output_agt[0].ap.connect(logger.output_imp);        
         // TODO Stage 8: connect monitor analysis ports to a smoke scoreboard for count/X/Z/timeout checks.
+        input_agt[0].ap.connect(scb.source_export);
+        weight_agt[0].ap.connect(scb.source_export);
+        bias_agt[0].ap.connect(scb.source_export);
+        head_output_agt[0].ap.connect(scb.output_export);
         // TODO Stage 10: connect logger output to the Phase 2 compare path.
         // TODO Stage 11: fan in heads 1-7, sum, and feed-forward analysis ports.
     endfunction : connect_phase
