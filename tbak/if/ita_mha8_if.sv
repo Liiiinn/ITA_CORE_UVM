@@ -148,4 +148,85 @@ interface ita_mha8_if
     end
     // TODO Stage 8: implement early assertion blocks for X/Z, timeout, valid-ready, and backpressure.
 
+    generate
+        for (genvar h = 0; h < NumHeads; h ++) begin
+        
+            property stream_ctrl_known;
+                @(posedge clk_i) disable iff (!rst_ni)
+                    !$isunknown({
+                        inp_valid_i[h],
+                        inp_ready_o[h],
+                        inp_weight_valid_i[h],
+                        inp_weight_ready_o[h],
+                        inp_bias_valid_i[h],
+                        inp_bias_ready_o[h],
+                        per_head_valid_o[h],
+                        per_head_ready_i[h]
+                    });
+            endproperty : stream_ctrl_known
+
+            property inp_payload_known_when_valid;
+                @(posedge clk_i) disable iff (!rst_ni)
+                    inp_valid_i[h] |-> !$isunknown(inp_i[h]);
+            endproperty : inp_payload_known_when_valid
+
+            property weight_payload_known_when_valid;
+                @(posedge clk_i) disable iff (!rst_ni)
+                    inp_weight_valid_i[h] |-> !$isunknown(inp_weight_i[h]);
+            endproperty : weight_payload_known_when_valid
+
+            property bias_payload_known_when_valid;
+                @(posedge clk_i) disable iff (!rst_ni)
+                    inp_bias_valid_i[h] |-> !$isunknown(inp_bias_i[h]);
+            endproperty : bias_payload_known_when_valid
+
+            property head_output_known_when_valid;
+                @(posedge clk_i) disable iff (!rst_ni)
+                    per_head_valid_o[h] |-> !$isunknown(per_head_oup_o[h]) && !$isunknown(per_head_step_o[h]);
+            endproperty : head_output_known_when_valid
+
+            property inp_stable_until_ready;
+                @(posedge clk_i) disable iff (!rst_ni)
+                    inp_valid_i[h] && !inp_ready_o[h]
+                    |=> inp_valid_i[h] && $stable(inp_i[h]);
+            endproperty : inp_stable_until_ready
+
+            property weight_stable_until_ready;
+                @(posedge clk_i) disable iff (!rst_ni)
+                    inp_weight_valid_i[h] && !inp_weight_ready_o[h]
+                    |=> inp_weight_valid_i[h] && $stable(inp_weight_i[h]);
+            endproperty : weight_stable_until_ready
+
+            property bias_stable_until_ready;
+                @(posedge clk_i) disable iff (!rst_ni)
+                    inp_bias_valid_i[h] && !inp_bias_ready_o[h]
+                    |=> inp_bias_valid_i[h] && $stable(inp_bias_i[h]);
+            endproperty : bias_stable_until_ready
+
+            property head_output_stable_until_ready;
+                @(posedge clk_i) disable iff (!rst_ni)
+                    per_head_valid_o[h] && !per_head_ready_i[h]
+                    |=> per_head_valid_o[h] && $stable(per_head_oup_o[h]) && $stable(per_head_step_o[h]);
+            endproperty
+
+            inp_payload_known_when_valid_a: assert property(inp_payload_known_when_valid);
+            weight_payload_known_when_valid_a: assert property(weight_payload_known_when_valid);
+            bias_payload_known_when_valid_a: assert property(bias_payload_known_when_valid);
+            head_output_known_when_valid_a: assert property(head_output_known_when_valid);
+            stream_ctrl_known_a: assert property(stream_ctrl_known);
+            inp_stable_until_a: assert property(inp_stable_until_ready);
+            weight_stable_until_a: assert property(weight_stable_until_ready);
+            bias_stable_until_a: assert property(bias_stable_until_ready);
+            head_output_stable_until_ready_a: assert property(head_output_stable_until_ready);
+        end
+    endgenerate
+
+    property ctrl_start_known;
+        @(posedge clk_i) disable iff (!rst_ni)
+            !$isunknown(ctrl_i.start);
+    endproperty
+
+    ctrl_start_known_a: assert property(ctrl_start_known);
+
+
 endinterface : ita_mha8_if
