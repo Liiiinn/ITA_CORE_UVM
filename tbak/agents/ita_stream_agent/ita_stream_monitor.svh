@@ -87,7 +87,7 @@ class ita_stream_monitor extends uvm_monitor;
 
         endcase
         // Stage 7: write sampled output transactions to logger through ap.
-        // TODO Stage 8: send sampled transactions to the smoke scoreboard.
+        // Stage 8: send sampled transactions to the smoke scoreboard.
         ap.write(tr);
         sample_count++;
     endfunction : sample_item

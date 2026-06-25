@@ -41,7 +41,7 @@ class ita_mha8_scoreboard extends uvm_component;
     endfunction : connect_phase
 
     task run_phase(uvm_phase phase);
-        // TODO Stage 8: implement smoke checks for count, X/Z, timeout, and valid-ready protocol.
+        // Stage 8: implement smoke checks for count, X/Z, timeout, and valid-ready protocol.
         fork
             process_source_fifo();
             process_output_fifo();

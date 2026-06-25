@@ -113,7 +113,7 @@ class ita_mha8_logger extends uvm_component;
                 return;
             end
         endcase
-        // TODO Stage 8: leave protocol/count checking to the smoke scoreboard, not the logger.
+        // Stage 8: leave protocol/count checking to the smoke scoreboard, not the logger.
         // TODO Stage 10: write actual output to actual_path in the format expected by the Python compare flow.
     endfunction : write_output
 
