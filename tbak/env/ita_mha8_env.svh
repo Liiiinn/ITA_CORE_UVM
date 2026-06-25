@@ -56,6 +56,7 @@ class ita_mha8_env extends uvm_env;
         end
 
         logger = ita_mha8_logger::type_id::create("logger", this);
+        scb = ita_mha8_scoreboard::type_id::create("scb", this);
         vsqr = ita_mha8_vsequencer::type_id::create("vsqr", this);
     endfunction : build_phase
 

@@ -239,12 +239,12 @@ interface ita_mha8_if
     endproperty : ctrl_known
 
     property ctrl_start_pulse;
-        @posedge(clk_i) disable iff (!rst_ni)
+        @(posedge clk_i) disable iff (!rst_ni)
             ctrl_i.start |=> !ctrl_i.start;
     endproperty : ctrl_start_pulse
 
     ctrl_start_known_a: assert property(ctrl_start_known);
     ctrl_known_a: assert property(ctrl_known);
-    ctrl_start_pulse_a: assert product(ctrl_start_pulse);
+    ctrl_start_pulse_a: assert property(ctrl_start_pulse);
 
 endinterface : ita_mha8_if

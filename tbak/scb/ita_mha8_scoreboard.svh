@@ -30,12 +30,12 @@ class ita_mha8_scoreboard extends uvm_component;
 
         source_fifo = new("source_fifo", this);
         output_fifo = new("output_fifo", this);
-        expected_fifo = new("expected_fifo", this);
-        actual_fifo = new("actual_fifo", this);
+        // expected_fifo = new("expected_fifo", this);
+        // actual_fifo = new("actual_fifo", this);
     endfunction : new
 
     function void connect_phase(uvm_phase phase);
-        super.connect_phase();
+        super.connect_phase(phase);
         source_export.connect(source_fifo.analysis_export);
         output_export.connect(output_fifo.analysis_export);
     endfunction : connect_phase
@@ -69,7 +69,7 @@ class ita_mha8_scoreboard extends uvm_component;
             source_fifo.get(tr);
 
             case(tr.kind)
-                ITA_STREAM_HEAD_INTPUT: input_count++;
+                ITA_STREAM_HEAD_INPUT: input_count++;
                 ITA_STREAM_HEAD_WEIGHT: weight_count++;
                 ITA_STREAM_HEAD_BIAS: bias_count++;
                 default:
