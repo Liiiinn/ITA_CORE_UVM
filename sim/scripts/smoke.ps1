@@ -4,8 +4,12 @@ param(
     [string]$UvmHome = $env:UVM_HOME,
     [string]$Python = "python",
     [int]$Heads = 8,
+    [string]$Manifest = "",
+    [string]$StreamName = "uvm_linear_mha8_stream.csv",
+    [string]$ManifestName = "uvm_linear_mha8_manifest.json",
     [switch]$GenerateVectors,
     [switch]$CompareLinear,
+    [switch]$NoCompare,
     [switch]$NoAutoVectorFlow,
     [switch]$DryRun
 )
@@ -56,10 +60,19 @@ function Invoke-PythonStep {
 $IsLinearDirected = ($TestName -eq "ita_mha8_linear_directed_test")
 $AutoVectorFlow = ($IsLinearDirected -and -not $NoAutoVectorFlow)
 $RunGenerateVectors = ($GenerateVectors -or $AutoVectorFlow)
-$RunCompareLinear = ($CompareLinear -or $AutoVectorFlow)
+$RunCompareLinear = (($CompareLinear -or $AutoVectorFlow) -and -not $NoCompare)
 
 if ($Heads -le 0 -or $Heads -gt 8) {
     throw "-Heads must be in the range 1..8"
+}
+
+if ($Manifest -eq "") {
+    $ManifestPath = Join-Path $LoggerDir $ManifestName
+} else {
+    $ManifestPath = $Manifest
+    if (-not [System.IO.Path]::IsPathRooted($ManifestPath)) {
+        $ManifestPath = Join-Path $CoreDir $ManifestPath
+    }
 }
 
 if (-not $DryRun) {
@@ -67,9 +80,20 @@ if (-not $DryRun) {
     New-Item -ItemType Directory -Path $LoggerDir -Force | Out-Null
 }
 
+$VectorOutDir = Split-Path -Parent $ManifestPath
+$StreamPath = Join-Path $VectorOutDir $StreamName
+if ($VectorOutDir -eq $LoggerDir) {
+    $StreamPlusArg = "logger/$StreamName"
+} else {
+    $StreamPlusArg = $StreamPath
+}
+
 if ($RunGenerateVectors) {
-    Invoke-PythonStep (Join-Path $ToolsDir "gen_uvm_vectors.py") @(
-        "--heads", [string]$Heads
+    Invoke-PythonStep (Join-Path $ToolsDir "gen_mha8_vectors.py") @(
+        "--heads", [string]$Heads,
+        "--out-dir", $VectorOutDir,
+        "--stream-name", $StreamName,
+        "--manifest-name", (Split-Path -Leaf $ManifestPath)
     )
 }
 
@@ -80,7 +104,14 @@ $vsimArgs = @(
     "-c",
     "-lib", "work",
     "ita_mha8_tb_top",
-    "+UVM_TESTNAME=$TestName",
+    "+UVM_TESTNAME=$TestName"
+)
+
+if ($IsLinearDirected -and -not $NoAutoVectorFlow) {
+    $vsimArgs += "+ITA_STREAM_CSV=$StreamPlusArg"
+}
+
+$vsimArgs += @(
     "-do", "run -all; quit -f",
     "-l", $Transcript
 )
@@ -94,7 +125,8 @@ finally {
 }
 
 if ($RunCompareLinear) {
-    Invoke-PythonStep (Join-Path $ToolsDir "compare_linear_head0.py") @(
-        "--heads", [string]$Heads
+    Invoke-PythonStep (Join-Path $ToolsDir "compare_mha8_manifest.py") @(
+        "--manifest", $ManifestPath
     )
 }
+
