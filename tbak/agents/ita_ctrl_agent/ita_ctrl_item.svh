@@ -29,15 +29,30 @@ class ita_ctrl_item extends uvm_sequence_item;
         end
     endfunction : new
 
-    function void set_linear_head0_identity_requant();
+    function void set_linear_head_identity_requant(int unsigned head_id);
         // MatMul is not listed in ita_requantization_controller and falls back to index 0.
-        head_eps_mult[0]       = '0;
-        head_right_shift[0]    = '0;
-        head_add[0]            = '0;
-        head_eps_mult[0][0]    = 8'd1;
-        head_right_shift[0][0] = 8'd0;
-        head_add[0][0]         = 8'sd0;
+        if (head_id >= 8) begin
+            `uvm_error("CTRL_ITEM", $sformatf("Illegal head_id for requant config: %0d", head_id))
+            return;
+        end
+
+        head_eps_mult[head_id]       = '0;
+        head_right_shift[head_id]    = '0;
+        head_add[head_id]            = '0;
+        head_eps_mult[head_id][0]    = 8'd1;
+        head_right_shift[head_id][0] = 8'd0;
+        head_add[head_id][0]         = 8'sd0;
+    endfunction : set_linear_head_identity_requant
+
+    function void set_linear_head0_identity_requant();
+        set_linear_head_identity_requant(0);
     endfunction : set_linear_head0_identity_requant
+
+    function void set_linear_all_heads_identity_requant();
+        for (int unsigned h = 0; h < 8; h++) begin
+            set_linear_head_identity_requant(h);
+        end
+    endfunction : set_linear_all_heads_identity_requant
 
 endclass : ita_ctrl_item
 

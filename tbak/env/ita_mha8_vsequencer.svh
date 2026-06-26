@@ -5,14 +5,14 @@ class ita_mha8_vsequencer extends uvm_sequencer;
     `uvm_component_utils(ita_mha8_vsequencer)
 
     ita_ctrl_sequencer ctrl_sqr;
-    ita_stream_sequencer inp_sqr;
-    ita_stream_sequencer weight_sqr;
-    ita_stream_sequencer bias_sqr;
-    
+    ita_stream_sequencer inp_sqr         [8];
+    ita_stream_sequencer weight_sqr      [8];
+    ita_stream_sequencer bias_sqr        [8];
+    ita_stream_sequencer head_output_sqr [8];
+
     function new(string name = "ita_mha8_vsequencer", uvm_component parent = null);
         super.new(name, parent);
     endfunction : new
-
 
 endclass : ita_mha8_vsequencer
 

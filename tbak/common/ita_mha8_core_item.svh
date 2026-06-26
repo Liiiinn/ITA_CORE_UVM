@@ -10,13 +10,17 @@ class ita_mha8_core_item extends uvm_sequence_item;
     tile_t       tile_e;
     tile_t       tile_p;
     tile_t       tile_f;
-    // Stage 6: choose testcase intent fields before splitting into ctrl and stream items.
     int unsigned target_head_id;
+    int unsigned num_active_heads;
 
     inp_t        input_payload[$];
     inp_weight_t weight_payload[$];
     bias_t       bias_payload[$];
-    // Stage 6: define head0 payload ordering before adding random or full-head payloads.
+
+    inp_t        input_payload_by_head       [8][$];
+    inp_weight_t weight_payload_by_head      [8][$];
+    bias_t       bias_payload_by_head        [8][$];
+    // Stage 10: per-head queues are the UVM stimulus contract for Linear 8-head smoke.
 
     string       expected_path;
     string       actual_path;
@@ -33,11 +37,39 @@ class ita_mha8_core_item extends uvm_sequence_item;
         tile_p = 1;
         tile_f = 1;
         target_head_id = 0;
+        num_active_heads = 1;
         expected_path = "";
         actual_path = "";
         compare_path = "";
+        stream_vector_path = "";
+        clear_payloads();
         // TODO Stage 9: seed a small manually checkable Linear transaction in the derived test.
     endfunction : new
+
+    function void clear_payloads();
+        input_payload.delete();
+        weight_payload.delete();
+        bias_payload.delete();
+        for (int unsigned h = 0; h < 8; h++) begin
+            input_payload_by_head[h].delete();
+            weight_payload_by_head[h].delete();
+            bias_payload_by_head[h].delete();
+        end
+    endfunction : clear_payloads
+
+    function void sync_head0_compat_queues();
+        input_payload = input_payload_by_head[0];
+        weight_payload = weight_payload_by_head[0];
+        bias_payload = bias_payload_by_head[0];
+    endfunction : sync_head0_compat_queues
+
+    function int unsigned active_heads();
+        if (num_active_heads == 0)
+            return 1;
+        if (num_active_heads > 8)
+            return 8;
+        return num_active_heads;
+    endfunction : active_heads
 
     function void set_linear_directed_head0;
         layer = Linear;
@@ -49,16 +81,15 @@ class ita_mha8_core_item extends uvm_sequence_item;
         tile_f = 1;
 
         target_head_id = 0;
+        num_active_heads = 1;
+        clear_payloads();
 
-        input_payload.delete();
-        weight_payload.delete();
-        bias_payload.delete();
-
-        input_payload.push_back(2);
+        input_payload_by_head[0].push_back(2);
         for (int unsigned i = 0; i < N_WRITE_EN; i++) begin
-            weight_payload.push_back(2);
+            weight_payload_by_head[0].push_back(2);
         end
-        bias_payload.push_back(4);
+        bias_payload_by_head[0].push_back(4);
+        sync_head0_compat_queues();
     endfunction : set_linear_directed_head0
 
     function void set_linear_head0_multibeat();
@@ -70,26 +101,27 @@ class ita_mha8_core_item extends uvm_sequence_item;
         tile_p = 1;
         tile_f = 1;
         target_head_id = 0;
+        num_active_heads = 1;
+        clear_payloads();
 
-        input_payload.delete();
-        weight_payload.delete();
-        bias_payload.delete();
-
-        // weight controller 需要先收满 N_WRITE_EN，默认就是 64。
         for (int unsigned i = 0; i < N_WRITE_EN; i++) begin
-            weight_payload.push_back('0);
+            weight_payload_by_head[0].push_back('0);
         end
 
-        // 先做 1 个 compute beat。
-        input_payload.push_back('0);
-        bias_payload.push_back('0);
+        input_payload_by_head[0].push_back('0);
+        bias_payload_by_head[0].push_back('0);
+        sync_head0_compat_queues();
 
         expected_path = "logger/ita_mha8_expected.csv";
         actual_path   = "logger/ita_mha8_output.csv";
         compare_path  = "logger/ita_mha8_compare.txt";
-    endfunction
+    endfunction : set_linear_head0_multibeat
 
     function void load_linear_head0_stream_csv(string stream_vector_path);
+        load_linear_stream_csv(stream_vector_path);
+    endfunction : load_linear_head0_stream_csv
+
+    function void load_linear_stream_csv(string stream_vector_path);
         int fd;
         int line_no;
         int code;
@@ -106,6 +138,7 @@ class ita_mha8_core_item extends uvm_sequence_item;
         int unsigned beat_id;
         int unsigned is_lockstep;
         int unsigned char_idx;
+        int unsigned max_head_seen;
         longint unsigned payload;
 
         layer = Linear;
@@ -115,11 +148,10 @@ class ita_mha8_core_item extends uvm_sequence_item;
         tile_p = 1;
         tile_f = 1;
         target_head_id = 0;
+        num_active_heads = 0;
+        max_head_seen = 0;
         this.stream_vector_path = stream_vector_path;
-
-        input_payload.delete();
-        weight_payload.delete();
-        bias_payload.delete();
+        clear_payloads();
 
         fd = $fopen(stream_vector_path, "r");
         if (fd == 0) begin
@@ -154,10 +186,13 @@ class ita_mha8_core_item extends uvm_sequence_item;
                 continue;
             end
 
-            if (head_id != 0) begin
-                `uvm_warning("CORE_CSV", $sformatf("Skipping non-head0 row at line %0d: head_id=%0d", line_no, head_id))
+            if (head_id >= 8) begin
+                `uvm_warning("CORE_CSV", $sformatf("Skipping illegal head row at line %0d: head_id=%0d", line_no, head_id))
                 continue;
             end
+
+            if (head_id > max_head_seen)
+                max_head_seen = head_id;
 
             if (payload_text.len() >= 2 &&
                 (payload_text.substr(0, 1) == "0x" || payload_text.substr(0, 1) == "0X")) begin
@@ -169,13 +204,13 @@ class ita_mha8_core_item extends uvm_sequence_item;
 
             case (kind)
                 "head_input": begin
-                    input_payload.push_back(inp_t'(payload));
+                    input_payload_by_head[head_id].push_back(inp_t'(payload));
                 end
                 "head_weight": begin
-                    weight_payload.push_back(inp_weight_t'(payload));
+                    weight_payload_by_head[head_id].push_back(inp_weight_t'(payload));
                 end
                 "head_bias": begin
-                    bias_payload.push_back(bias_t'(payload));
+                    bias_payload_by_head[head_id].push_back(bias_t'(payload));
                 end
                 default: begin
                     `uvm_warning("CORE_CSV", $sformatf("Skipping unsupported stream kind at line %0d: %s", line_no, kind))
@@ -184,19 +219,24 @@ class ita_mha8_core_item extends uvm_sequence_item;
         end
 
         $fclose(fd);
+        num_active_heads = max_head_seen + 1;
+        sync_head0_compat_queues();
 
-        if (input_payload.size() == 0)
-            `uvm_error("CORE_CSV", "CSV did not provide any head0 input payload")
-        if (weight_payload.size() == 0)
-            `uvm_error("CORE_CSV", "CSV did not provide any head0 weight payload")
-        if (bias_payload.size() == 0)
-            `uvm_error("CORE_CSV", "CSV did not provide any head0 bias payload")
+        for (int unsigned h = 0; h < active_heads(); h++) begin
+            if (input_payload_by_head[h].size() == 0)
+                `uvm_error("CORE_CSV", $sformatf("CSV did not provide any input payload for head%0d", h))
+            if (weight_payload_by_head[h].size() == 0)
+                `uvm_error("CORE_CSV", $sformatf("CSV did not provide any weight payload for head%0d", h))
+            if (bias_payload_by_head[h].size() == 0)
+                `uvm_error("CORE_CSV", $sformatf("CSV did not provide any bias payload for head%0d", h))
+        end
 
         `uvm_info("CORE_CSV",
-            $sformatf("Loaded Linear head0 CSV %s: input=%0d weight=%0d bias=%0d",
-                stream_vector_path, input_payload.size(), weight_payload.size(), bias_payload.size()),
+            $sformatf("Loaded Linear CSV %s: active_heads=%0d head0 input=%0d weight=%0d bias=%0d",
+                stream_vector_path, active_heads(), input_payload_by_head[0].size(),
+                weight_payload_by_head[0].size(), bias_payload_by_head[0].size()),
             UVM_LOW)
-    endfunction : load_linear_head0_stream_csv
+    endfunction : load_linear_stream_csv
 endclass : ita_mha8_core_item
 
 `endif // ITA_MHA8_CORE_ITEM_SVH

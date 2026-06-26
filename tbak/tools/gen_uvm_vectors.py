@@ -2,20 +2,20 @@
 # Copyright 2026
 # SPDX-License-Identifier: Apache-2.0
 
-"""Generate dependency-light vectors for the tbak Linear head0 flow.
+"""Generate dependency-light vectors for the tbak Linear MHA8 flow.
 
 This script is intentionally small and does not import PyITA. It emits the
-first Stage 10 Python-to-UVM contract:
+Stage 10 Python-to-UVM contract for a Linear smoke testcase:
 
-  - expected_matmul_head0.txt
-  - uvm_linear_head0_stream.csv
-  - uvm_linear_head0_manifest.json
+  - expected_matmul_head<N>.txt
+  - uvm_linear_head0_stream.csv, kept as the historical default filename
+  - uvm_linear_head0_manifest.json, kept as the historical default filename
 
-The default values match the current tbak directed test:
-  input payload  = 2
-  weight payload = 2 repeated 64 times
-  bias payload   = 4
-  requant        = identity-like, index 0: mult=1 shift=0 add=0
+The default generates heads 0-7. Payloads vary by head so per-head routing
+mistakes are easier to see:
+  input[head]  = input_base + head
+  weight[head] = weight_base + head
+  bias[head]   = bias_base + head
 """
 
 from __future__ import annotations
@@ -61,7 +61,7 @@ def pack_lanes_u8(lanes: list[int]) -> int:
     return packed
 
 
-def expected_linear_head0_payload(
+def expected_linear_payload(
     input_payload: int,
     weight_payload: int,
     bias_payload: int,
@@ -72,10 +72,9 @@ def expected_linear_head0_payload(
 ) -> int:
     """Compute the current scalar shorthand expected packed output.
 
-    The tbak directed stream uses packed scalar payloads. With the current DUT
-    path and preload pattern, every output lane sees input*weight. Lane 0 also
-    carries the packed scalar bias contribution. This is not a full PyITA golden
-    model; it is a small functional check for the Stage 10 head0 Linear smoke.
+    This is not a full PyITA golden model. It is a small functional check for
+    the Stage 10 Linear smoke: every lane sees input*weight, and lane 0 also
+    carries the scalar bias contribution.
     """
 
     base = input_payload * weight_payload
@@ -88,11 +87,10 @@ def expected_linear_head0_payload(
     return pack_lanes_u8(out_lanes)
 
 
-def write_expected(path: Path, values: list[int]) -> None:
+def write_expected(path: Path, value: int) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as f:
-        for value in values:
-            f.write(f"{hex_payload(value)}\n")
+        f.write(f"{hex_payload(value)}\n")
 
 
 def write_stream_csv(path: Path, rows: list[dict[str, Any]]) -> None:
@@ -114,52 +112,57 @@ def write_stream_csv(path: Path, rows: list[dict[str, Any]]) -> None:
 
 
 def make_stream_rows(
-    head_id: int,
+    heads: int,
     n_write_en: int,
-    input_payload: int,
-    weight_payload: int,
-    bias_payload: int,
+    input_base: int,
+    weight_base: int,
+    bias_base: int,
     step: str,
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
-    for beat in range(n_write_en):
+    for head in range(heads):
+        input_payload = input_base + head
+        weight_payload = weight_base + head
+        bias_payload = bias_base + head
+
+        for beat in range(n_write_en):
+            rows.append(
+                {
+                    "kind": "head_weight",
+                    "head_id": head,
+                    "tile_id": 0,
+                    "inner_tile_id": 0,
+                    "beat_id": beat,
+                    "step": step,
+                    "is_lockstep": 1,
+                    "payload": hex_payload(weight_payload),
+                }
+            )
+
         rows.append(
             {
-                "kind": "head_weight",
-                "head_id": head_id,
+                "kind": "head_input",
+                "head_id": head,
                 "tile_id": 0,
                 "inner_tile_id": 0,
-                "beat_id": beat,
+                "beat_id": 0,
                 "step": step,
                 "is_lockstep": 1,
-                "payload": hex_payload(weight_payload),
+                "payload": hex_payload(input_payload),
             }
         )
-
-    rows.append(
-        {
-            "kind": "head_input",
-            "head_id": head_id,
-            "tile_id": 0,
-            "inner_tile_id": 0,
-            "beat_id": 0,
-            "step": step,
-            "is_lockstep": 1,
-            "payload": hex_payload(input_payload),
-        }
-    )
-    rows.append(
-        {
-            "kind": "head_bias",
-            "head_id": head_id,
-            "tile_id": 0,
-            "inner_tile_id": 0,
-            "beat_id": 0,
-            "step": step,
-            "is_lockstep": 1,
-            "payload": hex_payload(bias_payload),
-        }
-    )
+        rows.append(
+            {
+                "kind": "head_bias",
+                "head_id": head,
+                "tile_id": 0,
+                "inner_tile_id": 0,
+                "beat_id": 0,
+                "step": step,
+                "is_lockstep": 1,
+                "payload": hex_payload(bias_payload),
+            }
+        )
     return rows
 
 
@@ -174,71 +177,82 @@ def main() -> int:
     root = core_root()
     default_out_dir = root / "sim" / "logger"
 
-    parser = argparse.ArgumentParser(description="Generate tbak Linear head0 expected/stimulus files.")
+    parser = argparse.ArgumentParser(description="Generate tbak Linear MHA8 expected/stimulus files.")
     parser.add_argument("--out-dir", type=Path, default=default_out_dir, help="Directory for generated files.")
-    parser.add_argument("--head", type=int, default=0, help="Target head id.")
+    parser.add_argument("--heads", type=int, default=8, help="Number of MHA heads to generate, starting at head 0.")
     parser.add_argument("--lanes", type=int, default=16, help="Number of u8 lanes in one output payload.")
-    parser.add_argument("--n-write-en", type=int, default=64, help="Number of weight preload beats.")
-    parser.add_argument("--input", dest="input_payload", type=parse_int, default=2, help="Packed input payload.")
-    parser.add_argument("--weight", dest="weight_payload", type=parse_int, default=2, help="Packed weight payload.")
-    parser.add_argument("--bias", dest="bias_payload", type=parse_int, default=4, help="Packed bias payload.")
+    parser.add_argument("--n-write-en", type=int, default=64, help="Number of weight preload beats per head.")
+    parser.add_argument("--input", dest="input_base", type=parse_int, default=2, help="Base packed input payload.")
+    parser.add_argument("--weight", dest="weight_base", type=parse_int, default=2, help="Base packed weight payload.")
+    parser.add_argument("--bias", dest="bias_base", type=parse_int, default=4, help="Base packed bias payload.")
     parser.add_argument("--requant-mult", type=parse_int, default=1, help="Expected requant multiplier.")
     parser.add_argument("--requant-shift", type=parse_int, default=0, help="Expected requant right shift.")
     parser.add_argument("--requant-add", type=parse_int, default=0, help="Expected requant add.")
-    parser.add_argument(
-        "--expected",
-        dest="expected_values",
-        action="append",
-        type=parse_int,
-        help="Override expected output payload. May be repeated.",
-    )
     parser.add_argument("--step", default="MatMul", help="Logical DUT step stored in generated CSV metadata.")
-    parser.add_argument("--expected-name", default="expected_matmul_head0.txt")
+    parser.add_argument("--expected-prefix", default="expected_matmul_head")
     parser.add_argument("--stream-name", default="uvm_linear_head0_stream.csv")
     parser.add_argument("--manifest-name", default="uvm_linear_head0_manifest.json")
     args = parser.parse_args()
 
+    if args.heads <= 0 or args.heads > 8:
+        raise ValueError("--heads must be in the range 1..8")
     if args.n_write_en <= 0:
         raise ValueError("--n-write-en must be greater than zero")
-    if args.head < 0:
-        raise ValueError("--head must be non-negative")
     if args.lanes <= 0:
         raise ValueError("--lanes must be greater than zero")
     if args.requant_shift < 0:
         raise ValueError("--requant-shift must be non-negative")
 
     out_dir = args.out_dir
-    expected_path = out_dir / args.expected_name
     stream_path = out_dir / args.stream_name
     manifest_path = out_dir / args.manifest_name
 
-    default_expected = expected_linear_head0_payload(
-        input_payload=args.input_payload,
-        weight_payload=args.weight_payload,
-        bias_payload=args.bias_payload,
-        lanes=args.lanes,
-        requant_mult=args.requant_mult,
-        requant_shift=args.requant_shift,
-        requant_add=args.requant_add,
-    )
-    expected_values = args.expected_values if args.expected_values is not None else [default_expected]
     rows = make_stream_rows(
-        head_id=args.head,
+        heads=args.heads,
         n_write_en=args.n_write_en,
-        input_payload=args.input_payload,
-        weight_payload=args.weight_payload,
-        bias_payload=args.bias_payload,
+        input_base=args.input_base,
+        weight_base=args.weight_base,
+        bias_base=args.bias_base,
         step=args.step,
     )
-
-    write_expected(expected_path, expected_values)
     write_stream_csv(stream_path, rows)
 
+    expected_values: list[str] = []
+    expected_paths: list[str] = []
+    per_head: list[dict[str, Any]] = []
+    for head in range(args.heads):
+        input_payload = args.input_base + head
+        weight_payload = args.weight_base + head
+        bias_payload = args.bias_base + head
+        expected = expected_linear_payload(
+            input_payload=input_payload,
+            weight_payload=weight_payload,
+            bias_payload=bias_payload,
+            lanes=args.lanes,
+            requant_mult=args.requant_mult,
+            requant_shift=args.requant_shift,
+            requant_add=args.requant_add,
+        )
+        expected_path = out_dir / f"{args.expected_prefix}{head}.txt"
+        write_expected(expected_path, expected)
+        expected_values.append(hex_payload(expected))
+        expected_paths.append(str(expected_path))
+        per_head.append(
+            {
+                "head_id": head,
+                "input_payload": hex_payload(input_payload),
+                "weight_payload": hex_payload(weight_payload),
+                "bias_payload": hex_payload(bias_payload),
+                "expected": hex_payload(expected),
+                "expected_path": str(expected_path),
+            }
+        )
+
     manifest = {
-        "name": "linear_head0",
+        "name": "linear_mha8_smoke",
         "layer": "Linear",
         "activation": "Identity",
-        "head_id": args.head,
+        "heads": args.heads,
         "lanes": args.lanes,
         "step": args.step,
         "tile_s": 1,
@@ -246,24 +260,21 @@ def main() -> int:
         "tile_p": 1,
         "tile_f": 1,
         "n_write_en": args.n_write_en,
-        "input_payload": hex_payload(args.input_payload),
-        "weight_payload": hex_payload(args.weight_payload),
-        "bias_payload": hex_payload(args.bias_payload),
         "requant_mult": hex_payload(args.requant_mult),
         "requant_shift": args.requant_shift,
         "requant_add": args.requant_add,
-        "expected_values": [hex_payload(value) for value in expected_values],
-        "expected_path": str(expected_path),
+        "expected_values": expected_values,
+        "expected_paths": expected_paths,
         "stream_path": str(stream_path),
+        "per_head": per_head,
     }
     write_manifest(manifest_path, manifest)
 
-    print(f"Wrote expected values -> {expected_path}")
     print(f"Wrote {len(rows)} stream rows -> {stream_path}")
+    print(f"Wrote {args.heads} expected files -> {out_dir / (args.expected_prefix + '<head>.txt')}")
     print(f"Wrote manifest -> {manifest_path}")
     return 0
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
