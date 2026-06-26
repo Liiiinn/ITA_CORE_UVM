@@ -60,6 +60,33 @@ class ita_mha8_core_item extends uvm_sequence_item;
         bias_payload.push_back(4);
     endfunction : set_linear_directed_head0
 
+    function void set_linear_head0_multibeat();
+        layer = Linear;
+        activation = Identity;
+
+        tile_s = 1;
+        tile_e = 1;
+        tile_p = 1;
+        tile_f = 1;
+        target_head_id = 0;
+
+        input_payload.delete();
+        weight_payload.delete();
+        bias_payload.delete();
+
+        // weight controller 需要先收满 N_WRITE_EN，默认就是 64。
+        for (int unsigned i = 0; i < N_WRITE_EN; i++) begin
+            weight_payload.push_back('0);
+        end
+
+        // 先做 1 个 compute beat。
+        input_payload.push_back('0);
+        bias_payload.push_back('0);
+
+        expected_path = "logger/ita_mha8_expected.csv";
+        actual_path   = "logger/ita_mha8_output.csv";
+        compare_path  = "logger/ita_mha8_compare.txt";
+    endfunction
 endclass : ita_mha8_core_item
 
 `endif // ITA_MHA8_CORE_ITEM_SVH

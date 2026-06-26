@@ -9,6 +9,7 @@ _site/
 sim/output
 sim/modelsim.ini
 sim/logger
+.venv
 
 
 # Additional Ruby/bundler ignore for when you run: bundle install
