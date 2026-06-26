@@ -2,7 +2,7 @@
 # Copyright 2026
 # SPDX-License-Identifier: Apache-2.0
 
-"""Convert UVM/ITA actual-output logs to simple decimal txt files.
+"""Convert UVM/ITA actual-output logs to simple hexadecimal txt files.
 
 This tbak copy is intentionally dependency-light.  It only uses Python's
 standard library and is meant for the UVM exercise flow:
@@ -16,7 +16,7 @@ standard library and is meant for the UVM exercise flow:
   3. Text lines containing ACTUAL plus key=value fields:
        ACTUAL phase=MatMul stream=per_head head=0 beat=0 value=0x12
 
-The output is a decimal txt file compatible with tbak/tools/compare.py.
+The output is a hexadecimal txt file compatible with tbak/tools/compare.py.
 For UVM CSV, payload is interpreted as packed hexadecimal because the SV
 logger writes it with %h.
 """
@@ -233,6 +233,12 @@ def position_key(record: ActualRecord) -> tuple[Any, ...]:
     )
 
 
+def format_hex_value(value: int) -> str:
+    if value < 0:
+        return f"-0x{-value:x}"
+    return f"0x{value:x}"
+
+
 def write_txt_output(path: Path, records: list[ActualRecord], row_words: int) -> None:
     if row_words <= 0:
         raise ValueError("--row-words must be greater than zero")
@@ -242,7 +248,7 @@ def write_txt_output(path: Path, records: list[ActualRecord], row_words: int) ->
         for index, record in enumerate(records):
             if index != 0:
                 f.write("\n" if (index % row_words) == 0 else " ")
-            f.write(str(record.value))
+            f.write(format_hex_value(record.value))
         if records:
             f.write("\n")
 
@@ -288,9 +294,9 @@ def write_split_outputs(out_dir: Path, records: list[ActualRecord], row_words: i
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Parse ITA/UVM actual output logs into decimal txt.")
+    parser = argparse.ArgumentParser(description="Parse ITA/UVM actual output logs into hexadecimal txt.")
     parser.add_argument("--input", "-i", required=True, type=Path, help="Input actual log, JSONL, or UVM CSV file.")
-    parser.add_argument("--out", "-o", type=Path, help="Output decimal txt file for single-file mode.")
+    parser.add_argument("--out", "-o", type=Path, help="Output hexadecimal txt file for single-file mode.")
     parser.add_argument("--out-dir", type=Path, help="Output directory for split mode.")
     parser.add_argument(
         "--format",
@@ -301,7 +307,7 @@ def main() -> int:
     parser.add_argument("--phase", help="Only emit records from this phase, e.g. MatMul, Q, K, OW, F1.")
     parser.add_argument("--stream", help="Only emit records from this stream, e.g. per_head, sum, ff.")
     parser.add_argument("--head", type=int, help="Only emit records from this head.")
-    parser.add_argument("--row-words", type=int, default=1, help="Number of decimal values per output row.")
+    parser.add_argument("--row-words", type=int, default=1, help="Number of hexadecimal values per output row.")
     parser.add_argument("--sort", choices=("input", "position"), default="input")
     parser.add_argument("--strict", action="store_true", help="Fail on the first malformed record.")
     parser.add_argument("--allow-empty", action="store_true", help="Allow zero parsed records.")
@@ -341,3 +347,6 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+

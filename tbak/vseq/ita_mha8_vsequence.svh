@@ -77,6 +77,9 @@ class ita_mha8_vsequence extends uvm_sequence;
         ctrl.ctrl.tile_p = core.tile_p;
         ctrl.ctrl.tile_f = core.tile_f;
         ctrl.ctrl.start = 1'b1;
+        if (core.layer == Linear) begin
+            ctrl.set_linear_head0_identity_requant();
+        end
 
         return ctrl;
     endfunction

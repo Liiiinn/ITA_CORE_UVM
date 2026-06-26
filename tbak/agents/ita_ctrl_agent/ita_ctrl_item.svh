@@ -29,6 +29,16 @@ class ita_ctrl_item extends uvm_sequence_item;
         end
     endfunction : new
 
+    function void set_linear_head0_identity_requant();
+        // MatMul is not listed in ita_requantization_controller and falls back to index 0.
+        head_eps_mult[0]       = '0;
+        head_right_shift[0]    = '0;
+        head_add[0]            = '0;
+        head_eps_mult[0][0]    = 8'd1;
+        head_right_shift[0][0] = 8'd0;
+        head_add[0][0]         = 8'sd0;
+    endfunction : set_linear_head0_identity_requant
+
 endclass : ita_ctrl_item
 
 `endif // ITA_CTRL_ITEM_SVH

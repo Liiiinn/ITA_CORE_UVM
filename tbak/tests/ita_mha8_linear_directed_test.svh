@@ -4,6 +4,8 @@
 class ita_mha8_linear_directed_test extends ita_mha8_base_test;
     `uvm_component_utils(ita_mha8_linear_directed_test)
 
+    string stream_path;
+
     function new(string name = "ita_mha8_linear_directed_test", uvm_component parent = null);
         super.new(name, parent);
     endfunction : new
@@ -15,7 +17,11 @@ class ita_mha8_linear_directed_test extends ita_mha8_base_test;
         phase.raise_objection(this);
 
         core = ita_mha8_core_item::type_id::create("core");
-        core.set_linear_directed_head0();
+        
+        if (!$value$plusargs("ITA_STREAM_CSV=%s", stream_path))
+            stream_path = "logger/uvm_linear_head0_stream.csv";
+
+        core.load_linear_head0_stream_csv(stream_path);
 
         vseq = ita_mha8_vsequence::type_id::create("vseq");
         vseq.core = core;
