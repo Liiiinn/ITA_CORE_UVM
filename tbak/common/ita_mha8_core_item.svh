@@ -38,6 +38,26 @@ class ita_mha8_core_item extends uvm_sequence_item;
         // TODO Stage 9: seed a small manually checkable Linear transaction in the derived test.
     endfunction : new
 
+    function void set_linear_directed_head0;
+        layer = Linear;
+        activation = Identity;
+
+        tile_s = 1;
+        tile_e = 1;
+        tile_p = 1;
+        tile_f = 1;
+
+        target_head_id = 0;
+
+        input_payload.delete();
+        weight_payload.delete();
+        bias_payload.delete();
+
+        input_payload.push_back('0);
+        weight_payload.push_back('0);
+        bias_payload.push_back('0);
+    endfunction : set_linear_directed_head0
+
 endclass : ita_mha8_core_item
 
 `endif // ITA_MHA8_CORE_ITEM_SVH

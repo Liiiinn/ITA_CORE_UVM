@@ -120,14 +120,12 @@ class ita_stream_driver extends uvm_driver #(ita_stream_item);
         cfg.vif.inp_valid_i[cfg.head_id] <= 1'b1;
 
         wait_cycles = 0;
-        while (!cfg.vif.inp_ready_o[cfg.head_id]) begin
+        do begin
             @(posedge cfg.vif.clk_i);
             wait_cycles++;
-
-            if (wait_cycles > 10000) begin
+            if (wait_cycles > 10000)
                 `uvm_fatal("STREAM_DRV", "timeout waiting for inp_ready_o")
-            end
-        end
+        end while (!cfg.vif.inp_ready_o[cfg.head_id]);
 
         cfg.vif.inp_valid_i[cfg.head_id] <= 1'b0;
         // do begin
@@ -144,14 +142,12 @@ class ita_stream_driver extends uvm_driver #(ita_stream_item);
         cfg.vif.inp_weight_valid_i[cfg.head_id] <= 1'b1;
         
         wait_cycles = 0;
-        while (!cfg.vif.inp_weight_ready_o[cfg.head_id]) begin
+        do begin
             @(posedge cfg.vif.clk_i);
             wait_cycles++;
-
-            if (wait_cycles > 10000) begin
+            if (wait_cycles > 10000)
                 `uvm_fatal("STREAM_DRV", "timeout waiting for inp_weight_ready_o")
-            end
-        end
+        end while (!cfg.vif.inp_weight_ready_o[cfg.head_id]);
 
         cfg.vif.inp_weight_valid_i[cfg.head_id] <= 1'b0;
 
@@ -169,14 +165,12 @@ class ita_stream_driver extends uvm_driver #(ita_stream_item);
         cfg.vif.inp_bias_valid_i[cfg.head_id] <= 1'b1;
 
         wait_cycles = 0;
-        while (!cfg.vif.inp_bias_ready_o[cfg.head_id]) begin
+        do begin
             @(posedge cfg.vif.clk_i);
             wait_cycles++;
-
-            if (wait_cycles > 10000) begin
+            if (wait_cycles > 10000)
                 `uvm_fatal("STREAM_DRV", "timeout waiting for inp_bias_ready_o")
-            end
-        end
+        end while (!cfg.vif.inp_bias_ready_o[cfg.head_id]);
         // do begin
         //     @ (posedge cfg.vif.clk_i);
         // end while (!cfg.vif.inp_bias_ready_o[cfg.head_id]);
