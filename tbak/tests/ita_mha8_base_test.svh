@@ -43,21 +43,4 @@ class ita_base_test extends ita_mha8_base_test;
 
 endclass : ita_base_test
 
-class ita_linear_directed_test extends ita_mha8_base_test;
-    `uvm_component_utils(ita_linear_directed_test)
-
-    function new(string name = "ita_linear_directed_test", uvm_component parent = null);
-        super.new(name, parent);
-    endfunction : new
-
-    task run_phase(uvm_phase phase);
-        // TODO Stage 9: create one ita_mha8_core_item for a small Linear head0 testcase.
-        // TODO Stage 9: start shared ctrl before input/weight/bias streams.
-        // TODO Stage 9: drive head0 input, weight, and bias payloads through stream sequences.
-        // TODO Stage 9: enable head0 output ready and collect actual output.
-        // TODO Stage 10: pass expected/actual/compare paths into the Phase 2 compare flow.
-    endtask : run_phase
-
-endclass : ita_linear_directed_test
-
 `endif // ITA_MHA8_BASE_TEST_SVH

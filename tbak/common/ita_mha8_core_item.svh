@@ -53,9 +53,11 @@ class ita_mha8_core_item extends uvm_sequence_item;
         weight_payload.delete();
         bias_payload.delete();
 
-        input_payload.push_back('0);
-        weight_payload.push_back('0);
-        bias_payload.push_back('0);
+        input_payload.push_back(2);
+        for (int unsigned i = 0; i < N_WRITE_EN; i++) begin
+            weight_payload.push_back(2);
+        end
+        bias_payload.push_back(4);
     endfunction : set_linear_directed_head0
 
 endclass : ita_mha8_core_item
