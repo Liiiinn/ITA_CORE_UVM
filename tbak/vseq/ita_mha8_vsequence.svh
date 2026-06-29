@@ -13,9 +13,6 @@ class ita_mha8_vsequence extends uvm_sequence;
 
     virtual task body();
         ita_ctrl_single_seq ctrl_seq;
-        ita_stream_single_seq inp_seq;
-        ita_stream_single_seq weight_seq;
-        ita_stream_single_seq bias_seq;
         step_e directed_step;
         int unsigned heads;
 
@@ -31,36 +28,52 @@ class ita_mha8_vsequence extends uvm_sequence;
         ctrl_seq.ctrl = make_ctrl_item(core);
         ctrl_seq.start(p_sequencer.ctrl_sqr);
 
-        fork
-            begin
-                for (int unsigned h = 0; h < heads; h++) begin
-                    for (int unsigned beat = 0; beat < core.weight_payload_by_head[h].size(); beat++) begin
-                        weight_seq = ita_stream_single_seq::type_id::create($sformatf("weight_seq_h%0d_b%0d", h, beat));
-                        weight_seq.stream = make_stream_item(core, ITA_STREAM_HEAD_WEIGHT, h, 0, beat, 1'b1, directed_step);
-                        weight_seq.start(p_sequencer.weight_sqr[h]);
-                    end
-                end
-            end
-            begin
-                for (int unsigned h = 0; h < heads; h++) begin
-                    for (int unsigned beat = 0; beat < core.input_payload_by_head[h].size(); beat++) begin
-                        inp_seq = ita_stream_single_seq::type_id::create($sformatf("inp_seq_h%0d_b%0d", h, beat));
-                        inp_seq.stream = make_stream_item(core, ITA_STREAM_HEAD_INPUT, h, 0, beat, 1'b1, directed_step);
-                        inp_seq.start(p_sequencer.inp_sqr[h]);
-                    end
-                end
-            end
-            begin
-                for (int unsigned h = 0; h < heads; h++) begin
-                    for (int unsigned beat = 0; beat < core.bias_payload_by_head[h].size(); beat++) begin
-                        bias_seq = ita_stream_single_seq::type_id::create($sformatf("bias_seq_h%0d_b%0d", h, beat));
-                        bias_seq.stream = make_stream_item(core, ITA_STREAM_HEAD_BIAS, h, 0, beat, 1'b1, directed_step);
-                        bias_seq.start(p_sequencer.bias_sqr[h]);
-                    end
-                end
-            end
-        join
+        for (int unsigned h = 0; h < heads; h++) begin
+            automatic int unsigned head_id = h;
+            fork
+                send_head_streams(head_id, directed_step);
+            join_none
+        end
+        wait fork;
     endtask : body
+
+    task send_head_streams(int unsigned head_id, step_e directed_step);
+        fork
+            send_weight_stream(head_id, directed_step);
+            send_input_stream(head_id, directed_step);
+            send_bias_stream(head_id, directed_step);
+        join
+    endtask : send_head_streams
+
+    task send_weight_stream(int unsigned head_id, step_e directed_step);
+        ita_stream_single_seq weight_seq;
+
+        for (int unsigned beat = 0; beat < core.weight_payload_by_head[head_id].size(); beat++) begin
+            weight_seq = ita_stream_single_seq::type_id::create($sformatf("weight_seq_h%0d_b%0d", head_id, beat));
+            weight_seq.stream = make_stream_item(core, ITA_STREAM_HEAD_WEIGHT, head_id, 0, beat, 1'b1, directed_step);
+            weight_seq.start(p_sequencer.weight_sqr[head_id]);
+        end
+    endtask : send_weight_stream
+
+    task send_input_stream(int unsigned head_id, step_e directed_step);
+        ita_stream_single_seq inp_seq;
+
+        for (int unsigned beat = 0; beat < core.input_payload_by_head[head_id].size(); beat++) begin
+            inp_seq = ita_stream_single_seq::type_id::create($sformatf("inp_seq_h%0d_b%0d", head_id, beat));
+            inp_seq.stream = make_stream_item(core, ITA_STREAM_HEAD_INPUT, head_id, 0, beat, 1'b1, directed_step);
+            inp_seq.start(p_sequencer.inp_sqr[head_id]);
+        end
+    endtask : send_input_stream
+
+    task send_bias_stream(int unsigned head_id, step_e directed_step);
+        ita_stream_single_seq bias_seq;
+
+        for (int unsigned beat = 0; beat < core.bias_payload_by_head[head_id].size(); beat++) begin
+            bias_seq = ita_stream_single_seq::type_id::create($sformatf("bias_seq_h%0d_b%0d", head_id, beat));
+            bias_seq.stream = make_stream_item(core, ITA_STREAM_HEAD_BIAS, head_id, 0, beat, 1'b1, directed_step);
+            bias_seq.start(p_sequencer.bias_sqr[head_id]);
+        end
+    endtask : send_bias_stream
 
     function ita_ctrl_item make_ctrl_item(ita_mha8_core_item core);
         ita_ctrl_item ctrl;
