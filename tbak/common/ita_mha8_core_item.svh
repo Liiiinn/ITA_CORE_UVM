@@ -23,6 +23,13 @@ class ita_mha8_core_item extends uvm_sequence_item;
     bias_t       bias_payload_by_head        [8][$];
     // Stage 10: per-head queues are the UVM stimulus contract for Linear 8-head smoke.
 
+    requant_const_array_t head_eps_mult       [8];
+    requant_const_array_t head_right_shift    [8];
+    requant_array_t       head_add            [8];
+    bit                   has_requant_config;
+    string                requant_vector_path;
+    // Stage 10: optional PyITA requant CSV lets Q/K/V compare use the same constants as the source vectors.
+
     string       expected_path;
     string       actual_path;
     string       compare_path;
@@ -45,7 +52,9 @@ class ita_mha8_core_item extends uvm_sequence_item;
         actual_path = "";
         compare_path = "";
         stream_vector_path = "";
+        requant_vector_path = "";
         clear_payloads();
+        clear_requant_config();
         // TODO Stage 9: seed a small manually checkable Linear transaction in the derived test.
     endfunction : new
 
@@ -60,11 +69,151 @@ class ita_mha8_core_item extends uvm_sequence_item;
         end
     endfunction : clear_payloads
 
+    function void clear_requant_config();
+        has_requant_config = 1'b0;
+        for (int unsigned h = 0; h < 8; h++) begin
+            head_eps_mult[h]    = '0;
+            head_right_shift[h] = '0;
+            head_add[h]         = '0;
+        end
+    endfunction : clear_requant_config
+
+    function int signed requant_index_from_step_name(string step_name);
+        case (step_name)
+            "Q": return 0;
+            "K": return 1;
+            "V": return 2;
+            "QK": return 3;
+            "AV": return 4;
+            "OW": return 5;
+            "F1": return 6;
+            "F2": return 7;
+            "MatMul": return 0;
+            default: return -1;
+        endcase
+    endfunction : requant_index_from_step_name
+
+    function void load_requant_csv(string requant_vector_path);
+        int fd;
+        int line_no;
+        int code;
+        int signed step_idx;
+        int signed add_value;
+        int unsigned head_id;
+        int unsigned mult_value;
+        int unsigned shift_value;
+        int unsigned char_idx;
+        int unsigned loaded_rows;
+        string header;
+        string line;
+        string scan_line;
+        string step_name;
+
+        this.requant_vector_path = requant_vector_path;
+        clear_requant_config();
+
+        fd = $fopen(requant_vector_path, "r");
+        if (fd == 0) begin
+            `uvm_fatal("CORE_RQCSV", $sformatf("Failed to open requant CSV: %s", requant_vector_path))
+        end
+
+        void'($fgets(header, fd));
+        line_no = 1;
+        loaded_rows = 0;
+
+        while ($fgets(line, fd)) begin
+            line_no++;
+            step_name = "";
+            scan_line = line;
+            for (char_idx = 0; char_idx < scan_line.len(); char_idx++) begin
+                if (scan_line.getc(char_idx) == 8'h2c) begin
+                    scan_line.putc(char_idx, 8'h20);
+                end
+            end
+
+            code = $sscanf(scan_line, "%s %d %d %d %d",
+                step_name, head_id, mult_value, shift_value, add_value);
+            if (code != 5) begin
+                if (line.len() != 0) begin
+                    `uvm_warning("CORE_RQCSV", $sformatf("Skipping malformed requant line %0d: %s", line_no, line))
+                end
+                continue;
+            end
+
+            if (head_id >= 8) begin
+                `uvm_warning("CORE_RQCSV", $sformatf("Skipping illegal head row at line %0d: head_id=%0d", line_no, head_id))
+                continue;
+            end
+
+            step_idx = requant_index_from_step_name(step_name);
+            if (step_idx < 0 || step_idx >= N_REQUANT_CONSTS) begin
+                `uvm_warning("CORE_RQCSV", $sformatf("Skipping unsupported requant step at line %0d: %s", line_no, step_name))
+                continue;
+            end
+
+            head_eps_mult[head_id][step_idx]    = requant_const_t'(mult_value);
+            head_right_shift[head_id][step_idx] = requant_const_t'(shift_value);
+            head_add[head_id][step_idx]         = requant_t'(add_value);
+            loaded_rows++;
+        end
+
+        $fclose(fd);
+        has_requant_config = (loaded_rows != 0);
+
+        if (!has_requant_config) begin
+            `uvm_error("CORE_RQCSV", $sformatf("No requant rows loaded from %s", requant_vector_path))
+        end else begin
+            `uvm_info("CORE_RQCSV",
+                $sformatf("Loaded %0d requant rows from %s", loaded_rows, requant_vector_path),
+                UVM_LOW)
+        end
+    endfunction : load_requant_csv
+
     function void sync_head0_compat_queues();
         input_payload = input_payload_by_head[0];
         weight_payload = weight_payload_by_head[0];
         bias_payload = bias_payload_by_head[0];
     endfunction : sync_head0_compat_queues
+
+    function automatic bit [511:0] parse_hex_payload_bits(string payload_text);
+        bit [511:0] value;
+        int unsigned nibble_idx;
+        int unsigned char_idx;
+        byte c;
+        bit [3:0] nibble;
+
+        value = '0;
+        nibble_idx = 0;
+
+        for (int signed i = payload_text.len() - 1; i >= 0; i--) begin
+            c = payload_text.getc(i);
+
+            if (c == 8'h5f) begin
+                continue;
+            end
+
+            if (c >= "0" && c <= "9") begin
+                nibble = c - "0";
+            end else if (c >= "a" && c <= "f") begin
+                nibble = c - "a" + 10;
+            end else if (c >= "A" && c <= "F") begin
+                nibble = c - "A" + 10;
+            end else begin
+                continue;
+            end
+
+            char_idx = nibble_idx * 4;
+            if (char_idx < 512) begin
+                value[char_idx +: 4] = nibble;
+            end else begin
+                `uvm_warning("CORE_CSV", $sformatf("Payload is wider than 512 bits and will be truncated: %s", payload_text))
+                break;
+            end
+            nibble_idx++;
+        end
+
+        return value;
+    endfunction : parse_hex_payload_bits
 
     function int unsigned active_heads();
         if (num_active_heads == 0)
@@ -157,7 +306,7 @@ class ita_mha8_core_item extends uvm_sequence_item;
         int unsigned is_lockstep;
         int unsigned char_idx;
         int unsigned max_head_seen;
-        longint unsigned payload;
+        bit [511:0] payload_bits;
         bit warned_step_mismatch;
 
         layer = layer_value;
@@ -228,17 +377,17 @@ class ita_mha8_core_item extends uvm_sequence_item;
             end else begin
                 payload_hex = payload_text;
             end
-            payload = payload_hex.atohex();
+            payload_bits = parse_hex_payload_bits(payload_hex);
 
             case (kind)
                 "head_input": begin
-                    input_payload_by_head[head_id].push_back(inp_t'(payload));
+                    input_payload_by_head[head_id].push_back(inp_t'(payload_bits));
                 end
                 "head_weight": begin
-                    weight_payload_by_head[head_id].push_back(inp_weight_t'(payload));
+                    weight_payload_by_head[head_id].push_back(inp_weight_t'(payload_bits));
                 end
                 "head_bias": begin
-                    bias_payload_by_head[head_id].push_back(bias_t'(payload));
+                    bias_payload_by_head[head_id].push_back(bias_t'(payload_bits));
                 end
                 default: begin
                     `uvm_warning("CORE_CSV", $sformatf("Skipping unsupported stream kind at line %0d: %s", line_no, kind))

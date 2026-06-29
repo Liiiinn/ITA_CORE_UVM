@@ -10,6 +10,7 @@ param(
     [string]$Manifest = "",
     [string]$StreamName = "",
     [string]$ManifestName = "",
+    [string]$RequantName = "",
     [switch]$GenerateVectors,
     [switch]$CompareLinear,
     [switch]$NoCompare,
@@ -104,6 +105,12 @@ if ($ManifestName -eq "") {
     }
 }
 
+if ($RequantName -eq "") {
+    if ($VectorSource -eq "pyita-q") {
+        $RequantName = "uvm_pyita_q_mha8_requant.csv"
+    }
+}
+
 if ($Manifest -eq "") {
     $ManifestPath = Join-Path $LoggerDir $ManifestName
 } else {
@@ -120,10 +127,26 @@ if (-not $DryRun) {
 
 $VectorOutDir = Split-Path -Parent $ManifestPath
 $StreamPath = Join-Path $VectorOutDir $StreamName
+$RequantPath = ""
+$TileS = 1
+$TileE = 1
+$TileP = 1
+$TileF = 1
 if ([System.IO.Path]::GetFullPath($VectorOutDir) -eq [System.IO.Path]::GetFullPath($LoggerDir)) {
     $StreamPlusArg = "logger/$StreamName"
+    if ($RequantName -ne "") {
+        $RequantPlusArg = "logger/$RequantName"
+    } else {
+        $RequantPlusArg = ""
+    }
 } else {
     $StreamPlusArg = $StreamPath
+    if ($RequantName -ne "") {
+        $RequantPath = Join-Path $VectorOutDir $RequantName
+        $RequantPlusArg = $RequantPath
+    } else {
+        $RequantPlusArg = ""
+    }
 }
 
 if ($RunGenerateVectors) {
@@ -136,11 +159,23 @@ if ($RunGenerateVectors) {
             $DutStep = "Q"
         }
         $ResolvedPyitaDir = Resolve-RepoPath $PyitaDir
+        $PyitaCaseDir = Split-Path -Parent $ResolvedPyitaDir
+        $PyitaCaseName = Split-Path -Leaf $PyitaCaseDir
+        if ($PyitaCaseName -match "data_S(?<S>\d+)_E(?<E>\d+)_P(?<P>\d+)_F(?<F>\d+)") {
+            $TileS = [int]([int]$Matches.S / 64)
+            $TileE = [int]([int]$Matches.E / 64)
+            $TileP = [int]([int]$Matches.P / 64)
+            $TileF = [int]([int]$Matches.F / 64)
+            if ($TileS -le 0 -or $TileE -le 0 -or $TileP -le 0 -or $TileF -le 0) {
+                throw "Invalid tile dimensions derived from $PyitaCaseName"
+            }
+        }
         Invoke-PythonStep (Join-Path $ToolsDir "gen_mha8_pyita_vectors.py") @(
             "--pyita-dir", $ResolvedPyitaDir,
             "--heads", [string]$Heads,
             "--out-dir", $VectorOutDir,
             "--stream-name", $StreamName,
+            "--requant-name", $RequantName,
             "--manifest-name", (Split-Path -Leaf $ManifestPath),
             "--dut-step", $DutStep
         )
@@ -169,6 +204,13 @@ $vsimArgs = @(
 
 if (($IsLinearDirected -or $IsQDirected) -and -not $NoAutoVectorFlow) {
     $vsimArgs += "+ITA_STREAM_CSV=$StreamPlusArg"
+    if ($IsQDirected -and $VectorSource -eq "pyita-q" -and $RequantPlusArg -ne "") {
+        $vsimArgs += "+ITA_REQUANT_CSV=$RequantPlusArg"
+        $vsimArgs += "+ITA_TILE_S=$TileS"
+        $vsimArgs += "+ITA_TILE_E=$TileE"
+        $vsimArgs += "+ITA_TILE_P=$TileP"
+        $vsimArgs += "+ITA_TILE_F=$TileF"
+    }
 }
 
 $vsimArgs += @(

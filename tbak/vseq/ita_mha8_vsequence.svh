@@ -31,15 +31,16 @@ class ita_mha8_vsequence extends uvm_sequence;
         ctrl_seq.ctrl = make_ctrl_item(core);
         ctrl_seq.start(p_sequencer.ctrl_sqr);
 
-        for (int unsigned h = 0; h < heads; h++) begin
-            for (int unsigned beat = 0; beat < core.weight_payload_by_head[h].size(); beat++) begin
-                weight_seq = ita_stream_single_seq::type_id::create($sformatf("weight_seq_h%0d_b%0d", h, beat));
-                weight_seq.stream = make_stream_item(core, ITA_STREAM_HEAD_WEIGHT, h, 0, beat, 1'b1, directed_step);
-                weight_seq.start(p_sequencer.weight_sqr[h]);
-            end
-        end
-
         fork
+            begin
+                for (int unsigned h = 0; h < heads; h++) begin
+                    for (int unsigned beat = 0; beat < core.weight_payload_by_head[h].size(); beat++) begin
+                        weight_seq = ita_stream_single_seq::type_id::create($sformatf("weight_seq_h%0d_b%0d", h, beat));
+                        weight_seq.stream = make_stream_item(core, ITA_STREAM_HEAD_WEIGHT, h, 0, beat, 1'b1, directed_step);
+                        weight_seq.start(p_sequencer.weight_sqr[h]);
+                    end
+                end
+            end
             begin
                 for (int unsigned h = 0; h < heads; h++) begin
                     for (int unsigned beat = 0; beat < core.input_payload_by_head[h].size(); beat++) begin
@@ -63,7 +64,12 @@ class ita_mha8_vsequence extends uvm_sequence;
 
     function ita_ctrl_item make_ctrl_item(ita_mha8_core_item core);
         ita_ctrl_item ctrl;
+        step_e ctrl_step;
         ctrl = ita_ctrl_item::type_id::create("ctrl");
+
+        ctrl_step = core.stream_step;
+        if (ctrl_step == Idle)
+            ctrl_step = (core.layer == Linear) ? MatMul : Q;
 
         ctrl.ctrl.layer = core.layer;
         ctrl.ctrl.activation = core.activation;
@@ -72,8 +78,15 @@ class ita_mha8_vsequence extends uvm_sequence;
         ctrl.ctrl.tile_p = core.tile_p;
         ctrl.ctrl.tile_f = core.tile_f;
         ctrl.ctrl.start = 1'b1;
-        if (core.layer == Linear) begin
-            ctrl.set_linear_all_heads_identity_requant();
+
+        if (core.has_requant_config) begin
+            for (int unsigned h = 0; h < 8; h++) begin
+                ctrl.head_eps_mult[h]    = core.head_eps_mult[h];
+                ctrl.head_right_shift[h] = core.head_right_shift[h];
+                ctrl.head_add[h]         = core.head_add[h];
+            end
+        end else begin
+            ctrl.set_all_heads_identity_requant_for_step(ctrl_step);
         end
 
         return ctrl;

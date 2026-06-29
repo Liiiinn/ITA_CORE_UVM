@@ -5,6 +5,7 @@ class ita_mha8_q_directed_test extends ita_mha8_base_test;
     `uvm_component_utils(ita_mha8_q_directed_test)
 
     string stream_path;
+    string requant_path;
 
     function new(string name = "ita_mha8_q_directed_test", uvm_component parent = null);
         super.new(name, parent);
@@ -13,6 +14,10 @@ class ita_mha8_q_directed_test extends ita_mha8_base_test;
     task run_phase(uvm_phase phase);
         ita_mha8_vsequence vseq;
         ita_mha8_core_item core;
+        int unsigned tile_s;
+        int unsigned tile_e;
+        int unsigned tile_p;
+        int unsigned tile_f;
 
         phase.raise_objection(this);
 
@@ -21,7 +26,18 @@ class ita_mha8_q_directed_test extends ita_mha8_base_test;
         if (!$value$plusargs("ITA_STREAM_CSV=%s", stream_path))
             stream_path = "logger/uvm_pyita_q_mha8_stream.csv";
 
-        core.load_stream_csv(stream_path, Attention, Q);
+        tile_s = 1;
+        tile_e = 1;
+        tile_p = 1;
+        tile_f = 1;
+        void'($value$plusargs("ITA_TILE_S=%d", tile_s));
+        void'($value$plusargs("ITA_TILE_E=%d", tile_e));
+        void'($value$plusargs("ITA_TILE_P=%d", tile_p));
+        void'($value$plusargs("ITA_TILE_F=%d", tile_f));
+
+        core.load_stream_csv(stream_path, Attention, Q, Identity, tile_s, tile_e, tile_p, tile_f);
+        if ($value$plusargs("ITA_REQUANT_CSV=%s", requant_path))
+            core.load_requant_csv(requant_path);
 
         vseq = ita_mha8_vsequence::type_id::create("vseq");
         vseq.core = core;

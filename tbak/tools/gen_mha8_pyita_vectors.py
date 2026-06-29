@@ -64,6 +64,26 @@ def read_values(path: Path) -> list[int]:
     return values
 
 
+def read_table(path: Path) -> list[list[int]]:
+    if not path.is_file():
+        raise FileNotFoundError(f"Required PyITA requant file not found: {path}")
+
+    rows: list[list[int]] = []
+    with path.open("r", encoding="utf-8-sig", errors="replace") as f:
+        for line_no, raw_line in enumerate(f, start=1):
+            line = raw_line.split("#", 1)[0].strip()
+            if not line:
+                continue
+            row: list[int] = []
+            for token in line.split():
+                try:
+                    row.append(parse_int(token))
+                except ValueError as exc:
+                    raise ValueError(f"Invalid integer in {path} line {line_no}: {token!r}") from exc
+            rows.append(row)
+    return rows
+
+
 def require_count(path: Path, values: list[int], count: int) -> None:
     if len(values) < count:
         raise ValueError(f"{path} contains {len(values)} value(s), but {count} are required")
@@ -108,6 +128,15 @@ def write_stream_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         writer.writerows(rows)
 
 
+def write_requant_csv(path: Path, rows: list[dict[str, Any]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fieldnames = ["step", "head_id", "mult", "shift", "add"]
+    with path.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+
+
 def write_manifest(path: Path, manifest: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as f:
@@ -128,6 +157,59 @@ def make_row(kind: str, head: int, beat: int, step: str, payload: int) -> dict[s
     }
 
 
+def step_requant_column(step: str) -> int:
+    mapping = {
+        "Q": 0,
+        "K": 1,
+        "V": 2,
+        "QK": 3,
+        "AV": 4,
+        "OW": 5,
+        "F1": 6,
+        "F2": 7,
+        "MatMul": 0,
+    }
+    try:
+        return mapping[step]
+    except KeyError as exc:
+        raise ValueError(f"Unsupported PyITA requant step: {step}") from exc
+
+
+def make_requant_rows(pyita_dir: Path, step: str, heads: int) -> list[dict[str, Any]]:
+    vector_root = pyita_dir.parent
+    mult_rows = read_table(vector_root / "RQS_ATTN_MUL.txt")
+    shift_rows = read_table(vector_root / "RQS_ATTN_SHIFT.txt")
+    add_rows = read_table(vector_root / "RQS_ATTN_ADD.txt")
+    column = step_requant_column(step)
+
+    if len(mult_rows) < heads or len(shift_rows) < heads or len(add_rows) < heads:
+        raise ValueError(
+            "PyITA requant tables do not contain enough head rows: "
+            f"mul={len(mult_rows)} shift={len(shift_rows)} add={len(add_rows)} heads={heads}"
+        )
+
+    rows: list[dict[str, Any]] = []
+    for head in range(heads):
+        for table_name, table in (
+            ("RQS_ATTN_MUL.txt", mult_rows),
+            ("RQS_ATTN_SHIFT.txt", shift_rows),
+            ("RQS_ATTN_ADD.txt", add_rows),
+        ):
+            if len(table[head]) <= column:
+                raise ValueError(f"{table_name} head{head} has no column {column} for step {step}")
+
+        rows.append(
+            {
+                "step": step,
+                "head_id": head,
+                "mult": mult_rows[head][column],
+                "shift": shift_rows[head][column],
+                "add": add_rows[head][column],
+            }
+        )
+    return rows
+
+
 def main() -> int:
     root = core_root()
     default_out_dir = root / "sim" / "logger"
@@ -138,16 +220,19 @@ def main() -> int:
     parser.add_argument("--heads", type=int, default=8, help="Number of MHA heads to adapt, starting at head 0.")
     parser.add_argument("--input-lanes", type=int, default=64, help="Number of int8 lanes in one inp_t payload.")
     parser.add_argument("--weight-lanes", type=int, default=16, help="Number of int8 lanes in one inp_weight_t payload.")
+    parser.add_argument("--weight-row-width", type=int, default=64, help="Logical row width of Wq_<head>.txt from PyITA tiler_QK.")
     parser.add_argument("--bias-lanes", type=int, default=16, help="Number of bias lanes in one bias_t payload.")
     parser.add_argument("--bias-bits", type=int, default=24, help="Bit width used to pack each bias lane.")
     parser.add_argument("--output-lanes", type=int, default=16, help="Number of int8 lanes in one requant_oup_t payload.")
-    parser.add_argument("--weight-beats", type=int, default=64, help="Number of weight beats emitted per head.")
-    parser.add_argument("--input-beats", type=int, default=1, help="Number of input beats emitted per head.")
-    parser.add_argument("--bias-beats", type=int, default=1, help="Number of bias beats emitted per head.")
-    parser.add_argument("--expected-beats", type=int, default=1, help="Number of expected output beats emitted per head.")
+    parser.add_argument("--weight-beats", type=int, default=0, help="Number of weight beats emitted per head; 0 uses all Wq rows.")
+    parser.add_argument("--input-beats", type=int, default=0, help="Number of input beats emitted per head; 0 matches expected beats.")
+    parser.add_argument("--bias-beats", type=int, default=0, help="Number of bias beats emitted per head; 0 matches expected beats.")
+    parser.add_argument("--expected-beats", type=int, default=0, help="Number of expected output beats emitted per head; 0 uses all Qp rows.")
+    parser.add_argument("--tile-beats", type=int, default=256, help="Handshake beats in one 64x64/16 ITA output tile.")
     parser.add_argument("--source-step", default="Q", help="PyITA source step recorded in the manifest.")
     parser.add_argument("--dut-step", default="MatMul", help="DUT compare step used by the current UVM Linear path.")
     parser.add_argument("--stream-name", default="uvm_pyita_q_mha8_stream.csv")
+    parser.add_argument("--requant-name", default="uvm_pyita_q_mha8_requant.csv")
     parser.add_argument("--manifest-name", default="uvm_pyita_q_mha8_manifest.json")
     parser.add_argument("--expected-prefix", default="expected_q_head")
     parser.add_argument("--actual-prefix", default="actual_q_head")
@@ -156,12 +241,12 @@ def main() -> int:
 
     if args.heads <= 0 or args.heads > 8:
         raise ValueError("--heads must be in the range 1..8")
-    for name in ("input_lanes", "weight_lanes", "bias_lanes", "bias_bits", "output_lanes"):
+    for name in ("input_lanes", "weight_lanes", "weight_row_width", "bias_lanes", "bias_bits", "output_lanes", "tile_beats"):
         if getattr(args, name) <= 0:
             raise ValueError(f"--{name.replace('_', '-')} must be greater than zero")
     for name in ("weight_beats", "input_beats", "bias_beats", "expected_beats"):
-        if getattr(args, name) <= 0:
-            raise ValueError(f"--{name.replace('_', '-')} must be greater than zero")
+        if getattr(args, name) < 0:
+            raise ValueError(f"--{name.replace('_', '-')} must be non-negative")
 
     pyita_dir = args.pyita_dir
     if not pyita_dir.is_absolute():
@@ -172,14 +257,15 @@ def main() -> int:
 
     out_dir = args.out_dir
     stream_path = out_dir / args.stream_name
+    requant_path = out_dir / args.requant_name
     manifest_path = out_dir / args.manifest_name
     actual_csv_path = out_dir / args.actual_csv_name
 
     input_path = pyita_dir / "Q.txt"
     input_values = read_values(input_path)
-    require_count(input_path, input_values, args.input_lanes * args.input_beats)
 
     rows: list[dict[str, Any]] = []
+    requant_rows = make_requant_rows(pyita_dir, args.source_step, args.heads)
     per_head: list[dict[str, Any]] = []
 
     for head in range(args.heads):
@@ -191,22 +277,60 @@ def main() -> int:
         bias_values = read_values(bias_path)
         expected_values = read_values(expected_source_path)
 
-        require_count(weight_path, weight_values, args.weight_lanes * args.weight_beats)
-        require_count(bias_path, bias_values, args.bias_lanes * args.bias_beats)
-        require_count(expected_source_path, expected_values, args.output_lanes * args.expected_beats)
+        expected_beats = args.expected_beats
+        if expected_beats == 0:
+            expected_beats = len(expected_values) // args.output_lanes
+        input_beats = args.input_beats
+        if input_beats == 0:
+            input_beats = len(input_values) // args.input_lanes
+        bias_beats = args.bias_beats
+        if bias_beats == 0:
+            bias_beats = input_beats
+        weight_beats = args.weight_beats
+        if weight_beats == 0:
+            weight_beats = len(weight_values) // args.weight_lanes
 
-        for beat in range(args.weight_beats):
+        bias_source_beats = len(bias_values) // args.bias_lanes
+        if bias_source_beats == 0:
+            raise ValueError(f"{bias_path} does not contain a complete bias beat")
+        if bias_beats < bias_source_beats:
+            raise ValueError(
+                f"Requested bias beats ({bias_beats}) are fewer than source bias beats ({bias_source_beats})"
+            )
+        if (bias_beats % bias_source_beats) != 0:
+            raise ValueError(
+                f"Bias beats ({bias_beats}) must be an integer multiple of source bias beats ({bias_source_beats})"
+            )
+        bias_repeat = bias_beats // bias_source_beats
+
+        require_count(input_path, input_values, args.input_lanes * input_beats)
+        require_count(weight_path, weight_values, args.weight_lanes * weight_beats)
+        require_count(bias_path, bias_values, args.bias_lanes * bias_source_beats)
+        require_count(expected_source_path, expected_values, args.output_lanes * expected_beats)
+
+        for beat in range(weight_beats):
             start = beat * args.weight_lanes
             payload = pack_lanes(weight_values[start : start + args.weight_lanes], 8)
             rows.append(make_row("head_weight", head, beat, args.dut_step, payload))
 
-        for beat in range(args.input_beats):
+        for beat in range(input_beats):
             start = beat * args.input_lanes
             payload = pack_lanes(input_values[start : start + args.input_lanes], 8)
             rows.append(make_row("head_input", head, beat, args.dut_step, payload))
 
-        for beat in range(args.bias_beats):
-            start = beat * args.bias_lanes
+        for beat in range(bias_beats):
+            if bias_repeat == 1:
+                source_beat = beat
+            else:
+                group = beat // (args.tile_beats * bias_repeat)
+                group_offset = beat % (args.tile_beats * bias_repeat)
+                source_beat = group * args.tile_beats + (group_offset % args.tile_beats)
+                if source_beat >= bias_source_beats:
+                    raise ValueError(
+                        f"Expanded bias beat {beat} maps outside source beats: "
+                        f"source_beat={source_beat} source_beats={bias_source_beats}"
+                    )
+            start = source_beat * args.bias_lanes
             payload = pack_lanes(bias_values[start : start + args.bias_lanes], args.bias_bits)
             rows.append(make_row("head_bias", head, beat, args.dut_step, payload))
 
@@ -215,7 +339,7 @@ def main() -> int:
         expected_payloads: list[str] = []
         expected_path.parent.mkdir(parents=True, exist_ok=True)
         with expected_path.open("w", encoding="utf-8") as f:
-            for beat in range(args.expected_beats):
+            for beat in range(expected_beats):
                 start = beat * args.output_lanes
                 payload = pack_lanes(expected_values[start : start + args.output_lanes], 8)
                 expected_payloads.append(hex_payload(payload))
@@ -230,15 +354,23 @@ def main() -> int:
                 "expected_source_path": rel_to_core(expected_source_path, root),
                 "expected_path": rel_to_core(expected_path, root),
                 "actual_path": rel_to_core(actual_path, root),
+                "requant": requant_rows[head],
+                "weight_beats": weight_beats,
+                "input_beats": input_beats,
+                "bias_beats": bias_beats,
+                "bias_source_beats": bias_source_beats,
+                "bias_repeat": bias_repeat,
+                "expected_beats": expected_beats,
                 "expected_values": expected_payloads,
             }
         )
 
     write_stream_csv(stream_path, rows)
+    write_requant_csv(requant_path, requant_rows)
 
     manifest = {
         "name": "pyita_q_mha8_linear_adapter",
-        "layer": "Linear",
+        "layer": "Attention" if args.dut_step == args.source_step else "Linear",
         "activation": "Identity",
         "heads": args.heads,
         "step": args.dut_step,
@@ -251,12 +383,16 @@ def main() -> int:
             "weight_prefix": "Wq",
             "bias_prefix": "Bq",
             "expected_prefix": "Qp",
+            "requant_mult_file": "RQS_ATTN_MUL.txt",
+            "requant_shift_file": "RQS_ATTN_SHIFT.txt",
+            "requant_add_file": "RQS_ATTN_ADD.txt",
         },
         "compare": {
             "actual_step": args.dut_step,
             "stream": "per_head",
         },
         "stream_path": rel_to_core(stream_path, root),
+        "requant_path": rel_to_core(requant_path, root),
         "actual_csv": rel_to_core(actual_csv_path, root),
         "tile_s": 1,
         "tile_e": 1,
@@ -264,18 +400,20 @@ def main() -> int:
         "tile_f": 1,
         "input_lanes": args.input_lanes,
         "weight_lanes": args.weight_lanes,
+        "weight_row_width": args.weight_row_width,
         "bias_lanes": args.bias_lanes,
         "bias_bits": args.bias_bits,
         "output_lanes": args.output_lanes,
-        "weight_beats": args.weight_beats,
-        "input_beats": args.input_beats,
-        "bias_beats": args.bias_beats,
-        "expected_beats": args.expected_beats,
+        "weight_beats": per_head[0]["weight_beats"] if per_head else 0,
+        "input_beats": per_head[0]["input_beats"] if per_head else 0,
+        "bias_beats": per_head[0]["bias_beats"] if per_head else 0,
+        "expected_beats": per_head[0]["expected_beats"] if per_head else 0,
         "per_head": per_head,
     }
     write_manifest(manifest_path, manifest)
 
     print(f"Wrote {len(rows)} stream rows -> {stream_path}")
+    print(f"Wrote {len(requant_rows)} requant rows -> {requant_path}")
     print(f"Wrote {args.heads} PyITA-Q expected files -> {out_dir / (args.expected_prefix + '<head>.txt')}")
     print(f"Wrote manifest -> {manifest_path}")
     return 0
