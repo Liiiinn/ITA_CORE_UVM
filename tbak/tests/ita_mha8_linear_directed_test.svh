@@ -27,7 +27,7 @@ class ita_mha8_linear_directed_test extends ita_mha8_base_test;
         vseq.core = core;
         vseq.start(env.vsqr);
 
-        // TODO Stage 10: pass expected/actual/compare paths into the Phase 2 compare flow.
+        // Stage 10: smoke.ps1 passes stream CSV; manifest/Python owns expected/actual/compare paths.
         repeat (200) @(posedge vif.clk_i);
 
         phase.drop_objection(this);

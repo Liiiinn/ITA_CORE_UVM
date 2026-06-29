@@ -26,7 +26,8 @@ class ita_mha8_core_item extends uvm_sequence_item;
     string       actual_path;
     string       compare_path;
     string       stream_vector_path;
-    // TODO Stage 10: pass these paths to logger and post-simulation Python compare flow.
+    // Stage 10: post-simulation compare paths are owned by the manifest/Python flow.
+    // Future optional: populate these fields from a manifest plusarg if SV-side path awareness is needed.
 
     function new(string name = "ita_mha8_core_item");
         super.new(name);

@@ -20,7 +20,8 @@ class ita_mha8_logger extends uvm_component;
 
     string stream_path;
     string output_path;
-    // TODO Stage 10: pass actual_path from ita_mha8_core_item or test config before adding file output.
+    // Stage 10: logger writes stable CSV files; manifest/Python converts output CSV to actual txt.
+    // Future optional: configure these CSV paths from test config instead of fixed defaults.
 
     function new(string name = "ita_mha8_logger", uvm_component parent = null);
         super.new(name, parent);
@@ -114,7 +115,7 @@ class ita_mha8_logger extends uvm_component;
             end
         endcase
         // Stage 8: leave protocol/count checking to the smoke scoreboard, not the logger.
-        // TODO Stage 10: write actual output to actual_path in the format expected by the Python compare flow.
+        // Stage 10 complete: parse_actual.py writes manifest-selected actual txt from this output CSV.
     endfunction : write_output
 
     function string stream_kind_name(ita_stream_kind_e kind);

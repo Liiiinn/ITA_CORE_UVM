@@ -59,7 +59,8 @@ class ita_mha8_scoreboard extends uvm_component;
         //         compare_metadata(expected, actual);
         //     end
         // end
-        // TODO Stage 10: compare actual and expected output only after the Phase 2 path is connected.
+        // Stage 10: numeric expected/actual compare is post-sim manifest flow, not this smoke scoreboard.
+        // Future optional: reintroduce expected_fifo for online metadata/golden checks after S11 ref-model work.
     endtask : run_phase
 
     task process_source_fifo();

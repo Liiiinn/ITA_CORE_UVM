@@ -83,7 +83,7 @@ class ita_mha8_env extends uvm_env;
             bias_agt[h].ap.connect(scb.source_export);
             head_output_agt[h].ap.connect(scb.output_export);
         end
-        // Stage 10: connect logger output to the Phase 2 compare path.
+        // Stage 10: logger CSV output feeds parse_actual.py through the manifest-driven smoke flow.
         // TODO Stage 11: fan in sum and feed-forward analysis ports.
     endfunction : connect_phase
 
