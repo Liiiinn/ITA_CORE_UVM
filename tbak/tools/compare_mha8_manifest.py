@@ -49,10 +49,12 @@ def require_key(obj: dict[str, Any], key: str) -> Any:
     return obj[key]
 
 
-def run(cmd: list[str], dry_run: bool) -> None:
+def run(cmd: list[str], dry_run: bool) -> int:
     print("PY> " + " ".join(cmd), flush=True)
-    if not dry_run:
-        subprocess.run(cmd, check=True)
+    if dry_run:
+        return 0
+    completed = subprocess.run(cmd, check=False)
+    return completed.returncode
 
 
 def main() -> int:
@@ -67,15 +69,24 @@ def main() -> int:
 
     manifest_path = args.manifest
     if not manifest_path.is_absolute():
-        manifest_path = core_root() / manifest_path
+        if manifest_path.is_file():
+            manifest_path = manifest_path.resolve()
+        else:
+            manifest_path = core_root() / manifest_path
     if not manifest_path.is_file():
         raise FileNotFoundError(f"Manifest not found: {manifest_path}")
 
-    with manifest_path.open("r", encoding="utf-8") as f:
+    with manifest_path.open("r", encoding="utf-8-sig") as f:
         manifest = json.load(f)
 
-    step = str(require_key(manifest, "step"))
-    stream = str(manifest.get("stream", "per_head"))
+    compare_cfg = manifest.get("compare", {})
+    if compare_cfg is None:
+        compare_cfg = {}
+    if not isinstance(compare_cfg, dict):
+        raise ValueError("Manifest compare must be an object when present")
+
+    step = str(compare_cfg.get("actual_step", require_key(manifest, "step")))
+    stream = str(compare_cfg.get("stream", manifest.get("stream", "per_head")))
     per_head = require_key(manifest, "per_head")
     if not isinstance(per_head, list) or not per_head:
         raise ValueError("Manifest per_head must be a non-empty list")
@@ -91,6 +102,7 @@ def main() -> int:
     elif not actual_csv.is_absolute():
         actual_csv = core_root() / actual_csv
 
+    failures: list[str] = []
     for entry in per_head:
         if not isinstance(entry, dict):
             raise ValueError(f"Invalid per_head entry: {entry!r}")
@@ -129,9 +141,22 @@ def main() -> int:
         if args.bit_width is not None:
             compare_cmd.extend(["--bit-width", str(args.bit_width)])
 
-        run(parse_cmd, args.dry_run)
-        run(compare_cmd, args.dry_run)
+        parse_rc = run(parse_cmd, args.dry_run)
+        if parse_rc != 0:
+            failures.append(f"head{head}: parse_actual failed with exit code {parse_rc}")
+            continue
 
+        compare_rc = run(compare_cmd, args.dry_run)
+        if compare_rc != 0:
+            failures.append(f"head{head}: compare failed with exit code {compare_rc}")
+
+    if failures:
+        print("MHA8_MANIFEST_COMPARE_FAIL")
+        for failure in failures:
+            print(f"  {failure}")
+        return 1
+
+    print(f"MHA8_MANIFEST_COMPARE_PASS heads={len(per_head)}")
     return 0
 
 

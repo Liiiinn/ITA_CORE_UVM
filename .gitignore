@@ -10,7 +10,7 @@ sim/output
 sim/modelsim.ini
 sim/logger
 .venv
-
+tools/__pycache__
 # Additional Ruby/bundler ignore for when you run: bundle install
 /vendor
 

@@ -4,9 +4,12 @@ param(
     [string]$UvmHome = $env:UVM_HOME,
     [string]$Python = "python",
     [int]$Heads = 8,
+    [ValidateSet("synthetic", "pyita-q")]
+    [string]$VectorSource = "synthetic",
+    [string]$PyitaDir = "",
     [string]$Manifest = "",
-    [string]$StreamName = "uvm_linear_mha8_stream.csv",
-    [string]$ManifestName = "uvm_linear_mha8_manifest.json",
+    [string]$StreamName = "",
+    [string]$ManifestName = "",
     [switch]$GenerateVectors,
     [switch]$CompareLinear,
     [switch]$NoCompare,
@@ -20,6 +23,7 @@ $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $SimDir = Split-Path -Parent $ScriptDir
 $CoreDir = Split-Path -Parent $SimDir
+$WorkspaceDir = Split-Path -Parent $CoreDir
 $OutputDir = Join-Path $SimDir "output"
 $LogDir = Join-Path $OutputDir "logs"
 $LoggerDir = Join-Path $SimDir "logger"
@@ -32,6 +36,23 @@ function Resolve-Tool {
         return Join-Path $QuestaBin $Name
     }
     return $Name
+}
+
+function Resolve-RepoPath {
+    param([string]$PathText)
+    if ($PathText -eq "") {
+        return ""
+    }
+    if ([System.IO.Path]::IsPathRooted($PathText)) {
+        return $PathText
+    }
+
+    $workspaceCandidate = Join-Path $WorkspaceDir $PathText
+    if ((Test-Path $workspaceCandidate) -or $DryRun) {
+        return $workspaceCandidate
+    }
+
+    return Join-Path $CoreDir $PathText
 }
 
 function Invoke-Step {
@@ -66,6 +87,22 @@ if ($Heads -le 0 -or $Heads -gt 8) {
     throw "-Heads must be in the range 1..8"
 }
 
+if ($StreamName -eq "") {
+    if ($VectorSource -eq "pyita-q") {
+        $StreamName = "uvm_pyita_q_mha8_stream.csv"
+    } else {
+        $StreamName = "uvm_linear_mha8_stream.csv"
+    }
+}
+
+if ($ManifestName -eq "") {
+    if ($VectorSource -eq "pyita-q") {
+        $ManifestName = "uvm_pyita_q_mha8_manifest.json"
+    } else {
+        $ManifestName = "uvm_linear_mha8_manifest.json"
+    }
+}
+
 if ($Manifest -eq "") {
     $ManifestPath = Join-Path $LoggerDir $ManifestName
 } else {
@@ -82,19 +119,33 @@ if (-not $DryRun) {
 
 $VectorOutDir = Split-Path -Parent $ManifestPath
 $StreamPath = Join-Path $VectorOutDir $StreamName
-if ($VectorOutDir -eq $LoggerDir) {
+if ([System.IO.Path]::GetFullPath($VectorOutDir) -eq [System.IO.Path]::GetFullPath($LoggerDir)) {
     $StreamPlusArg = "logger/$StreamName"
 } else {
     $StreamPlusArg = $StreamPath
 }
 
 if ($RunGenerateVectors) {
-    Invoke-PythonStep (Join-Path $ToolsDir "gen_mha8_vectors.py") @(
-        "--heads", [string]$Heads,
-        "--out-dir", $VectorOutDir,
-        "--stream-name", $StreamName,
-        "--manifest-name", (Split-Path -Leaf $ManifestPath)
-    )
+    if ($VectorSource -eq "pyita-q") {
+        if ($PyitaDir -eq "") {
+            throw "-PyitaDir is required when -VectorSource pyita-q generates vectors"
+        }
+        $ResolvedPyitaDir = Resolve-RepoPath $PyitaDir
+        Invoke-PythonStep (Join-Path $ToolsDir "gen_mha8_pyita_vectors.py") @(
+            "--pyita-dir", $ResolvedPyitaDir,
+            "--heads", [string]$Heads,
+            "--out-dir", $VectorOutDir,
+            "--stream-name", $StreamName,
+            "--manifest-name", (Split-Path -Leaf $ManifestPath)
+        )
+    } else {
+        Invoke-PythonStep (Join-Path $ToolsDir "gen_mha8_vectors.py") @(
+            "--heads", [string]$Heads,
+            "--out-dir", $VectorOutDir,
+            "--stream-name", $StreamName,
+            "--manifest-name", (Split-Path -Leaf $ManifestPath)
+        )
+    }
 }
 
 & (Join-Path $ScriptDir "compile.ps1") -QuestaBin $QuestaBin -UvmHome $UvmHome -DryRun:$DryRun
@@ -129,4 +180,3 @@ if ($RunCompareLinear) {
         "--manifest", $ManifestPath
     )
 }
-
