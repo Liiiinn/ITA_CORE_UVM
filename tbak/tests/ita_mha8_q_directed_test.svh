@@ -1,12 +1,12 @@
-`ifndef ITA_MHA8_LINEAR_DIRECTED_TEST_SVH
-`define ITA_MHA8_LINEAR_DIRECTED_TEST_SVH
+`ifndef ITA_MHA8_Q_DIRECTED_TEST_SVH
+`define ITA_MHA8_Q_DIRECTED_TEST_SVH
 
-class ita_mha8_linear_directed_test extends ita_mha8_base_test;
-    `uvm_component_utils(ita_mha8_linear_directed_test)
+class ita_mha8_q_directed_test extends ita_mha8_base_test;
+    `uvm_component_utils(ita_mha8_q_directed_test)
 
     string stream_path;
 
-    function new(string name = "ita_mha8_linear_directed_test", uvm_component parent = null);
+    function new(string name = "ita_mha8_q_directed_test", uvm_component parent = null);
         super.new(name, parent);
     endfunction : new
 
@@ -19,9 +19,9 @@ class ita_mha8_linear_directed_test extends ita_mha8_base_test;
         core = ita_mha8_core_item::type_id::create("core");
         
         if (!$value$plusargs("ITA_STREAM_CSV=%s", stream_path))
-            stream_path = "logger/uvm_linear_head0_stream.csv";
+            stream_path = "logger/uvm_pyita_q_mha8_stream.csv";
 
-        core.load_stream_csv(stream_path, Linear, MatMul);
+        core.load_stream_csv(stream_path, Attention, Q);
 
         vseq = ita_mha8_vsequence::type_id::create("vseq");
         vseq.core = core;
@@ -34,4 +34,4 @@ class ita_mha8_linear_directed_test extends ita_mha8_base_test;
     endtask : run_phase
 endclass
 
-`endif // ITA_MHA8_LINEAR_DIRECTED_TEST_SVH
+`endif // ITA_MHA8_Q_DIRECTED_TEST_SVH

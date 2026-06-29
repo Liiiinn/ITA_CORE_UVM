@@ -79,7 +79,8 @@ function Invoke-PythonStep {
 }
 
 $IsLinearDirected = ($TestName -eq "ita_mha8_linear_directed_test")
-$AutoVectorFlow = ($IsLinearDirected -and -not $NoAutoVectorFlow)
+$IsQDirected = ($TestName -eq "ita_mha8_q_directed_test")
+$AutoVectorFlow = (($IsLinearDirected -or $IsQDirected) -and -not $NoAutoVectorFlow)
 $RunGenerateVectors = ($GenerateVectors -or $AutoVectorFlow)
 $RunCompareLinear = (($CompareLinear -or $AutoVectorFlow) -and -not $NoCompare)
 
@@ -130,15 +131,23 @@ if ($RunGenerateVectors) {
         if ($PyitaDir -eq "") {
             throw "-PyitaDir is required when -VectorSource pyita-q generates vectors"
         }
+        $DutStep = "MatMul"
+        if ($IsQDirected) {
+            $DutStep = "Q"
+        }
         $ResolvedPyitaDir = Resolve-RepoPath $PyitaDir
         Invoke-PythonStep (Join-Path $ToolsDir "gen_mha8_pyita_vectors.py") @(
             "--pyita-dir", $ResolvedPyitaDir,
             "--heads", [string]$Heads,
             "--out-dir", $VectorOutDir,
             "--stream-name", $StreamName,
-            "--manifest-name", (Split-Path -Leaf $ManifestPath)
+            "--manifest-name", (Split-Path -Leaf $ManifestPath),
+            "--dut-step", $DutStep
         )
     } else {
+        if ($IsQDirected) {
+            throw "ita_mha8_q_directed_test requires -VectorSource pyita-q"
+        }
         Invoke-PythonStep (Join-Path $ToolsDir "gen_mha8_vectors.py") @(
             "--heads", [string]$Heads,
             "--out-dir", $VectorOutDir,
@@ -158,7 +167,7 @@ $vsimArgs = @(
     "+UVM_TESTNAME=$TestName"
 )
 
-if ($IsLinearDirected -and -not $NoAutoVectorFlow) {
+if (($IsLinearDirected -or $IsQDirected) -and -not $NoAutoVectorFlow) {
     $vsimArgs += "+ITA_STREAM_CSV=$StreamPlusArg"
 }
 

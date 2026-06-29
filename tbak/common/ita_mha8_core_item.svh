@@ -6,6 +6,7 @@ class ita_mha8_core_item extends uvm_sequence_item;
 
     layer_e      layer;
     activation_e activation;
+    step_e       stream_step;
     tile_t       tile_s;
     tile_t       tile_e;
     tile_t       tile_p;
@@ -33,6 +34,7 @@ class ita_mha8_core_item extends uvm_sequence_item;
         super.new(name);
         layer = Attention;
         activation = Identity;
+        stream_step = MatMul;
         tile_s = 1;
         tile_e = 1;
         tile_p = 1;
@@ -75,6 +77,7 @@ class ita_mha8_core_item extends uvm_sequence_item;
     function void set_linear_directed_head0;
         layer = Linear;
         activation = Identity;
+        stream_step = MatMul;
 
         tile_s = 1;
         tile_e = 1;
@@ -96,6 +99,7 @@ class ita_mha8_core_item extends uvm_sequence_item;
     function void set_linear_head0_multibeat();
         layer = Linear;
         activation = Identity;
+        stream_step = MatMul;
 
         tile_s = 1;
         tile_e = 1;
@@ -119,10 +123,23 @@ class ita_mha8_core_item extends uvm_sequence_item;
     endfunction : set_linear_head0_multibeat
 
     function void load_linear_head0_stream_csv(string stream_vector_path);
-        load_linear_stream_csv(stream_vector_path);
+        load_stream_csv(stream_vector_path, Linear, MatMul);
     endfunction : load_linear_head0_stream_csv
 
     function void load_linear_stream_csv(string stream_vector_path);
+        load_stream_csv(stream_vector_path, Linear, MatMul);
+    endfunction : load_linear_stream_csv
+
+    function void load_stream_csv(
+        string stream_vector_path,
+        layer_e layer_value,
+        step_e stream_step_value,
+        activation_e activation_value = Identity,
+        tile_t tile_s_value = 1,
+        tile_t tile_e_value = 1,
+        tile_t tile_p_value = 1,
+        tile_t tile_f_value = 1
+    );
         int fd;
         int line_no;
         int code;
@@ -141,16 +158,19 @@ class ita_mha8_core_item extends uvm_sequence_item;
         int unsigned char_idx;
         int unsigned max_head_seen;
         longint unsigned payload;
+        bit warned_step_mismatch;
 
-        layer = Linear;
-        activation = Identity;
-        tile_s = 1;
-        tile_e = 1;
-        tile_p = 1;
-        tile_f = 1;
+        layer = layer_value;
+        activation = activation_value;
+        stream_step = stream_step_value;
+        tile_s = tile_s_value;
+        tile_e = tile_e_value;
+        tile_p = tile_p_value;
+        tile_f = tile_f_value;
         target_head_id = 0;
         num_active_heads = 0;
         max_head_seen = 0;
+        warned_step_mismatch = 1'b0;
         this.stream_vector_path = stream_vector_path;
         clear_payloads();
 
@@ -195,6 +215,13 @@ class ita_mha8_core_item extends uvm_sequence_item;
             if (head_id > max_head_seen)
                 max_head_seen = head_id;
 
+            if (!warned_step_mismatch && step_name != "" && step_name != stream_step.name()) begin
+                `uvm_warning("CORE_CSV",
+                    $sformatf("CSV step metadata '%s' differs from requested stream_step '%s'; using requested stream_step",
+                        step_name, stream_step.name()))
+                warned_step_mismatch = 1'b1;
+            end
+
             if (payload_text.len() >= 2 &&
                 (payload_text.substr(0, 1) == "0x" || payload_text.substr(0, 1) == "0X")) begin
                 payload_hex = payload_text.substr(2, payload_text.len() - 1);
@@ -233,11 +260,11 @@ class ita_mha8_core_item extends uvm_sequence_item;
         end
 
         `uvm_info("CORE_CSV",
-            $sformatf("Loaded Linear CSV %s: active_heads=%0d head0 input=%0d weight=%0d bias=%0d",
-                stream_vector_path, active_heads(), input_payload_by_head[0].size(),
+            $sformatf("Loaded stream CSV %s: layer=%s stream_step=%s active_heads=%0d head0 input=%0d weight=%0d bias=%0d",
+                stream_vector_path, layer.name(), stream_step.name(), active_heads(), input_payload_by_head[0].size(),
                 weight_payload_by_head[0].size(), bias_payload_by_head[0].size()),
             UVM_LOW)
-    endfunction : load_linear_stream_csv
+    endfunction : load_stream_csv
 endclass : ita_mha8_core_item
 
 `endif // ITA_MHA8_CORE_ITEM_SVH

@@ -22,7 +22,9 @@ class ita_mha8_vsequence extends uvm_sequence;
         if (core == null)
             core = ita_mha8_core_item::type_id::create("core");
 
-        directed_step = (core.layer == Linear) ? MatMul : Q;
+        directed_step = core.stream_step;
+        if (directed_step == Idle)
+            directed_step = (core.layer == Linear) ? MatMul : Q;
         heads = core.active_heads();
 
         ctrl_seq = ita_ctrl_single_seq::type_id::create("ctrl_seq");
