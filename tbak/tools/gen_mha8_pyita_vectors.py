@@ -2,19 +2,19 @@
 # Copyright 2026
 # SPDX-License-Identifier: Apache-2.0
 
-"""Adapt PyITA standalone Q projection vectors to the tbak MHA8 UVM CSV flow.
+"""Adapt PyITA standalone Q/K/V projection vectors to the tbak MHA8 UVM CSV flow.
 
 This is intentionally an adapter, not a PyITA generator. It consumes an existing
-standalone directory containing Q.txt, Wq_<head>.txt, Bq_<head>.txt, and
-Qp_<head>.txt, then emits:
+standalone directory containing projection input, weight, bias, and expected
+files such as Q.txt, Wq_<head>.txt, Bq_<head>.txt, and Qp_<head>.txt, then emits:
 
-  - sim/logger/uvm_pyita_q_mha8_stream.csv
-  - sim/logger/uvm_pyita_q_mha8_manifest.json
-  - sim/logger/expected_q_head<N>.txt
+  - sim/logger/uvm_pyita_<projection>_mha8_stream.csv
+  - sim/logger/uvm_pyita_<projection>_mha8_manifest.json
+  - sim/logger/expected_<projection>_head<N>.txt
 
-The current UVM directed test still runs the DUT through the Linear/MatMul
-single-step path. The manifest records source.step=Q and compare.actual_step=MatMul
-so the source of the data remains explicit.
+The current UVM directed test can run the DUT through the selected Attention
+projection step. The manifest records both source.step and compare.actual_step
+so the data source and DUT-observed step remain explicit.
 """
 
 from __future__ import annotations
@@ -175,6 +175,28 @@ def step_requant_column(step: str) -> int:
         raise ValueError(f"Unsupported PyITA requant step: {step}") from exc
 
 
+PROJECTION_FILES = {
+    "Q": {
+        "input_file": "Q.txt",
+        "weight_prefix": "Wq",
+        "bias_prefix": "Bq",
+        "expected_prefix": "Qp",
+    },
+    "K": {
+        "input_file": "K.txt",
+        "weight_prefix": "Wk",
+        "bias_prefix": "Bk",
+        "expected_prefix": "Kp",
+    },
+    "V": {
+        "input_file": "V.txt",
+        "weight_prefix": "Wv",
+        "bias_prefix": "Bv",
+        "expected_prefix": "Vp",
+    },
+}
+
+
 def make_requant_rows(pyita_dir: Path, step: str, heads: int) -> list[dict[str, Any]]:
     vector_root = pyita_dir.parent
     mult_rows = read_table(vector_root / "RQS_ATTN_MUL.txt")
@@ -214,9 +236,10 @@ def main() -> int:
     root = core_root()
     default_out_dir = root / "sim" / "logger"
 
-    parser = argparse.ArgumentParser(description="Adapt PyITA Q vectors into tbak MHA8 UVM stream/manifest files.")
+    parser = argparse.ArgumentParser(description="Adapt PyITA Q/K/V vectors into tbak MHA8 UVM stream/manifest files.")
     parser.add_argument("--pyita-dir", required=True, type=Path, help="PyITA standalone vector directory.")
     parser.add_argument("--out-dir", type=Path, default=default_out_dir, help="Directory for generated UVM files.")
+    parser.add_argument("--projection", choices=sorted(PROJECTION_FILES), default="Q", help="PyITA projection to adapt.")
     parser.add_argument("--heads", type=int, default=8, help="Number of MHA heads to adapt, starting at head 0.")
     parser.add_argument("--input-lanes", type=int, default=64, help="Number of int8 lanes in one inp_t payload.")
     parser.add_argument("--weight-lanes", type=int, default=16, help="Number of int8 lanes in one inp_weight_t payload.")
@@ -229,15 +252,37 @@ def main() -> int:
     parser.add_argument("--bias-beats", type=int, default=0, help="Number of bias beats emitted per head; 0 matches expected beats.")
     parser.add_argument("--expected-beats", type=int, default=0, help="Number of expected output beats emitted per head; 0 uses all Qp rows.")
     parser.add_argument("--tile-beats", type=int, default=256, help="Handshake beats in one 64x64/16 ITA output tile.")
-    parser.add_argument("--source-step", default="Q", help="PyITA source step recorded in the manifest.")
+    parser.add_argument("--source-step", help="PyITA source step recorded in the manifest; defaults to --projection.")
     parser.add_argument("--dut-step", default="MatMul", help="DUT compare step used by the current UVM Linear path.")
-    parser.add_argument("--stream-name", default="uvm_pyita_q_mha8_stream.csv")
-    parser.add_argument("--requant-name", default="uvm_pyita_q_mha8_requant.csv")
-    parser.add_argument("--manifest-name", default="uvm_pyita_q_mha8_manifest.json")
-    parser.add_argument("--expected-prefix", default="expected_q_head")
-    parser.add_argument("--actual-prefix", default="actual_q_head")
+    parser.add_argument("--input-file", help="Override projection input file name, e.g. Q.txt.")
+    parser.add_argument("--weight-prefix", help="Override projection weight prefix, e.g. Wq.")
+    parser.add_argument("--bias-prefix", help="Override projection bias prefix, e.g. Bq.")
+    parser.add_argument("--expected-source-prefix", help="Override PyITA expected prefix, e.g. Qp.")
+    parser.add_argument("--stream-name")
+    parser.add_argument("--requant-name")
+    parser.add_argument("--manifest-name")
+    parser.add_argument("--expected-prefix")
+    parser.add_argument("--actual-prefix")
     parser.add_argument("--actual-csv-name", default="ita_mha8_output.csv")
     args = parser.parse_args()
+
+    projection = args.projection.upper()
+    projection_lower = projection.lower()
+    projection_files = PROJECTION_FILES[projection]
+    source_step = args.source_step if args.source_step is not None else projection
+    input_file = args.input_file if args.input_file is not None else projection_files["input_file"]
+    weight_prefix = args.weight_prefix if args.weight_prefix is not None else projection_files["weight_prefix"]
+    bias_prefix = args.bias_prefix if args.bias_prefix is not None else projection_files["bias_prefix"]
+    expected_source_prefix = (
+        args.expected_source_prefix if args.expected_source_prefix is not None else projection_files["expected_prefix"]
+    )
+    stream_name = args.stream_name if args.stream_name is not None else f"uvm_pyita_{projection_lower}_mha8_stream.csv"
+    requant_name = args.requant_name if args.requant_name is not None else f"uvm_pyita_{projection_lower}_mha8_requant.csv"
+    manifest_name = (
+        args.manifest_name if args.manifest_name is not None else f"uvm_pyita_{projection_lower}_mha8_manifest.json"
+    )
+    expected_prefix = args.expected_prefix if args.expected_prefix is not None else f"expected_{projection_lower}_head"
+    actual_prefix = args.actual_prefix if args.actual_prefix is not None else f"actual_{projection_lower}_head"
 
     if args.heads <= 0 or args.heads > 8:
         raise ValueError("--heads must be in the range 1..8")
@@ -256,22 +301,22 @@ def main() -> int:
         raise FileNotFoundError(f"PyITA standalone directory not found: {pyita_dir}")
 
     out_dir = args.out_dir
-    stream_path = out_dir / args.stream_name
-    requant_path = out_dir / args.requant_name
-    manifest_path = out_dir / args.manifest_name
+    stream_path = out_dir / stream_name
+    requant_path = out_dir / requant_name
+    manifest_path = out_dir / manifest_name
     actual_csv_path = out_dir / args.actual_csv_name
 
-    input_path = pyita_dir / "Q.txt"
+    input_path = pyita_dir / input_file
     input_values = read_values(input_path)
 
     rows: list[dict[str, Any]] = []
-    requant_rows = make_requant_rows(pyita_dir, args.source_step, args.heads)
+    requant_rows = make_requant_rows(pyita_dir, source_step, args.heads)
     per_head: list[dict[str, Any]] = []
 
     for head in range(args.heads):
-        weight_path = pyita_dir / f"Wq_{head}.txt"
-        bias_path = pyita_dir / f"Bq_{head}.txt"
-        expected_source_path = pyita_dir / f"Qp_{head}.txt"
+        weight_path = pyita_dir / f"{weight_prefix}_{head}.txt"
+        bias_path = pyita_dir / f"{bias_prefix}_{head}.txt"
+        expected_source_path = pyita_dir / f"{expected_source_prefix}_{head}.txt"
 
         weight_values = read_values(weight_path)
         bias_values = read_values(bias_path)
@@ -285,7 +330,7 @@ def main() -> int:
             input_beats = len(input_values) // args.input_lanes
         bias_beats = args.bias_beats
         if bias_beats == 0:
-            bias_beats = input_beats
+            bias_beats = expected_beats
         weight_beats = args.weight_beats
         if weight_beats == 0:
             weight_beats = len(weight_values) // args.weight_lanes
@@ -334,8 +379,8 @@ def main() -> int:
             payload = pack_lanes(bias_values[start : start + args.bias_lanes], args.bias_bits)
             rows.append(make_row("head_bias", head, beat, args.dut_step, payload))
 
-        expected_path = out_dir / f"{args.expected_prefix}{head}.txt"
-        actual_path = out_dir / f"{args.actual_prefix}{head}.txt"
+        expected_path = out_dir / f"{expected_prefix}{head}.txt"
+        actual_path = out_dir / f"{actual_prefix}{head}.txt"
         expected_payloads: list[str] = []
         expected_path.parent.mkdir(parents=True, exist_ok=True)
         with expected_path.open("w", encoding="utf-8") as f:
@@ -369,20 +414,21 @@ def main() -> int:
     write_requant_csv(requant_path, requant_rows)
 
     manifest = {
-        "name": "pyita_q_mha8_linear_adapter",
-        "layer": "Attention" if args.dut_step == args.source_step else "Linear",
+        "name": f"pyita_{projection_lower}_mha8_adapter",
+        "layer": "Attention" if args.dut_step == source_step else "Linear",
         "activation": "Identity",
         "heads": args.heads,
         "step": args.dut_step,
         "stream": "per_head",
         "source": {
             "type": "pyita",
-            "step": args.source_step,
+            "projection": projection,
+            "step": source_step,
             "vector_dir": rel_to_core(pyita_dir, root),
-            "input_file": "Q.txt",
-            "weight_prefix": "Wq",
-            "bias_prefix": "Bq",
-            "expected_prefix": "Qp",
+            "input_file": input_file,
+            "weight_prefix": weight_prefix,
+            "bias_prefix": bias_prefix,
+            "expected_prefix": expected_source_prefix,
             "requant_mult_file": "RQS_ATTN_MUL.txt",
             "requant_shift_file": "RQS_ATTN_SHIFT.txt",
             "requant_add_file": "RQS_ATTN_ADD.txt",
@@ -414,7 +460,7 @@ def main() -> int:
 
     print(f"Wrote {len(rows)} stream rows -> {stream_path}")
     print(f"Wrote {len(requant_rows)} requant rows -> {requant_path}")
-    print(f"Wrote {args.heads} PyITA-Q expected files -> {out_dir / (args.expected_prefix + '<head>.txt')}")
+    print(f"Wrote {args.heads} PyITA-{projection} expected files -> {out_dir / (expected_prefix + '<head>.txt')}")
     print(f"Wrote manifest -> {manifest_path}")
     return 0
 

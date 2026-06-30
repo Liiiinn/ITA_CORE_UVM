@@ -11,9 +11,23 @@ class ita_mha8_q_directed_test extends ita_mha8_base_test;
         super.new(name, parent);
     endfunction : new
 
+    function step_e parse_directed_step(string step_name);
+        if (step_name == "Q" || step_name == "q")
+            return Q;
+        if (step_name == "K" || step_name == "k")
+            return K;
+        if (step_name == "V" || step_name == "v")
+            return V;
+
+        `uvm_fatal("ITA_STEP", $sformatf("Unsupported ITA_DIRECTED_STEP=%s; expected Q, K, or V", step_name))
+        return Q;
+    endfunction : parse_directed_step
+
     task run_phase(uvm_phase phase);
         ita_mha8_vsequence vseq;
         ita_mha8_core_item core;
+        string directed_step_name;
+        step_e directed_step;
         int unsigned tile_s;
         int unsigned tile_e;
         int unsigned tile_p;
@@ -25,6 +39,9 @@ class ita_mha8_q_directed_test extends ita_mha8_base_test;
         
         if (!$value$plusargs("ITA_STREAM_CSV=%s", stream_path))
             stream_path = "logger/uvm_pyita_q_mha8_stream.csv";
+        if (!$value$plusargs("ITA_DIRECTED_STEP=%s", directed_step_name))
+            directed_step_name = "Q";
+        directed_step = parse_directed_step(directed_step_name);
 
         tile_s = 1;
         tile_e = 1;
@@ -35,7 +52,7 @@ class ita_mha8_q_directed_test extends ita_mha8_base_test;
         void'($value$plusargs("ITA_TILE_P=%d", tile_p));
         void'($value$plusargs("ITA_TILE_F=%d", tile_f));
 
-        core.load_stream_csv(stream_path, Attention, Q, Identity, tile_s, tile_e, tile_p, tile_f);
+        core.load_stream_csv(stream_path, Attention, directed_step, Identity, tile_s, tile_e, tile_p, tile_f);
         if ($value$plusargs("ITA_REQUANT_CSV=%s", requant_path))
             core.load_requant_csv(requant_path);
 

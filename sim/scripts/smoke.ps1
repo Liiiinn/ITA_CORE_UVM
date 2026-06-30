@@ -6,6 +6,8 @@ param(
     [int]$Heads = 8,
     [ValidateSet("synthetic", "pyita-q")]
     [string]$VectorSource = "synthetic",
+    [ValidateSet("Q", "K", "V")]
+    [string]$Projection = "Q",
     [string]$PyitaDir = "",
     [string]$Manifest = "",
     [string]$StreamName = "",
@@ -91,7 +93,8 @@ if ($Heads -le 0 -or $Heads -gt 8) {
 
 if ($StreamName -eq "") {
     if ($VectorSource -eq "pyita-q") {
-        $StreamName = "uvm_pyita_q_mha8_stream.csv"
+        $ProjectionLower = $Projection.ToLowerInvariant()
+        $StreamName = "uvm_pyita_${ProjectionLower}_mha8_stream.csv"
     } else {
         $StreamName = "uvm_linear_mha8_stream.csv"
     }
@@ -99,7 +102,8 @@ if ($StreamName -eq "") {
 
 if ($ManifestName -eq "") {
     if ($VectorSource -eq "pyita-q") {
-        $ManifestName = "uvm_pyita_q_mha8_manifest.json"
+        $ProjectionLower = $Projection.ToLowerInvariant()
+        $ManifestName = "uvm_pyita_${ProjectionLower}_mha8_manifest.json"
     } else {
         $ManifestName = "uvm_linear_mha8_manifest.json"
     }
@@ -107,7 +111,8 @@ if ($ManifestName -eq "") {
 
 if ($RequantName -eq "") {
     if ($VectorSource -eq "pyita-q") {
-        $RequantName = "uvm_pyita_q_mha8_requant.csv"
+        $ProjectionLower = $Projection.ToLowerInvariant()
+        $RequantName = "uvm_pyita_${ProjectionLower}_mha8_requant.csv"
     }
 }
 
@@ -156,7 +161,7 @@ if ($RunGenerateVectors) {
         }
         $DutStep = "MatMul"
         if ($IsQDirected) {
-            $DutStep = "Q"
+            $DutStep = $Projection
         }
         $ResolvedPyitaDir = Resolve-RepoPath $PyitaDir
         $PyitaCaseDir = Split-Path -Parent $ResolvedPyitaDir
@@ -172,6 +177,8 @@ if ($RunGenerateVectors) {
         }
         Invoke-PythonStep (Join-Path $ToolsDir "gen_mha8_pyita_vectors.py") @(
             "--pyita-dir", $ResolvedPyitaDir,
+            "--projection", $Projection,
+            "--source-step", $Projection,
             "--heads", [string]$Heads,
             "--out-dir", $VectorOutDir,
             "--stream-name", $StreamName,
@@ -205,6 +212,7 @@ $vsimArgs = @(
 if (($IsLinearDirected -or $IsQDirected) -and -not $NoAutoVectorFlow) {
     $vsimArgs += "+ITA_STREAM_CSV=$StreamPlusArg"
     if ($IsQDirected -and $VectorSource -eq "pyita-q" -and $RequantPlusArg -ne "") {
+        $vsimArgs += "+ITA_DIRECTED_STEP=$Projection"
         $vsimArgs += "+ITA_REQUANT_CSV=$RequantPlusArg"
         $vsimArgs += "+ITA_TILE_S=$TileS"
         $vsimArgs += "+ITA_TILE_E=$TileE"
