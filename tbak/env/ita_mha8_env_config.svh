@@ -17,7 +17,7 @@ class ita_mha8_env_config extends uvm_object;
     ita_stream_config ff_weight_cfg;
     ita_stream_config ff_bias_cfg;
     ita_stream_config ff_output_cfg;
-    // TODO Stage 11: create sum/feed-forward configs after the head0 path works.
+    // Stage 11: create sum/feed-forward configs after the head0 path works.
 
     function new(string name = "ita_mha8_env_config");
         super.new(name);
@@ -37,7 +37,12 @@ class ita_mha8_env_config extends uvm_object;
             bias_cfg[h] = create_stream_cfg($sformatf("bias_cfg_%0d", h), ITA_STREAM_HEAD_BIAS, h, UVM_ACTIVE);
             head_output_cfg[h] = create_stream_cfg($sformatf("head_output_cfg_%0d", h), ITA_STREAM_HEAD_OUTPUT, h, UVM_ACTIVE);
         end
-        // TODO Stage 11: expand config creation to heads 1-7, sum, and feed-forward paths.
+        // Stage 11: expand config creation to heads 1-7, sum, and feed-forward paths.
+        sum_output_cfg = create_stream_cfg("sum_output_cfg", ITA_STREAM_SUM_OUTPUT, 0, UVM_ACTIVE);
+        ff_input_cfg = create_stream_cfg("ff_input_cfg", ITA_STREAM_FF_INPUT, 0, UVM_ACTIVE);
+        ff_weight_cfg = create_stream_cfg("ff_weight_cfg", ITA_STREAM_FF_WEIGHT, 0, UVM_ACTIVE);
+        ff_bias_cfg = create_stream_cfg("ff_bias_cfg", ITA_STREAM_FF_BIAS, 0, UVM_ACTIVE);
+        ff_output_cfg = create_stream_cfg("ff_output_cfg", ITA_STREAM_FF_OUTPUT, 0, UVM_ACTIVE);
     endfunction : create_default_agent_configs
 
     function ita_stream_config create_stream_cfg(

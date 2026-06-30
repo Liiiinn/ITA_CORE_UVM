@@ -21,7 +21,7 @@ class ita_mha8_env extends uvm_env;
 
     ita_mha8_logger logger;
     ita_mha8_scoreboard scb;
-    // TODO Stage 11: create sum and feed-forward agents after full head-path coverage exists.
+    // Stage 11: create sum and feed-forward agents after full head-path coverage exists.
 
     function new(string name = "ita_mha8_env", uvm_component parent = null);
         super.new(name, parent);
@@ -40,7 +40,7 @@ class ita_mha8_env extends uvm_env;
         // Stage 3: set input_cfg[0] into uvm_config_db and create input_agt[0].
         // Stage 4: set weight_cfg[0]/bias_cfg[0] and create weight_agt[0]/bias_agt[0].
         // Stage 5: set head_output_cfg[0] and create head_output_agt[0].
-        // TODO Stage 11: create heads 1-7, sum_output_agt, and ff_* agents.
+        // Stage 11: create heads 1-7, sum_output_agt, and ff_* agents.
         for (int unsigned h = 0; h < 8; h ++) begin
             uvm_config_db#(ita_stream_config)::set(this, $sformatf("input_agt[%0d]", h), "cfg", cfg.input_cfg[h]);
             input_agt[h] = ita_stream_agent::type_id::create($sformatf("input_agt[%0d]", h), this);
@@ -54,6 +54,18 @@ class ita_mha8_env extends uvm_env;
             uvm_config_db#(ita_stream_config)::set(this, $sformatf("head_output_agt[%0d]", h), "cfg", cfg.head_output_cfg[h]);
             head_output_agt[h] = ita_stream_agent::type_id::create($sformatf("head_output_agt[%0d]", h), this);
         end
+
+        uvm_config_db#(ita_stream_config)::set(this, "sum_output_agt", "cfg", cfg.sum_output_cfg);
+        sum_output_agt = ita_stream_agent::type_id::create("sum_output_agt", this);
+
+        uvm_config_db#(ita_stream_config)::set(this, "ff_input_agt", "cfg", cfg.ff_input_cfg);
+        ff_input_agt = ita_stream_agent::type_id::create("ff_input_agt", this);
+        uvm_config_db#(ita_stream_config)::set(this, "ff_weight_agt", "cfg", cfg.ff_weight_cfg);
+        ff_weight_agt = ita_stream_agent::type_id::create("ff_weight_agt", this);
+        uvm_config_db#(ita_stream_config)::set(this, "ff_bias_agt", "cfg", cfg.ff_bias_cfg);
+        ff_bias_agt = ita_stream_agent::type_id::create("ff_bias_agt", this);
+        uvm_config_db#(ita_stream_config)::set(this, "ff_output_agt", "cfg", cfg.ff_output_cfg);
+        ff_output_agt = ita_stream_agent::type_id::create("ff_output_agt", this);
 
         logger = ita_mha8_logger::type_id::create("logger", this);
         scb = ita_mha8_scoreboard::type_id::create("scb", this);
@@ -84,7 +96,24 @@ class ita_mha8_env extends uvm_env;
             head_output_agt[h].ap.connect(scb.output_export);
         end
         // Stage 10: logger CSV output feeds parse_actual.py through the manifest-driven smoke flow.
-        // TODO Stage 11: fan in sum and feed-forward analysis ports.
+        // Stage 11: fan in sum and feed-forward analysis ports.
+        vsqr.sum_output_sqr = sum_output_agt.sqr;
+        vsqr.ff_input_sqr = ff_input_agt.sqr;
+        vsqr.ff_weight_sqr = ff_weight_agt.sqr;
+        vsqr.ff_bias_sqr = ff_bias_agt.sqr;
+        vsqr.ff_output_sqr = ff_output_agt.sqr;
+
+        sum_output_agt.ap.connect(logger.output_imp);
+        ff_input_agt.ap.connect(logger.stream_imp);
+        ff_weight_agt.ap.connect(logger.stream_imp);
+        ff_bias_agt.ap.connect(logger.stream_imp);
+        ff_output_agt.ap.connect(logger.output_imp);
+
+        sum_output_agt.ap.connect(scb.source_export);
+        ff_input_agt.ap.connect(scb.source_export);
+        ff_weight_agt.ap.connect(scb.source_export);
+        ff_bias_agt.ap.connect(scb.source_export);
+        ff_output_agt.ap.connect(scb.source_export);
     endfunction : connect_phase
 
 endclass : ita_mha8_env
