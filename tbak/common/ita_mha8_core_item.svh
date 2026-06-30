@@ -15,9 +15,9 @@ class ita_mha8_core_item extends uvm_sequence_item;
     tile_t       tile_p;
     tile_t       tile_f;
 
-    ita_mha8_step_payload step_payloads[NumStepPayloads];
+    ita_mha8_step_payload payloads[NumStepPayloads];
     step_e step_order[$];
-    // Stage 10: step_payloads are the UVM stimulus contract for Q/K/V multi-step flow.
+    // Stage 10: payloads are the UVM stimulus contract for Q/K/V multi-step flow.
 
     requant_const_array_t head_eps_mult       [NumHeads];
     requant_const_array_t head_right_shift    [NumHeads];
@@ -69,17 +69,17 @@ class ita_mha8_core_item extends uvm_sequence_item;
         endcase
     endfunction : parse_step_name
 
-    function ita_mha8_step_payload get_step_payload(step_e step);
+    function ita_mha8_step_payload get_payload(step_e step);
         int unsigned slot;
 
         slot = step_to_slot(step);
-        if (step_payloads[slot] == null) begin
-            step_payloads[slot] = ita_mha8_step_payload::type_id::create($sformatf("step_payloads_%0d", slot));
+        if (payloads[slot] == null) begin
+            payloads[slot] = ita_mha8_step_payload::type_id::create($sformatf("payloads_%0d", slot));
         end
-        step_payloads[slot].step = step;
+        payloads[slot].step = step;
 
-        return step_payloads[slot];
-    endfunction : get_step_payload
+        return payloads[slot];
+    endfunction : get_payload
 
     function void add_step_to_order(step_e step);
         foreach (step_order[i]) begin
@@ -92,10 +92,10 @@ class ita_mha8_core_item extends uvm_sequence_item;
     function void clear_payloads();
         step_order.delete();
         for (int unsigned slot = 0; slot < NumStepPayloads; slot++) begin
-            if (step_payloads[slot] == null) begin
-                step_payloads[slot] = ita_mha8_step_payload::type_id::create($sformatf("step_payloads_%0d", slot));
+            if (payloads[slot] == null) begin
+                payloads[slot] = ita_mha8_step_payload::type_id::create($sformatf("payloads_%0d", slot));
             end
-            step_payloads[slot].clear();
+            payloads[slot].clear();
         end
     endfunction : clear_payloads
 
@@ -319,7 +319,7 @@ class ita_mha8_core_item extends uvm_sequence_item;
             end
 
             row_step = (step_name == "") ? stream_step : parse_step_name(step_name);
-            payload = get_step_payload(row_step);
+            payload = get_payload(row_step);
             payload.enabled = 1'b1;
             payload.step = row_step;
             add_step_to_order(row_step);
@@ -351,14 +351,14 @@ class ita_mha8_core_item extends uvm_sequence_item;
         $fclose(fd);
 
         foreach (step_order[i]) begin
-            payload = get_step_payload(step_order[i]);
+            payload = get_payload(step_order[i]);
             payload.validate_complete();
         end
 
         if (stream_step == Idle && step_order.size() != 0) begin
             stream_step = step_order[0];
         end
-        log_payload = (step_order.size() == 0) ? null : get_step_payload(stream_step);
+        log_payload = (step_order.size() == 0) ? null : get_payload(stream_step);
 
         `uvm_info("CORE_CSV",
             $sformatf("Loaded stream CSV %s: layer=%s stream_step=%s steps=%0d head0 input=%0d weight=%0d bias=%0d",

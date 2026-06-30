@@ -26,7 +26,7 @@ class ita_mha8_vsequence extends uvm_sequence;
             ita_mha8_step_payload payload;
 
             step = core.step_order[i];
-            payload = core.get_step_payload(step);
+            payload = core.get_payload(step);
 
             send_step_payload(payload);
         end
