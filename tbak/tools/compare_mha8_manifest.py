@@ -15,6 +15,7 @@ import argparse
 import json
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -55,6 +56,26 @@ def run(cmd: list[str], dry_run: bool) -> int:
         return 0
     completed = subprocess.run(cmd, check=False)
     return completed.returncode
+
+
+@dataclass(frozen=True)
+class EntryResult:
+    step: str
+    head: int
+    expected: Path
+    actual: Path
+    status: str
+    detail: str = ""
+
+    @property
+    def passed(self) -> bool:
+        return self.status == "PASS"
+
+    def summary_line(self) -> str:
+        line = f"{self.status} {self.step}/head{self.head}: expected={self.expected.name} actual={self.actual.name}"
+        if self.detail:
+            line += f" ({self.detail})"
+        return line
 
 
 def main() -> int:
@@ -108,7 +129,7 @@ def main() -> int:
     elif not actual_csv.is_absolute():
         actual_csv = core_root() / actual_csv
 
-    def run_compare_for_entry(step: str, head: int, expected: Path, actual_txt: Path) -> list[str]:
+    def run_compare_for_entry(step: str, head: int, expected: Path, actual_txt: Path) -> EntryResult:
         parse_cmd = [
             sys.executable,
             str(tool_dir() / "parse_actual.py"),
@@ -139,18 +160,16 @@ def main() -> int:
         if args.bit_width is not None:
             compare_cmd.extend(["--bit-width", str(args.bit_width)])
 
-        failures: list[str] = []
         parse_rc = run(parse_cmd, args.dry_run)
         if parse_rc != 0:
-            failures.append(f"{step}/head{head}: parse_actual failed with exit code {parse_rc}")
-            return failures
+            return EntryResult(step, head, expected, actual_txt, "FAIL", f"parse_actual exit code {parse_rc}")
 
         compare_rc = run(compare_cmd, args.dry_run)
         if compare_rc != 0:
-            failures.append(f"{step}/head{head}: compare failed with exit code {compare_rc}")
-        return failures
+            return EntryResult(step, head, expected, actual_txt, "FAIL", f"compare exit code {compare_rc}")
+        return EntryResult(step, head, expected, actual_txt, "PASS", "dry-run" if args.dry_run else "")
 
-    failures: list[str] = []
+    results: list[EntryResult] = []
     for entry in per_head:
         if not isinstance(entry, dict):
             raise ValueError(f"Invalid per_head entry: {entry!r}")
@@ -159,7 +178,7 @@ def main() -> int:
         if actual_steps_obj is None:
             expected = resolve_manifest_path(str(require_key(entry, "expected_path")), manifest_path)
             actual_txt = resolve_manifest_path(str(require_key(entry, "actual_path")), manifest_path)
-            failures.extend(run_compare_for_entry(actual_steps[0], head, expected, actual_txt))
+            results.append(run_compare_for_entry(actual_steps[0], head, expected, actual_txt))
         else:
             steps_cfg = require_key(entry, "steps")
             if not isinstance(steps_cfg, dict):
@@ -170,12 +189,27 @@ def main() -> int:
                     raise ValueError(f"per_head head{head} step {step} must be an object")
                 expected = resolve_manifest_path(str(require_key(step_cfg, "expected_path")), manifest_path)
                 actual_txt = resolve_manifest_path(str(require_key(step_cfg, "actual_path")), manifest_path)
-                failures.extend(run_compare_for_entry(step, head, expected, actual_txt))
+                results.append(run_compare_for_entry(step, head, expected, actual_txt))
 
-    if failures:
+    passed = [result for result in results if result.passed]
+    failed = [result for result in results if not result.passed]
+
+    print(
+        "MHA8_MANIFEST_COMPARE_SUMMARY "
+        f"total={len(results)} passed={len(passed)} failed={len(failed)} "
+        f"steps={len(actual_steps)} heads={len(per_head)}"
+    )
+    if passed:
+        print("  PASS_ENTRIES:")
+        for result in passed:
+            print(f"    {result.summary_line()}")
+    if failed:
+        print("  FAIL_ENTRIES:")
+        for result in failed:
+            print(f"    {result.summary_line()}")
+
+    if failed:
         print("MHA8_MANIFEST_COMPARE_FAIL")
-        for failure in failures:
-            print(f"  {failure}")
         return 1
 
     if actual_steps_obj is None:

@@ -54,7 +54,7 @@ class ita_ctrl_driver extends uvm_driver #(ita_ctrl_item);
         cfg.vif.ctrl_i.start <= 1'b0;
         // Stage 2: add a uvm_info message that prints layer, activation, and tile fields.
         `uvm_info("CTRL_DRV",
-            $sformatf("Current layer: %s, current activation: %s, tile fields: S: %0d, E: %0d, P: %0d, F: %0d",
+            $sformatf("Current layer: %s, current activation: %s, tile fields: tile_s=%0d tile_e=%0d tile_p=%0d tile_f=%0d",
                 tr.ctrl.layer.name(), tr.ctrl.activation.name(), tr.ctrl.tile_s, tr.ctrl.tile_e, tr.ctrl.tile_p, tr.ctrl.tile_f),
             UVM_LOW)
     endtask : drive_item

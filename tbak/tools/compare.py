@@ -115,6 +115,65 @@ def format_bits(value: int | None, bit_width: int | None) -> str:
     return f"0x{value:0{hex_digits}x}"
 
 
+def infer_hex_width(*values: int, bit_width: int | None) -> int | None:
+    if bit_width is not None:
+        return bit_width
+
+    max_bits = 0
+    for value in values:
+        if value >= 0:
+            max_bits = max(max_bits, value.bit_length())
+    if max_bits == 0:
+        return 8
+    return max(8, ((max_bits + 3) // 4) * 4)
+
+
+def format_hex(value: int, width: int | None) -> str:
+    if width is None:
+        return f"-0x{-value:x}" if value < 0 else f"0x{value:x}"
+
+    hex_digits = max(1, (width + 3) // 4)
+    return f"0x{bit_pattern(value, width):0{hex_digits}x}"
+
+
+def format_lane_diffs(
+    expected: int,
+    actual: int,
+    bit_width: int | None,
+    lane_bits: int | None,
+    max_lane_diffs: int,
+) -> str:
+    if lane_bits is None:
+        return ""
+    if lane_bits <= 0:
+        raise ValueError("--lane-bits must be greater than zero")
+    if max_lane_diffs <= 0:
+        raise ValueError("--max-lane-diffs must be greater than zero")
+
+    width = infer_hex_width(expected, actual, bit_width=bit_width)
+    if width is None or width <= lane_bits:
+        return ""
+
+    lane_count = (width + lane_bits - 1) // lane_bits
+    lane_mask = (1 << lane_bits) - 1
+    diffs: list[str] = []
+    total_diffs = 0
+    for lane in range(lane_count):
+        exp_lane = (bit_pattern(expected, width) >> (lane * lane_bits)) & lane_mask
+        act_lane = (bit_pattern(actual, width) >> (lane * lane_bits)) & lane_mask
+        if exp_lane == act_lane:
+            continue
+        total_diffs += 1
+        if len(diffs) < max_lane_diffs:
+            lane_digits = max(1, (lane_bits + 3) // 4)
+            diffs.append(f"lane{lane}:0x{exp_lane:0{lane_digits}x}->0x{act_lane:0{lane_digits}x}")
+
+    if total_diffs == 0:
+        return ""
+    suffix = "" if total_diffs <= max_lane_diffs else f" ... +{total_diffs - max_lane_diffs} more"
+    return " lane_diffs=[" + ", ".join(diffs) + suffix + "]"
+
+
 def compare_values(
     expected_path: Path,
     actual_path: Path,
@@ -204,7 +263,14 @@ def row_col(index: int, row_words: int) -> tuple[int, int]:
     return index // row_words, index % row_words
 
 
-def print_mismatch(prefix: str, mismatch: Mismatch, row_words: int, bit_width: int | None) -> None:
+def print_mismatch(
+    prefix: str,
+    mismatch: Mismatch,
+    row_words: int,
+    bit_width: int | None,
+    lane_bits: int | None,
+    max_lane_diffs: int,
+) -> None:
     row, col = row_col(mismatch.index, row_words)
     if mismatch.is_length_mismatch:
         print(
@@ -217,15 +283,36 @@ def print_mismatch(prefix: str, mismatch: Mismatch, row_words: int, bit_width: i
         f"  {prefix} index={mismatch.index} row={row} col={col} "
         f"expected={mismatch.expected} actual={mismatch.actual}"
     )
+    width = infer_hex_width(mismatch.expected, mismatch.actual, bit_width=bit_width)
+    xor_value = bit_pattern(mismatch.expected, width) ^ bit_pattern(mismatch.actual, width) if width is not None else 0
+    message += (
+        f" expected_hex={format_hex(mismatch.expected, width)}"
+        f" actual_hex={format_hex(mismatch.actual, width)}"
+        f" xor={format_hex(xor_value, width)}"
+    )
     if bit_width is not None:
         message += (
             f" expected_bits={format_bits(mismatch.expected_bits, bit_width)}"
             f" actual_bits={format_bits(mismatch.actual_bits, bit_width)}"
         )
+    message += format_lane_diffs(
+        mismatch.expected,
+        mismatch.actual,
+        bit_width=bit_width,
+        lane_bits=lane_bits,
+        max_lane_diffs=max_lane_diffs,
+    )
     print(message)
 
 
-def print_result(result: CompareResult, max_mismatches: int, row_words: int, bit_width: int | None) -> None:
+def print_result(
+    result: CompareResult,
+    max_mismatches: int,
+    row_words: int,
+    bit_width: int | None,
+    lane_bits: int | None,
+    max_lane_diffs: int,
+) -> None:
     if not result.failed:
         mode = f"bit_width={bit_width}" if bit_width is not None else "integer-exact"
         print(f"PASS {result.actual_path.name}: checked {result.checked} values ({mode})")
@@ -237,9 +324,9 @@ def print_result(result: CompareResult, max_mismatches: int, row_words: int, bit
         f"expected_count={result.expected_count} actual_count={result.actual_count}"
     )
     if result.mismatches:
-        print_mismatch("FIRST_MISMATCH", result.mismatches[0], row_words, bit_width)
+        print_mismatch("FIRST_MISMATCH", result.mismatches[0], row_words, bit_width, lane_bits, max_lane_diffs)
         for mismatch in result.mismatches[1:max_mismatches]:
-            print_mismatch("MISMATCH", mismatch, row_words, bit_width)
+            print_mismatch("MISMATCH", mismatch, row_words, bit_width, lane_bits, max_lane_diffs)
 
 
 def main() -> int:
@@ -255,6 +342,8 @@ def main() -> int:
     parser.add_argument("--bit-width", type=int, help="Compare masked two's-complement bit patterns at this width.")
     parser.add_argument("--row-words", type=int, default=1, help="Values per logical row for mismatch row/col reporting.")
     parser.add_argument("--max-mismatches", type=int, default=10, help="Maximum mismatches to print per file.")
+    parser.add_argument("--lane-bits", type=int, default=8, help="Show per-lane diffs using this lane width; use 0 to disable.")
+    parser.add_argument("--max-lane-diffs", type=int, default=8, help="Maximum lane diffs to print per mismatched value.")
     parser.add_argument("--count-all", action="store_true", help="Scan full files and report complete mismatch counts.")
     parser.add_argument("--allow-empty", action="store_true", help="Allow directory mode to find zero pairs.")
     args = parser.parse_args()
@@ -265,6 +354,11 @@ def main() -> int:
         raise ValueError("--row-words must be greater than zero")
     if args.bit_width is not None and args.bit_width <= 0:
         raise ValueError("--bit-width must be greater than zero")
+    if args.lane_bits < 0:
+        raise ValueError("--lane-bits must be non-negative")
+    if args.max_lane_diffs <= 0:
+        raise ValueError("--max-lane-diffs must be greater than zero")
+    lane_bits = args.lane_bits if args.lane_bits != 0 else None
 
     file_mode = args.expected is not None or args.actual is not None
     dir_mode = args.expected_dir is not None or args.actual_dir is not None
@@ -275,7 +369,7 @@ def main() -> int:
         if args.expected is None or args.actual is None:
             raise ValueError("File mode requires both --expected and --actual")
         result = compare_values(args.expected, args.actual, args.max_mismatches, args.bit_width, args.count_all)
-        print_result(result, args.max_mismatches, args.row_words, args.bit_width)
+        print_result(result, args.max_mismatches, args.row_words, args.bit_width, lane_bits, args.max_lane_diffs)
         if result.failed:
             print(
                 f"SUMMARY files=1 failed_files=1 checked_values={result.checked} "
@@ -300,7 +394,7 @@ def main() -> int:
     length_mismatches = 0
     for expected_path, actual_path in pairs:
         result = compare_values(expected_path, actual_path, args.max_mismatches, args.bit_width, args.count_all)
-        print_result(result, args.max_mismatches, args.row_words, args.bit_width)
+        print_result(result, args.max_mismatches, args.row_words, args.bit_width, lane_bits, args.max_lane_diffs)
         total_values += result.checked
         total_mismatches += result.mismatch_count
         if result.expected_count != result.actual_count:
