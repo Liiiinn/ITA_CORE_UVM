@@ -5,6 +5,7 @@ class ita_mha8_core_item extends uvm_sequence_item;
     `uvm_object_utils(ita_mha8_core_item)
 
     localparam int unsigned NumStepPayloads = 3;
+    localparam int unsigned NumHeads = 8;
 
     layer_e      layer;
     activation_e activation;
@@ -13,56 +14,34 @@ class ita_mha8_core_item extends uvm_sequence_item;
     tile_t       tile_e;
     tile_t       tile_p;
     tile_t       tile_f;
-    int unsigned target_head_id;
-    int unsigned num_active_heads;
-
-    inp_t        input_payload[$];
-    inp_weight_t weight_payload[$];
-    bias_t       bias_payload[$];
-
-    // Compatibility queues for existing single-step vseq code. New QKV code
-    // should use step_payloads + step_order as the source of truth.
-    inp_t        input_payload_by_head       [8][$];
-    inp_weight_t weight_payload_by_head      [8][$];
-    bias_t       bias_payload_by_head        [8][$];
 
     ita_mha8_step_payload step_payloads[NumStepPayloads];
     step_e step_order[$];
     // Stage 10: step_payloads are the UVM stimulus contract for Q/K/V multi-step flow.
 
-    requant_const_array_t head_eps_mult       [8];
-    requant_const_array_t head_right_shift    [8];
-    requant_array_t       head_add            [8];
+    requant_const_array_t head_eps_mult       [NumHeads];
+    requant_const_array_t head_right_shift    [NumHeads];
+    requant_array_t       head_add            [NumHeads];
     bit                   has_requant_config;
     string                requant_vector_path;
     // Stage 10: optional PyITA requant CSV lets Q/K/V compare use the same constants as the source vectors.
 
-    string       expected_path;
-    string       actual_path;
-    string       compare_path;
-    string       stream_vector_path;
+    string stream_vector_path;
     // Stage 10: post-simulation compare paths are owned by the manifest/Python flow.
-    // Future optional: populate these fields from a manifest plusarg if SV-side path awareness is needed.
 
     function new(string name = "ita_mha8_core_item");
         super.new(name);
         layer = Attention;
         activation = Identity;
-        stream_step = MatMul;
+        stream_step = Idle;
         tile_s = 1;
         tile_e = 1;
         tile_p = 1;
         tile_f = 1;
-        target_head_id = 0;
-        num_active_heads = 1;
-        expected_path = "";
-        actual_path = "";
-        compare_path = "";
         stream_vector_path = "";
         requant_vector_path = "";
         clear_payloads();
         clear_requant_config();
-        // TODO Stage 9: seed a small manually checkable Linear transaction in the derived test.
     endfunction : new
 
     function int unsigned step_to_slot(step_e step);
@@ -79,10 +58,10 @@ class ita_mha8_core_item extends uvm_sequence_item;
 
     function step_e parse_step_name(string step_name);
         case (step_name)
-            "Q", "q":             return Q;
-            "K", "k":             return K;
-            "V", "v":             return V;
-            "MatMul", "matmul":   return MatMul;
+            "Q", "q":           return Q;
+            "K", "k":           return K;
+            "V", "v":           return V;
+            "MatMul", "matmul": return MatMul;
             default: begin
                 `uvm_fatal("CORE_STEP", $sformatf("Unsupported CSV step metadata: %s", step_name))
                 return Idle;
@@ -110,19 +89,7 @@ class ita_mha8_core_item extends uvm_sequence_item;
         step_order.push_back(step);
     endfunction : add_step_to_order
 
-    function void clear_compat_queues();
-        input_payload.delete();
-        weight_payload.delete();
-        bias_payload.delete();
-        for (int unsigned h = 0; h < 8; h++) begin
-            input_payload_by_head[h].delete();
-            weight_payload_by_head[h].delete();
-            bias_payload_by_head[h].delete();
-        end
-    endfunction : clear_compat_queues
-
     function void clear_payloads();
-        clear_compat_queues();
         step_order.delete();
         for (int unsigned slot = 0; slot < NumStepPayloads; slot++) begin
             if (step_payloads[slot] == null) begin
@@ -134,7 +101,7 @@ class ita_mha8_core_item extends uvm_sequence_item;
 
     function void clear_requant_config();
         has_requant_config = 1'b0;
-        for (int unsigned h = 0; h < 8; h++) begin
+        for (int unsigned h = 0; h < NumHeads; h++) begin
             head_eps_mult[h]    = '0;
             head_right_shift[h] = '0;
             head_add[h]         = '0;
@@ -143,16 +110,16 @@ class ita_mha8_core_item extends uvm_sequence_item;
 
     function int signed requant_index_from_step_name(string step_name);
         case (step_name)
-            "Q": return 0;
-            "K": return 1;
-            "V": return 2;
-            "QK": return 3;
-            "AV": return 4;
-            "OW": return 5;
-            "F1": return 6;
-            "F2": return 7;
+            "Q":      return 0;
+            "K":      return 1;
+            "V":      return 2;
+            "QK":     return 3;
+            "AV":     return 4;
+            "OW":     return 5;
+            "F1":     return 6;
+            "F2":     return 7;
             "MatMul": return 0;
-            default: return -1;
+            default:  return -1;
         endcase
     endfunction : requant_index_from_step_name
 
@@ -203,7 +170,7 @@ class ita_mha8_core_item extends uvm_sequence_item;
                 continue;
             end
 
-            if (head_id >= 8) begin
+            if (head_id >= NumHeads) begin
                 `uvm_warning("CORE_RQCSV", $sformatf("Skipping illegal head row at line %0d: head_id=%0d", line_no, head_id))
                 continue;
             end
@@ -232,27 +199,7 @@ class ita_mha8_core_item extends uvm_sequence_item;
         end
     endfunction : load_requant_csv
 
-    function void sync_compat_queues_for_step(step_e step);
-        ita_mha8_step_payload payload;
-
-        clear_compat_queues();
-        payload = get_step_payload(step);
-        for (int unsigned h = 0; h < 8; h++) begin
-            input_payload_by_head[h]  = payload.input_payload_by_head[h];
-            weight_payload_by_head[h] = payload.weight_payload_by_head[h];
-            bias_payload_by_head[h]   = payload.bias_payload_by_head[h];
-        end
-
-        input_payload  = input_payload_by_head[0];
-        weight_payload = weight_payload_by_head[0];
-        bias_payload   = bias_payload_by_head[0];
-    endfunction : sync_compat_queues_for_step
-
-    function void sync_head0_compat_queues();
-        sync_compat_queues_for_step(stream_step);
-    endfunction : sync_head0_compat_queues
-
-    function automatic bit [511:0] parse_hex_payload_bits(string payload_text);
+    function bit [511:0] parse_hex_payload_bits(string payload_text);
         bit [511:0] value;
         int unsigned nibble_idx;
         int unsigned char_idx;
@@ -292,82 +239,6 @@ class ita_mha8_core_item extends uvm_sequence_item;
         return value;
     endfunction : parse_hex_payload_bits
 
-    function int unsigned active_heads();
-        if (num_active_heads == 0)
-            return 1;
-        if (num_active_heads > 8)
-            return 8;
-        return num_active_heads;
-    endfunction : active_heads
-
-    function void set_linear_directed_head0;
-        ita_mha8_step_payload payload;
-
-        layer = Linear;
-        activation = Identity;
-        stream_step = MatMul;
-
-        tile_s = 1;
-        tile_e = 1;
-        tile_p = 1;
-        tile_f = 1;
-
-        target_head_id = 0;
-        num_active_heads = 1;
-        clear_payloads();
-
-        payload = get_step_payload(MatMul);
-        payload.enabled = 1'b1;
-        payload.step = MatMul;
-        payload.input_payload_by_head[0].push_back(2);
-        for (int unsigned i = 0; i < N_WRITE_EN; i++) begin
-            payload.weight_payload_by_head[0].push_back(2);
-        end
-        payload.bias_payload_by_head[0].push_back(4);
-        add_step_to_order(MatMul);
-        sync_head0_compat_queues();
-    endfunction : set_linear_directed_head0
-
-    function void set_linear_head0_multibeat();
-        ita_mha8_step_payload payload;
-
-        layer = Linear;
-        activation = Identity;
-        stream_step = MatMul;
-
-        tile_s = 1;
-        tile_e = 1;
-        tile_p = 1;
-        tile_f = 1;
-        target_head_id = 0;
-        num_active_heads = 1;
-        clear_payloads();
-
-        payload = get_step_payload(MatMul);
-        payload.enabled = 1'b1;
-        payload.step = MatMul;
-        for (int unsigned i = 0; i < N_WRITE_EN; i++) begin
-            payload.weight_payload_by_head[0].push_back('0);
-        end
-
-        payload.input_payload_by_head[0].push_back('0);
-        payload.bias_payload_by_head[0].push_back('0);
-        add_step_to_order(MatMul);
-        sync_head0_compat_queues();
-
-        expected_path = "logger/ita_mha8_expected.csv";
-        actual_path   = "logger/ita_mha8_output.csv";
-        compare_path  = "logger/ita_mha8_compare.txt";
-    endfunction : set_linear_head0_multibeat
-
-    function void load_linear_head0_stream_csv(string stream_vector_path);
-        load_stream_csv(stream_vector_path, Linear, MatMul);
-    endfunction : load_linear_head0_stream_csv
-
-    function void load_linear_stream_csv(string stream_vector_path);
-        load_stream_csv(stream_vector_path, Linear, MatMul);
-    endfunction : load_linear_stream_csv
-
     function void load_stream_csv(
         string stream_vector_path,
         layer_e layer_value,
@@ -397,6 +268,7 @@ class ita_mha8_core_item extends uvm_sequence_item;
         bit [511:0] payload_bits;
         step_e row_step;
         ita_mha8_step_payload payload;
+        ita_mha8_step_payload log_payload;
 
         layer = layer_value;
         activation = activation_value;
@@ -405,8 +277,6 @@ class ita_mha8_core_item extends uvm_sequence_item;
         tile_e = tile_e_value;
         tile_p = tile_p_value;
         tile_f = tile_f_value;
-        target_head_id = 0;
-        num_active_heads = 8;
         this.stream_vector_path = stream_vector_path;
         clear_payloads();
 
@@ -443,7 +313,7 @@ class ita_mha8_core_item extends uvm_sequence_item;
                 continue;
             end
 
-            if (head_id >= 8) begin
+            if (head_id >= NumHeads) begin
                 `uvm_warning("CORE_CSV", $sformatf("Skipping illegal head row at line %0d: head_id=%0d", line_no, head_id))
                 continue;
             end
@@ -488,12 +358,14 @@ class ita_mha8_core_item extends uvm_sequence_item;
         if (stream_step == Idle && step_order.size() != 0) begin
             stream_step = step_order[0];
         end
-        sync_head0_compat_queues();
+        log_payload = (step_order.size() == 0) ? null : get_step_payload(stream_step);
 
         `uvm_info("CORE_CSV",
             $sformatf("Loaded stream CSV %s: layer=%s stream_step=%s steps=%0d head0 input=%0d weight=%0d bias=%0d",
-                stream_vector_path, layer.name(), stream_step.name(), step_order.size(), input_payload_by_head[0].size(),
-                weight_payload_by_head[0].size(), bias_payload_by_head[0].size()),
+                stream_vector_path, layer.name(), stream_step.name(), step_order.size(),
+                (log_payload == null) ? 0 : log_payload.input_payload_by_head[0].size(),
+                (log_payload == null) ? 0 : log_payload.weight_payload_by_head[0].size(),
+                (log_payload == null) ? 0 : log_payload.bias_payload_by_head[0].size()),
             UVM_LOW)
     endfunction : load_stream_csv
 endclass : ita_mha8_core_item
