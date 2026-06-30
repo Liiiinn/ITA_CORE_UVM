@@ -109,11 +109,11 @@ class ita_mha8_env extends uvm_env;
         ff_bias_agt.ap.connect(logger.stream_imp);
         ff_output_agt.ap.connect(logger.output_imp);
 
-        sum_output_agt.ap.connect(scb.source_export);
+        sum_output_agt.ap.connect(scb.out_export);
         ff_input_agt.ap.connect(scb.source_export);
         ff_weight_agt.ap.connect(scb.source_export);
         ff_bias_agt.ap.connect(scb.source_export);
-        ff_output_agt.ap.connect(scb.source_export);
+        ff_output_agt.ap.connect(scb.out_export);
     endfunction : connect_phase
 
 endclass : ita_mha8_env
