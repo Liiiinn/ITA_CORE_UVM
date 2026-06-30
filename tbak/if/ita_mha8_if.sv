@@ -55,7 +55,11 @@ interface ita_mha8_if
     logic                    sum_valid_o;
     logic                    sum_ready_i;
     requant_oup_t            sum_oup_o;
-    // TODO Stage 11: add sum output assertions and monitor hooks after heads 0-7 are enabled.
+    step_e                   sum_step_dbg;
+    int unsigned             sum_tile_id_dbg;
+    int unsigned             sum_inner_id_dbg;
+    int unsigned             sum_beat_id_dbg;
+    // Stage 11: add sum output assertions and monitor hooks after heads 0-7 are enabled.
 
     logic                    ff_inp_valid_i;
     logic                    ff_inp_ready_o;
@@ -88,7 +92,7 @@ interface ita_mha8_if
     requant_oup_t            ff_oup_o;
     step_e                   ff_step_o;
     logic                    phase_mismatch_o;
-    // TODO Stage 11: add feed-forward stream assertions after the FF path is added to active tests.
+    // Stage 11: add feed-forward stream assertions after the FF path is added to active tests.
 
     // TODO ·: initialize or tie off driver-owned pins needed for an idle smoke shell.
     initial begin

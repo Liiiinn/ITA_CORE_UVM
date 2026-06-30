@@ -46,6 +46,16 @@ class ita_stream_monitor extends uvm_monitor;
                 return cfg.vif.inp_bias_valid_i[cfg.head_id] && cfg.vif.inp_bias_ready_o[cfg.head_id];
             ITA_STREAM_HEAD_OUTPUT:
                 return cfg.vif.per_head_valid_o[cfg.head_id] && cfg.vif.per_head_ready_i[cfg.head_id];
+            ITA_STREAM_SUM_OUTPUT:
+                return cfg.vif.sum_valid_o && cfg.vif.sum_ready_i;
+            ITA_STREAM_FF_INPUT:
+                return cfg.vif.ff_inp_valid_i && cfg.vif.ff_inp_ready_o;
+            ITA_STREAM_FF_WEIGHT:
+                return cfg.vif.ff_inp_weight_valid_i && cfg.vif.ff_inp_weight_ready_o;
+            ITA_STREAM_FF_BIAS:
+                return cfg.vif.ff_inp_bias_valid_i && cfg.vif.ff_inp_bias_ready_o; 
+            ITA_STREAM_FF_OUTPUT:
+                return cfg.vif.ff_valid_o && cfg.vif.ff_ready_i;
         endcase
         return 1'b0;
     endfunction : is_handshake
@@ -58,33 +68,72 @@ class ita_stream_monitor extends uvm_monitor;
         tr.head_id = cfg.head_id;
         tr.beat_id = sample_count;
         // Stage 3-5: sample the payload selected by cfg.kind and cfg.head_id.
-        case(cfg.kind)
+        case (cfg.kind)
             ITA_STREAM_HEAD_INPUT: begin
                 tr.inp = cfg.vif.inp_i[cfg.head_id];
+                tr.step = cfg.vif.inp_step_dbg[cfg.head_id];
                 tr.tile_id = cfg.vif.inp_tile_id_dbg[cfg.head_id];
                 tr.inner_tile_id = cfg.vif.inp_inner_id_dbg[cfg.head_id];
+                tr.beat_id = cfg.vif.inp_beat_id_dbg[cfg.head_id];
                 tr.is_lockstep = cfg.vif.inp_lockstep_dbg[cfg.head_id];
-                tr.step = cfg.vif.inp_step_dbg[cfg.head_id];
             end
             ITA_STREAM_HEAD_WEIGHT: begin
                 tr.weight = cfg.vif.inp_weight_i[cfg.head_id];
-                tr.tile_id = cfg.vif.inp_tile_id_dbg[cfg.head_id];
-                tr.inner_tile_id = cfg.vif.inp_inner_id_dbg[cfg.head_id];
-                tr.is_lockstep = cfg.vif.inp_lockstep_dbg[cfg.head_id];
-                tr.step = cfg.vif.inp_step_dbg[cfg.head_id];
+                tr.step = cfg.vif.inp_weight_step_dbg[cfg.head_id];
+                tr.tile_id = cfg.vif.inp_weight_tile_id_dbg[cfg.head_id];
+                tr.inner_tile_id = cfg.vif.inp_weight_inner_id_dbg[cfg.head_id];
+                tr.beat_id = cfg.vif.inp_weight_beat_id_dbg[cfg.head_id];
+                tr.is_lockstep = cfg.vif.inp_weight_lockstep_dbg[cfg.head_id];
             end
-            ITA_STREAM_HEAD_BIAS: begin 
+            ITA_STREAM_HEAD_BIAS: begin
                 tr.bias = cfg.vif.inp_bias_i[cfg.head_id];
-                tr.tile_id = cfg.vif.inp_tile_id_dbg[cfg.head_id];
-                tr.inner_tile_id = cfg.vif.inp_inner_id_dbg[cfg.head_id];
-                tr.is_lockstep = cfg.vif.inp_lockstep_dbg[cfg.head_id];
-                tr.step = cfg.vif.inp_step_dbg[cfg.head_id];
+                tr.step = cfg.vif.inp_bias_step_dbg[cfg.head_id];
+                tr.tile_id = cfg.vif.inp_bias_tile_id_dbg[cfg.head_id];
+                tr.inner_tile_id = cfg.vif.inp_bias_inner_id_dbg[cfg.head_id];
+                tr.beat_id = cfg.vif.inp_bias_beat_id_dbg[cfg.head_id];
+                tr.is_lockstep = cfg.vif.inp_bias_lockstep_dbg[cfg.head_id];
             end
             ITA_STREAM_HEAD_OUTPUT: begin
                 tr.oup = cfg.vif.per_head_oup_o[cfg.head_id];
                 tr.step = cfg.vif.per_head_step_o[cfg.head_id];
+                tr.beat_id = sample_count;
             end
-
+            ITA_STREAM_SUM_OUTPUT: begin
+                tr.oup = cfg.vif.sum_oup_o;
+                tr.step = cfg.vif.sum_step_dbg;
+                tr.tile_id = cfg.vif.sum_tile_id_dbg;
+                tr.inner_tile_id = cfg.vif.sum_inner_id_dbg;
+                tr.beat_id = cfg.vif.sum_beat_id_dbg;
+            end
+            ITA_STREAM_FF_INPUT: begin
+                tr.inp = cfg.vif.ff_inp_i;
+                tr.step = cfg.vif.ff_inp_step_dbg;
+                tr.tile_id = cfg.vif.ff_inp_tile_id_dbg;
+                tr.inner_tile_id = cfg.vif.ff_inp_inner_id_dbg;
+                tr.beat_id = cfg.vif.ff_inp_beat_id_dbg;
+                tr.is_lockstep = cfg.vif.ff_inp_lockstep_dbg;
+            end
+            ITA_STREAM_FF_WEIGHT: begin
+                tr.weight = cfg.vif.ff_inp_weight_i;
+                tr.step = cfg.vif.ff_inp_weight_step_dbg;
+                tr.tile_id = cfg.vif.ff_inp_weight_tile_id_dbg;
+                tr.inner_tile_id = cfg.vif.ff_inp_weight_inner_id_dbg;
+                tr.beat_id = cfg.vif.ff_inp_weight_beat_id_dbg;
+                tr.is_lockstep = cfg.vif.ff_inp_weight_lockstep_dbg;
+            end
+            ITA_STREAM_FF_BIAS: begin
+                tr.bias = cfg.vif.ff_inp_bias_i;
+                tr.step = cfg.vif.ff_inp_bias_step_dbg;
+                tr.tile_id = cfg.vif.ff_inp_bias_tile_id_dbg;
+                tr.inner_tile_id = cfg.vif.ff_inp_bias_inner_id_dbg;
+                tr.beat_id = cfg.vif.ff_inp_bias_beat_id_dbg;
+                tr.is_lockstep = cfg.vif.ff_inp_bias_lockstep_dbg;
+            end
+            ITA_STREAM_FF_OUTPUT: begin
+                tr.oup = cfg.vif.ff_oup_o;
+                tr.step = cfg.vif.ff_step_o;
+                tr.beat_id = sample_count;
+            end
         endcase
         // Stage 7: write sampled output transactions to logger through ap.
         // Stage 8: send sampled transactions to the smoke scoreboard.

@@ -49,7 +49,7 @@ class ita_stream_driver extends uvm_driver #(ita_stream_item);
         // Stage 3: idle head0 input stream pins before source driving is implemented.
         // Stage 4: idle head0 weight/bias stream pins before those sources are implemented.
         // Stage 5: idle head0 output ready before sink driving is implemented.
-        // TODO Stage 11: idle sum and feed-forward pins before those paths are implemented.
+        // Stage 11: idle sum and feed-forward pins before those paths are implemented.
         case(cfg.kind)
             ITA_STREAM_HEAD_INPUT:
             begin
@@ -74,6 +74,21 @@ class ita_stream_driver extends uvm_driver #(ita_stream_item);
             begin
                 cfg.vif.sum_ready_i <= 1'b0;
             end
+            ITA_STREAM_FF_INPUT:
+            begin
+                cfg.vif.ff_inp_valid_i <= 1'b0;
+                cfg.vif.ff_inp_i <= '0;
+            end
+            ITA_STREAM_FF_WEIGHT:
+            begin
+                cfg.vif.ff_inp_weight_valid_i <= 1'b0;
+                cfg.vif.ff_inp_weight_i <= '0;
+            end
+            ITA_STREAM_FF_BIAS:
+            begin
+                cfg.vif.ff_inp_bias_valid_i <= 1'b0;
+                cfg.vif.ff_inp_bias_i <= '0;
+            end
         endcase
     endtask : drive_idle
 
@@ -87,6 +102,10 @@ class ita_stream_driver extends uvm_driver #(ita_stream_item);
             case (cfg.kind)
                 ITA_STREAM_HEAD_OUTPUT:
                     cfg.vif.per_head_ready_i[cfg.head_id] <= 1'b1;
+                ITA_STREAM_SUM_OUTPUT:
+                    cfg.vif.sum_ready_i <= 1'b1;
+                ITA_STREAM_FF_OUTPUT:
+                    cfg.vif.ff_ready_i <= 1'b1;
                 default:
                     `uvm_error("STREAM DRV", "drive_sink_ready called for non-output stream")
             endcase
@@ -118,6 +137,11 @@ class ita_stream_driver extends uvm_driver #(ita_stream_item);
         // Stage 3: drive inp_i/inp_valid_i for head0 and wait for inp_ready_o.
         cfg.vif.inp_i[cfg.head_id] <= tr.inp;
         cfg.vif.inp_valid_i[cfg.head_id] <= 1'b1;
+        cfg.vif.inp_step_dbg[cfg.head_id] <= tr.step;
+        cfg.vif.inp_tile_id_dbg[cfg.head_id] <= tr.tile_id;
+        cfg.vif.inp_inner_id_dbg[cfg.head_id] <= tr.inner_tile_id;
+        cfg.vif.inp_beat_id_dbg[cfg.head_id] <= tr.beat_id;
+        cfg.vif.inp_lockstep_dbg[cfg.head_id] <= tr.is_lockstep;
 
         wait_cycles = 0;
         do begin
@@ -140,7 +164,12 @@ class ita_stream_driver extends uvm_driver #(ita_stream_item);
         // Stage 4: drive inp_weight_i/inp_weight_valid_i for head0 and wait for inp_weight_ready_o.
         cfg.vif.inp_weight_i[cfg.head_id] <= tr.weight;
         cfg.vif.inp_weight_valid_i[cfg.head_id] <= 1'b1;
-        
+        cfg.vif.inp_weight_step_dbg[cfg.head_id] <= tr.step;
+        cfg.vif.inp_weight_tile_id_dbg[cfg.head_id] <= tr.tile_id;
+        cfg.vif.inp_weight_inner_id_dbg[cfg.head_id] <= tr.inner_tile_id;
+        cfg.vif.inp_weight_beat_id_dbg[cfg.head_id] <= tr.beat_id;
+        cfg.vif.inp_weight_lockstep_dbg[cfg.head_id] <= tr.is_lockstep;
+
         wait_cycles = 0;
         do begin
             @(posedge cfg.vif.clk_i);
@@ -163,6 +192,11 @@ class ita_stream_driver extends uvm_driver #(ita_stream_item);
         // Stage 4: drive inp_bias_i/inp_bias_valid_i for head0 and wait for inp_bias_ready_o.
         cfg.vif.inp_bias_i[cfg.head_id] <= tr.bias;
         cfg.vif.inp_bias_valid_i[cfg.head_id] <= 1'b1;
+        cfg.vif.inp_bias_step_dbg[cfg.head_id] <= tr.step;
+        cfg.vif.inp_bias_tile_id_dbg[cfg.head_id] <= tr.tile_id;
+        cfg.vif.inp_bias_inner_id_dbg[cfg.head_id] <= tr.inner_tile_id;
+        cfg.vif.inp_bias_beat_id_dbg[cfg.head_id] <= tr.beat_id;
+        cfg.vif.inp_bias_lockstep_dbg[cfg.head_id] <= tr.is_lockstep;
 
         wait_cycles = 0;
         do begin
@@ -178,18 +212,69 @@ class ita_stream_driver extends uvm_driver #(ita_stream_item);
     endtask : drive_head_bias
 
     task drive_ff_input(ita_stream_item tr);
+        int unsigned wait_cycles;
         @(posedge cfg.vif.clk_i);
-        // TODO Stage 11: drive feed-forward input stream after the head0 MHA path is complete.
+        // Stage 11: drive feed-forward input stream after the head0 MHA path is complete.
+        cfg.vif.ff_inp_i <= tr.inp;
+        cfg.vif.ff_inp_valid_i <= 1'b1;
+        cfg.vif.ff_inp_step_dbg <= tr.step;
+        cfg.vif.ff_inp_tile_id_dbg <= tr.tile_id;
+        cfg.vif.ff_inp_inner_id_dbg <= tr.inner_tile_id;
+        cfg.vif.ff_inp_beat_id_dbg <= tr.beat_id;
+        cfg.vif.ff_inp_lockstep_dbg <= tr.is_lockstep;
+
+        wait_cycles = 0;
+        do begin
+            @(posedge cfg.vif.clk_i);
+            wait_cycles++;
+            if (wait_cycles > 10000)
+                `uvm_fatal("STREAM_DRV", "timeout waiting for ff_inp_ready_o")
+        end while (!cfg.vif.ff_inp_ready_o);
+        cfg.vif.ff_inp_valid_i <= 1'b0;
     endtask : drive_ff_input
 
     task drive_ff_weight(ita_stream_item tr);
+        int unsigned wait_cycles;
         @(posedge cfg.vif.clk_i);
-        // TODO Stage 11: drive feed-forward weight stream after the head0 MHA path is complete.
+        // Stage 11: drive feed-forward weight stream after the head0 MHA path is complete.
+        cfg.vif.ff_inp_weight_i <= tr.weight;
+        cfg.vif.ff_inp_weight_valid_i <= 1'b1;
+        cfg.vif.ff_inp_weight_step_dbg <= tr.step;
+        cfg.vif.ff_inp_weight_tile_id_dbg <= tr.tile_id;
+        cfg.vif.ff_inp_weight_inner_id_dbg <= tr.inner_tile_id;
+        cfg.vif.ff_inp_weight_beat_id_dbg <= tr.beat_id;
+        cfg.vif.ff_inp_weight_lockstep_dbg <= tr.is_lockstep;
+
+        wait_cycles = 0;
+        do begin
+            @(posedge cfg.vif.clk_i);
+            wait_cycles++;
+            if (wait_cycles > 10000)
+                `uvm_fatal("STREAM_DRV", "timeout waiting for ff_inp__weight_ready_o")
+        end while (!cfg.vif.ff_inp_weight_ready_o);
+        cfg.vif.ff_inp_weight_valid_i <= 1'b0;
     endtask : drive_ff_weight
 
     task drive_ff_bias(ita_stream_item tr);
+        int unsigned wait_cycles;
         @(posedge cfg.vif.clk_i);
-        // TODO Stage 11: drive feed-forward bias stream after the head0 MHA path is complete.
+        // Stage 11: drive feed-forward bias stream after the head0 MHA path is complete.
+        cfg.vif.ff_inp_bias_i <= tr.bias;
+        cfg.vif.ff_inp_bias_valid_i <= 1'b1;
+        cfg.vif.ff_inp_bias_step_dbg <= tr.step;
+        cfg.vif.ff_inp_bias_tile_id_dbg <= tr.tile_id;
+        cfg.vif.ff_inp_bias_inner_id_dbg <= tr.inner_tile_id;
+        cfg.vif.ff_inp_bias_beat_id_dbg <= tr.beat_id;
+        cfg.vif.ff_inp_bias_lockstep_dbg <= tr.is_lockstep;
+
+        wait_cycles = 0;
+        do begin
+            @(posedge cfg.vif.clk_i);
+            wait_cycles++;
+            if (wait_cycles > 10000)
+                `uvm_fatal("STREAM_DRV", "timeout waiting for ff_inp_bias_ready_o")
+        end while (!cfg.vif.ff_inp_bias_ready_o);
+        cfg.vif.ff_inp_bias_valid_i <= 1'b0;
     endtask : drive_ff_bias
 
 endclass : ita_stream_driver
