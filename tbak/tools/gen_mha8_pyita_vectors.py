@@ -100,6 +100,19 @@ def pack_lanes(values: list[int], bits: int) -> int:
     return packed
 
 
+def source_beats(path: Path, values: list[int], lanes: int) -> int:
+    beats = len(values) // lanes
+    if beats == 0:
+        raise ValueError(f"{path} does not contain a complete {lanes}-lane beat")
+    return beats
+
+
+def pack_source_beat(values: list[int], lanes: int, bits: int, beat: int, source_count: int) -> int:
+    source_beat = beat % source_count
+    start = source_beat * lanes
+    return pack_lanes(values[start : start + lanes], bits)
+
+
 def hex_payload(value: int) -> str:
     return f"0x{value:x}"
 
@@ -354,22 +367,36 @@ def main() -> int:
             bias_values = read_values(bias_path)
             expected_values = read_values(expected_source_path)
 
+            if step_name == "V":
+                # PyITA/HWPE V projection is intentionally transposed:
+                # Wv_<head> feeds the DUT input port and V.txt feeds the DUT weight port.
+                stream_input_path = weight_path
+                stream_input_values = weight_values
+                stream_weight_path = input_path
+                stream_weight_values = input_values
+            else:
+                stream_input_path = input_path
+                stream_input_values = input_values
+                stream_weight_path = weight_path
+                stream_weight_values = weight_values
+
+            input_source_beats = source_beats(stream_input_path, stream_input_values, args.input_lanes)
+            weight_source_beats = source_beats(stream_weight_path, stream_weight_values, args.weight_lanes)
+            bias_source_beats = source_beats(bias_path, bias_values, args.bias_lanes)
+
             expected_beats = args.expected_beats
             if expected_beats == 0:
                 expected_beats = len(expected_values) // args.output_lanes
             input_beats = args.input_beats
             if input_beats == 0:
-                input_beats = len(input_values) // args.input_lanes
+                input_beats = expected_beats if is_multi_step else input_source_beats
             bias_beats = args.bias_beats
             if bias_beats == 0:
                 bias_beats = expected_beats
             weight_beats = args.weight_beats
             if weight_beats == 0:
-                weight_beats = len(weight_values) // args.weight_lanes
+                weight_beats = expected_beats if is_multi_step else weight_source_beats
 
-            bias_source_beats = len(bias_values) // args.bias_lanes
-            if bias_source_beats == 0:
-                raise ValueError(f"{bias_path} does not contain a complete bias beat")
             if bias_beats < bias_source_beats:
                 raise ValueError(
                     f"Requested bias beats ({bias_beats}) are fewer than source bias beats ({bias_source_beats})"
@@ -380,19 +407,26 @@ def main() -> int:
                 )
             bias_repeat = bias_beats // bias_source_beats
 
-            require_count(input_path, input_values, args.input_lanes * input_beats)
-            require_count(weight_path, weight_values, args.weight_lanes * weight_beats)
+            if not is_multi_step:
+                require_count(stream_input_path, stream_input_values, args.input_lanes * input_beats)
+                require_count(stream_weight_path, stream_weight_values, args.weight_lanes * weight_beats)
             require_count(bias_path, bias_values, args.bias_lanes * bias_source_beats)
             require_count(expected_source_path, expected_values, args.output_lanes * expected_beats)
 
             for beat in range(weight_beats):
-                start = beat * args.weight_lanes
-                payload = pack_lanes(weight_values[start : start + args.weight_lanes], 8)
+                if is_multi_step:
+                    payload = pack_source_beat(stream_weight_values, args.weight_lanes, 8, beat, weight_source_beats)
+                else:
+                    start = beat * args.weight_lanes
+                    payload = pack_lanes(stream_weight_values[start : start + args.weight_lanes], 8)
                 rows.append(make_row("head_weight", head, beat, step_name, payload))
 
             for beat in range(input_beats):
-                start = beat * args.input_lanes
-                payload = pack_lanes(input_values[start : start + args.input_lanes], 8)
+                if is_multi_step:
+                    payload = pack_source_beat(stream_input_values, args.input_lanes, 8, beat, input_source_beats)
+                else:
+                    start = beat * args.input_lanes
+                    payload = pack_lanes(stream_input_values[start : start + args.input_lanes], 8)
                 rows.append(make_row("head_input", head, beat, step_name, payload))
 
             for beat in range(bias_beats):
@@ -423,13 +457,17 @@ def main() -> int:
                     f.write(f"{hex_payload(payload)}\n")
 
             step_entry = {
-                "input_path": rel_to_core(input_path, root),
-                "weight_path": rel_to_core(weight_path, root),
+                "input_path": rel_to_core(stream_input_path, root),
+                "weight_path": rel_to_core(stream_weight_path, root),
                 "bias_path": rel_to_core(bias_path, root),
+                "pyita_input_path": rel_to_core(input_path, root),
+                "pyita_weight_path": rel_to_core(weight_path, root),
                 "expected_source_path": rel_to_core(expected_source_path, root),
                 "expected_path": rel_to_core(expected_path, root),
                 "actual_path": rel_to_core(actual_path, root),
                 "requant": step_requant_rows[head],
+                "weight_source_beats": weight_source_beats,
+                "input_source_beats": input_source_beats,
                 "weight_beats": weight_beats,
                 "input_beats": input_beats,
                 "bias_beats": bias_beats,
