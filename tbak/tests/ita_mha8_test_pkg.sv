@@ -14,5 +14,6 @@ package ita_mha8_test_pkg;
     `include "ita_mha8_smoke_test.svh"
     `include "ita_mha8_linear_directed_test.svh"
     `include "ita_mha8_q_directed_test.svh"
+    `include "ita_mha8_qkv_directed_test.svh"
 
 endpackage : ita_mha8_test_pkg

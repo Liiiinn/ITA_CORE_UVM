@@ -6,7 +6,7 @@ param(
     [int]$Heads = 8,
     [ValidateSet("synthetic", "pyita-q")]
     [string]$VectorSource = "synthetic",
-    [ValidateSet("Q", "K", "V")]
+    [ValidateSet("Q", "K", "V", "QKV")]
     [string]$Projection = "Q",
     [string]$PyitaDir = "",
     [string]$Manifest = "",
@@ -83,7 +83,8 @@ function Invoke-PythonStep {
 
 $IsLinearDirected = ($TestName -eq "ita_mha8_linear_directed_test")
 $IsQDirected = ($TestName -eq "ita_mha8_q_directed_test")
-$AutoVectorFlow = (($IsLinearDirected -or $IsQDirected) -and -not $NoAutoVectorFlow)
+$IsQkvDirected = ($TestName -eq "ita_mha8_qkv_directed_test")
+$AutoVectorFlow = (($IsLinearDirected -or $IsQDirected -or $IsQkvDirected) -and -not $NoAutoVectorFlow)
 $RunGenerateVectors = ($GenerateVectors -or $AutoVectorFlow)
 $RunCompareLinear = (($CompareLinear -or $AutoVectorFlow) -and -not $NoCompare)
 
@@ -160,7 +161,7 @@ if ($RunGenerateVectors) {
             throw "-PyitaDir is required when -VectorSource pyita-q generates vectors"
         }
         $DutStep = "MatMul"
-        if ($IsQDirected) {
+        if ($IsQDirected -or $IsQkvDirected) {
             $DutStep = $Projection
         }
         $ResolvedPyitaDir = Resolve-RepoPath $PyitaDir
@@ -175,10 +176,9 @@ if ($RunGenerateVectors) {
                 throw "Invalid tile dimensions derived from $PyitaCaseName"
             }
         }
-        Invoke-PythonStep (Join-Path $ToolsDir "gen_mha8_pyita_vectors.py") @(
+        $genArgs = @(
             "--pyita-dir", $ResolvedPyitaDir,
             "--projection", $Projection,
-            "--source-step", $Projection,
             "--heads", [string]$Heads,
             "--out-dir", $VectorOutDir,
             "--stream-name", $StreamName,
@@ -186,9 +186,13 @@ if ($RunGenerateVectors) {
             "--manifest-name", (Split-Path -Leaf $ManifestPath),
             "--dut-step", $DutStep
         )
+        if ($Projection -ne "QKV") {
+            $genArgs += @("--source-step", $Projection)
+        }
+        Invoke-PythonStep (Join-Path $ToolsDir "gen_mha8_pyita_vectors.py") $genArgs
     } else {
-        if ($IsQDirected) {
-            throw "ita_mha8_q_directed_test requires -VectorSource pyita-q"
+        if ($IsQDirected -or $IsQkvDirected) {
+            throw "$TestName requires -VectorSource pyita-q"
         }
         Invoke-PythonStep (Join-Path $ToolsDir "gen_mha8_vectors.py") @(
             "--heads", [string]$Heads,
@@ -209,10 +213,12 @@ $vsimArgs = @(
     "+UVM_TESTNAME=$TestName"
 )
 
-if (($IsLinearDirected -or $IsQDirected) -and -not $NoAutoVectorFlow) {
+if (($IsLinearDirected -or $IsQDirected -or $IsQkvDirected) -and -not $NoAutoVectorFlow) {
     $vsimArgs += "+ITA_STREAM_CSV=$StreamPlusArg"
-    if ($IsQDirected -and $VectorSource -eq "pyita-q" -and $RequantPlusArg -ne "") {
-        $vsimArgs += "+ITA_DIRECTED_STEP=$Projection"
+    if (($IsQDirected -or $IsQkvDirected) -and $VectorSource -eq "pyita-q" -and $RequantPlusArg -ne "") {
+        if ($IsQDirected) {
+            $vsimArgs += "+ITA_DIRECTED_STEP=$Projection"
+        }
         $vsimArgs += "+ITA_REQUANT_CSV=$RequantPlusArg"
         $vsimArgs += "+ITA_TILE_S=$TileS"
         $vsimArgs += "+ITA_TILE_E=$TileE"
