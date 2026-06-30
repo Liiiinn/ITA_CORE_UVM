@@ -239,7 +239,12 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Adapt PyITA Q/K/V vectors into tbak MHA8 UVM stream/manifest files.")
     parser.add_argument("--pyita-dir", required=True, type=Path, help="PyITA standalone vector directory.")
     parser.add_argument("--out-dir", type=Path, default=default_out_dir, help="Directory for generated UVM files.")
-    parser.add_argument("--projection", choices=sorted(PROJECTION_FILES), default="Q", help="PyITA projection to adapt.")
+    parser.add_argument(
+        "--projection",
+        choices=sorted(PROJECTION_FILES) + ["QKV"],
+        default="Q",
+        help="PyITA projection to adapt. QKV emits a fixed Q -> K -> V multi-step bundle.",
+    )
     parser.add_argument("--heads", type=int, default=8, help="Number of MHA heads to adapt, starting at head 0.")
     parser.add_argument("--input-lanes", type=int, default=64, help="Number of int8 lanes in one inp_t payload.")
     parser.add_argument("--weight-lanes", type=int, default=16, help="Number of int8 lanes in one inp_weight_t payload.")
@@ -268,14 +273,28 @@ def main() -> int:
 
     projection = args.projection.upper()
     projection_lower = projection.lower()
-    projection_files = PROJECTION_FILES[projection]
+    is_multi_step = projection == "QKV"
+    projections = ["Q", "K", "V"] if is_multi_step else [projection]
+    if is_multi_step and any(
+        value is not None
+        for value in (args.source_step, args.input_file, args.weight_prefix, args.bias_prefix, args.expected_source_prefix)
+    ):
+        raise ValueError("QKV mode uses fixed Q/K/V file conventions; do not pass source/file override arguments")
+
+    projection_files = PROJECTION_FILES[projection] if not is_multi_step else None
     source_step = args.source_step if args.source_step is not None else projection
-    input_file = args.input_file if args.input_file is not None else projection_files["input_file"]
-    weight_prefix = args.weight_prefix if args.weight_prefix is not None else projection_files["weight_prefix"]
-    bias_prefix = args.bias_prefix if args.bias_prefix is not None else projection_files["bias_prefix"]
-    expected_source_prefix = (
-        args.expected_source_prefix if args.expected_source_prefix is not None else projection_files["expected_prefix"]
-    )
+    if is_multi_step:
+        input_file = None
+        weight_prefix = None
+        bias_prefix = None
+        expected_source_prefix = None
+    else:
+        input_file = args.input_file if args.input_file is not None else projection_files["input_file"]
+        weight_prefix = args.weight_prefix if args.weight_prefix is not None else projection_files["weight_prefix"]
+        bias_prefix = args.bias_prefix if args.bias_prefix is not None else projection_files["bias_prefix"]
+        expected_source_prefix = (
+            args.expected_source_prefix if args.expected_source_prefix is not None else projection_files["expected_prefix"]
+        )
     stream_name = args.stream_name if args.stream_name is not None else f"uvm_pyita_{projection_lower}_mha8_stream.csv"
     requant_name = args.requant_name if args.requant_name is not None else f"uvm_pyita_{projection_lower}_mha8_requant.csv"
     manifest_name = (
@@ -306,100 +325,111 @@ def main() -> int:
     manifest_path = out_dir / manifest_name
     actual_csv_path = out_dir / args.actual_csv_name
 
-    input_path = pyita_dir / input_file
-    input_values = read_values(input_path)
-
     rows: list[dict[str, Any]] = []
-    requant_rows = make_requant_rows(pyita_dir, source_step, args.heads)
-    per_head: list[dict[str, Any]] = []
+    requant_rows: list[dict[str, Any]] = []
+    per_head: list[dict[str, Any]] = [{"head_id": head, "steps": {}} for head in range(args.heads)] if is_multi_step else []
 
-    for head in range(args.heads):
-        weight_path = pyita_dir / f"{weight_prefix}_{head}.txt"
-        bias_path = pyita_dir / f"{bias_prefix}_{head}.txt"
-        expected_source_path = pyita_dir / f"{expected_source_prefix}_{head}.txt"
+    for step_name in projections:
+        step_lower = step_name.lower()
+        step_files = PROJECTION_FILES[step_name]
+        step_source_step = step_name
+        step_input_file = step_files["input_file"] if is_multi_step else input_file
+        step_weight_prefix = step_files["weight_prefix"] if is_multi_step else weight_prefix
+        step_bias_prefix = step_files["bias_prefix"] if is_multi_step else bias_prefix
+        step_expected_source_prefix = step_files["expected_prefix"] if is_multi_step else expected_source_prefix
+        step_expected_prefix = f"expected_{step_lower}_head" if is_multi_step else expected_prefix
+        step_actual_prefix = f"actual_{step_lower}_head" if is_multi_step else actual_prefix
 
-        weight_values = read_values(weight_path)
-        bias_values = read_values(bias_path)
-        expected_values = read_values(expected_source_path)
+        input_path = pyita_dir / step_input_file
+        input_values = read_values(input_path)
+        step_requant_rows = make_requant_rows(pyita_dir, step_source_step, args.heads)
+        requant_rows.extend(step_requant_rows)
 
-        expected_beats = args.expected_beats
-        if expected_beats == 0:
-            expected_beats = len(expected_values) // args.output_lanes
-        input_beats = args.input_beats
-        if input_beats == 0:
-            input_beats = len(input_values) // args.input_lanes
-        bias_beats = args.bias_beats
-        if bias_beats == 0:
-            bias_beats = expected_beats
-        weight_beats = args.weight_beats
-        if weight_beats == 0:
-            weight_beats = len(weight_values) // args.weight_lanes
+        for head in range(args.heads):
+            weight_path = pyita_dir / f"{step_weight_prefix}_{head}.txt"
+            bias_path = pyita_dir / f"{step_bias_prefix}_{head}.txt"
+            expected_source_path = pyita_dir / f"{step_expected_source_prefix}_{head}.txt"
 
-        bias_source_beats = len(bias_values) // args.bias_lanes
-        if bias_source_beats == 0:
-            raise ValueError(f"{bias_path} does not contain a complete bias beat")
-        if bias_beats < bias_source_beats:
-            raise ValueError(
-                f"Requested bias beats ({bias_beats}) are fewer than source bias beats ({bias_source_beats})"
-            )
-        if (bias_beats % bias_source_beats) != 0:
-            raise ValueError(
-                f"Bias beats ({bias_beats}) must be an integer multiple of source bias beats ({bias_source_beats})"
-            )
-        bias_repeat = bias_beats // bias_source_beats
+            weight_values = read_values(weight_path)
+            bias_values = read_values(bias_path)
+            expected_values = read_values(expected_source_path)
 
-        require_count(input_path, input_values, args.input_lanes * input_beats)
-        require_count(weight_path, weight_values, args.weight_lanes * weight_beats)
-        require_count(bias_path, bias_values, args.bias_lanes * bias_source_beats)
-        require_count(expected_source_path, expected_values, args.output_lanes * expected_beats)
+            expected_beats = args.expected_beats
+            if expected_beats == 0:
+                expected_beats = len(expected_values) // args.output_lanes
+            input_beats = args.input_beats
+            if input_beats == 0:
+                input_beats = len(input_values) // args.input_lanes
+            bias_beats = args.bias_beats
+            if bias_beats == 0:
+                bias_beats = expected_beats
+            weight_beats = args.weight_beats
+            if weight_beats == 0:
+                weight_beats = len(weight_values) // args.weight_lanes
 
-        for beat in range(weight_beats):
-            start = beat * args.weight_lanes
-            payload = pack_lanes(weight_values[start : start + args.weight_lanes], 8)
-            rows.append(make_row("head_weight", head, beat, args.dut_step, payload))
+            bias_source_beats = len(bias_values) // args.bias_lanes
+            if bias_source_beats == 0:
+                raise ValueError(f"{bias_path} does not contain a complete bias beat")
+            if bias_beats < bias_source_beats:
+                raise ValueError(
+                    f"Requested bias beats ({bias_beats}) are fewer than source bias beats ({bias_source_beats})"
+                )
+            if (bias_beats % bias_source_beats) != 0:
+                raise ValueError(
+                    f"Bias beats ({bias_beats}) must be an integer multiple of source bias beats ({bias_source_beats})"
+                )
+            bias_repeat = bias_beats // bias_source_beats
 
-        for beat in range(input_beats):
-            start = beat * args.input_lanes
-            payload = pack_lanes(input_values[start : start + args.input_lanes], 8)
-            rows.append(make_row("head_input", head, beat, args.dut_step, payload))
+            require_count(input_path, input_values, args.input_lanes * input_beats)
+            require_count(weight_path, weight_values, args.weight_lanes * weight_beats)
+            require_count(bias_path, bias_values, args.bias_lanes * bias_source_beats)
+            require_count(expected_source_path, expected_values, args.output_lanes * expected_beats)
 
-        for beat in range(bias_beats):
-            if bias_repeat == 1:
-                source_beat = beat
-            else:
-                group = beat // (args.tile_beats * bias_repeat)
-                group_offset = beat % (args.tile_beats * bias_repeat)
-                source_beat = group * args.tile_beats + (group_offset % args.tile_beats)
-                if source_beat >= bias_source_beats:
-                    raise ValueError(
-                        f"Expanded bias beat {beat} maps outside source beats: "
-                        f"source_beat={source_beat} source_beats={bias_source_beats}"
-                    )
-            start = source_beat * args.bias_lanes
-            payload = pack_lanes(bias_values[start : start + args.bias_lanes], args.bias_bits)
-            rows.append(make_row("head_bias", head, beat, args.dut_step, payload))
+            for beat in range(weight_beats):
+                start = beat * args.weight_lanes
+                payload = pack_lanes(weight_values[start : start + args.weight_lanes], 8)
+                rows.append(make_row("head_weight", head, beat, step_name, payload))
 
-        expected_path = out_dir / f"{expected_prefix}{head}.txt"
-        actual_path = out_dir / f"{actual_prefix}{head}.txt"
-        expected_payloads: list[str] = []
-        expected_path.parent.mkdir(parents=True, exist_ok=True)
-        with expected_path.open("w", encoding="utf-8") as f:
-            for beat in range(expected_beats):
-                start = beat * args.output_lanes
-                payload = pack_lanes(expected_values[start : start + args.output_lanes], 8)
-                expected_payloads.append(hex_payload(payload))
-                f.write(f"{hex_payload(payload)}\n")
+            for beat in range(input_beats):
+                start = beat * args.input_lanes
+                payload = pack_lanes(input_values[start : start + args.input_lanes], 8)
+                rows.append(make_row("head_input", head, beat, step_name, payload))
 
-        per_head.append(
-            {
-                "head_id": head,
+            for beat in range(bias_beats):
+                if bias_repeat == 1:
+                    source_beat = beat
+                else:
+                    group = beat // (args.tile_beats * bias_repeat)
+                    group_offset = beat % (args.tile_beats * bias_repeat)
+                    source_beat = group * args.tile_beats + (group_offset % args.tile_beats)
+                    if source_beat >= bias_source_beats:
+                        raise ValueError(
+                            f"Expanded bias beat {beat} maps outside source beats: "
+                            f"source_beat={source_beat} source_beats={bias_source_beats}"
+                        )
+                start = source_beat * args.bias_lanes
+                payload = pack_lanes(bias_values[start : start + args.bias_lanes], args.bias_bits)
+                rows.append(make_row("head_bias", head, beat, step_name, payload))
+
+            expected_path = out_dir / f"{step_expected_prefix}{head}.txt"
+            actual_path = out_dir / f"{step_actual_prefix}{head}.txt"
+            expected_payloads: list[str] = []
+            expected_path.parent.mkdir(parents=True, exist_ok=True)
+            with expected_path.open("w", encoding="utf-8") as f:
+                for beat in range(expected_beats):
+                    start = beat * args.output_lanes
+                    payload = pack_lanes(expected_values[start : start + args.output_lanes], 8)
+                    expected_payloads.append(hex_payload(payload))
+                    f.write(f"{hex_payload(payload)}\n")
+
+            step_entry = {
                 "input_path": rel_to_core(input_path, root),
                 "weight_path": rel_to_core(weight_path, root),
                 "bias_path": rel_to_core(bias_path, root),
                 "expected_source_path": rel_to_core(expected_source_path, root),
                 "expected_path": rel_to_core(expected_path, root),
                 "actual_path": rel_to_core(actual_path, root),
-                "requant": requant_rows[head],
+                "requant": step_requant_rows[head],
                 "weight_beats": weight_beats,
                 "input_beats": input_beats,
                 "bias_beats": bias_beats,
@@ -408,35 +438,40 @@ def main() -> int:
                 "expected_beats": expected_beats,
                 "expected_values": expected_payloads,
             }
-        )
+
+            if is_multi_step:
+                per_head[head]["steps"][step_name] = step_entry
+            else:
+                per_head.append({"head_id": head, **step_entry})
 
     write_stream_csv(stream_path, rows)
     write_requant_csv(requant_path, requant_rows)
 
     manifest = {
         "name": f"pyita_{projection_lower}_mha8_adapter",
-        "layer": "Attention" if args.dut_step == source_step else "Linear",
+        "layer": "Attention" if is_multi_step or args.dut_step == source_step else "Linear",
         "activation": "Identity",
         "heads": args.heads,
-        "step": args.dut_step,
+        "step": "QKV" if is_multi_step else args.dut_step,
         "stream": "per_head",
         "source": {
             "type": "pyita",
             "projection": projection,
-            "step": source_step,
+            "step": "QKV" if is_multi_step else source_step,
+            "steps": projections,
             "vector_dir": rel_to_core(pyita_dir, root),
-            "input_file": input_file,
-            "weight_prefix": weight_prefix,
-            "bias_prefix": bias_prefix,
-            "expected_prefix": expected_source_prefix,
+            "input_file": input_file if not is_multi_step else None,
+            "weight_prefix": weight_prefix if not is_multi_step else None,
+            "bias_prefix": bias_prefix if not is_multi_step else None,
+            "expected_prefix": expected_source_prefix if not is_multi_step else None,
+            "projection_files": PROJECTION_FILES if is_multi_step else None,
             "requant_mult_file": "RQS_ATTN_MUL.txt",
             "requant_shift_file": "RQS_ATTN_SHIFT.txt",
             "requant_add_file": "RQS_ATTN_ADD.txt",
         },
-        "compare": {
-            "actual_step": args.dut_step,
-            "stream": "per_head",
-        },
+        "compare": {"actual_steps": projections, "stream": "per_head"}
+        if is_multi_step
+        else {"actual_step": args.dut_step, "stream": "per_head"},
         "stream_path": rel_to_core(stream_path, root),
         "requant_path": rel_to_core(requant_path, root),
         "actual_csv": rel_to_core(actual_csv_path, root),
@@ -450,17 +485,22 @@ def main() -> int:
         "bias_lanes": args.bias_lanes,
         "bias_bits": args.bias_bits,
         "output_lanes": args.output_lanes,
-        "weight_beats": per_head[0]["weight_beats"] if per_head else 0,
-        "input_beats": per_head[0]["input_beats"] if per_head else 0,
-        "bias_beats": per_head[0]["bias_beats"] if per_head else 0,
-        "expected_beats": per_head[0]["expected_beats"] if per_head else 0,
+        "weight_beats": 0 if is_multi_step else (per_head[0]["weight_beats"] if per_head else 0),
+        "input_beats": 0 if is_multi_step else (per_head[0]["input_beats"] if per_head else 0),
+        "bias_beats": 0 if is_multi_step else (per_head[0]["bias_beats"] if per_head else 0),
+        "expected_beats": 0 if is_multi_step else (per_head[0]["expected_beats"] if per_head else 0),
         "per_head": per_head,
     }
+    if is_multi_step:
+        manifest["step_order"] = projections
     write_manifest(manifest_path, manifest)
 
     print(f"Wrote {len(rows)} stream rows -> {stream_path}")
     print(f"Wrote {len(requant_rows)} requant rows -> {requant_path}")
-    print(f"Wrote {args.heads} PyITA-{projection} expected files -> {out_dir / (expected_prefix + '<head>.txt')}")
+    if is_multi_step:
+        print(f"Wrote {args.heads * len(projections)} PyITA-QKV expected files -> {out_dir / 'expected_<step>_head<head>.txt'}")
+    else:
+        print(f"Wrote {args.heads} PyITA-{projection} expected files -> {out_dir / (expected_prefix + '<head>.txt')}")
     print(f"Wrote manifest -> {manifest_path}")
     return 0
 

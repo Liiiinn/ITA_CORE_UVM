@@ -85,7 +85,13 @@ def main() -> int:
     if not isinstance(compare_cfg, dict):
         raise ValueError("Manifest compare must be an object when present")
 
-    step = str(compare_cfg.get("actual_step", require_key(manifest, "step")))
+    actual_steps_obj = compare_cfg.get("actual_steps")
+    if actual_steps_obj is not None:
+        if not isinstance(actual_steps_obj, list) or not actual_steps_obj:
+            raise ValueError("Manifest compare.actual_steps must be a non-empty list when present")
+        actual_steps = [str(step) for step in actual_steps_obj]
+    else:
+        actual_steps = [str(compare_cfg.get("actual_step", require_key(manifest, "step")))]
     stream = str(compare_cfg.get("stream", manifest.get("stream", "per_head")))
     per_head = require_key(manifest, "per_head")
     if not isinstance(per_head, list) or not per_head:
@@ -102,15 +108,7 @@ def main() -> int:
     elif not actual_csv.is_absolute():
         actual_csv = core_root() / actual_csv
 
-    failures: list[str] = []
-    for entry in per_head:
-        if not isinstance(entry, dict):
-            raise ValueError(f"Invalid per_head entry: {entry!r}")
-
-        head = int(require_key(entry, "head_id"))
-        expected = resolve_manifest_path(str(require_key(entry, "expected_path")), manifest_path)
-        actual_txt = resolve_manifest_path(str(require_key(entry, "actual_path")), manifest_path)
-
+    def run_compare_for_entry(step: str, head: int, expected: Path, actual_txt: Path) -> list[str]:
         parse_cmd = [
             sys.executable,
             str(tool_dir() / "parse_actual.py"),
@@ -141,14 +139,38 @@ def main() -> int:
         if args.bit_width is not None:
             compare_cmd.extend(["--bit-width", str(args.bit_width)])
 
+        failures: list[str] = []
         parse_rc = run(parse_cmd, args.dry_run)
         if parse_rc != 0:
-            failures.append(f"head{head}: parse_actual failed with exit code {parse_rc}")
-            continue
+            failures.append(f"{step}/head{head}: parse_actual failed with exit code {parse_rc}")
+            return failures
 
         compare_rc = run(compare_cmd, args.dry_run)
         if compare_rc != 0:
-            failures.append(f"head{head}: compare failed with exit code {compare_rc}")
+            failures.append(f"{step}/head{head}: compare failed with exit code {compare_rc}")
+        return failures
+
+    failures: list[str] = []
+    for entry in per_head:
+        if not isinstance(entry, dict):
+            raise ValueError(f"Invalid per_head entry: {entry!r}")
+
+        head = int(require_key(entry, "head_id"))
+        if actual_steps_obj is None:
+            expected = resolve_manifest_path(str(require_key(entry, "expected_path")), manifest_path)
+            actual_txt = resolve_manifest_path(str(require_key(entry, "actual_path")), manifest_path)
+            failures.extend(run_compare_for_entry(actual_steps[0], head, expected, actual_txt))
+        else:
+            steps_cfg = require_key(entry, "steps")
+            if not isinstance(steps_cfg, dict):
+                raise ValueError(f"per_head head{head} steps must be an object")
+            for step in actual_steps:
+                step_cfg = require_key(steps_cfg, step)
+                if not isinstance(step_cfg, dict):
+                    raise ValueError(f"per_head head{head} step {step} must be an object")
+                expected = resolve_manifest_path(str(require_key(step_cfg, "expected_path")), manifest_path)
+                actual_txt = resolve_manifest_path(str(require_key(step_cfg, "actual_path")), manifest_path)
+                failures.extend(run_compare_for_entry(step, head, expected, actual_txt))
 
     if failures:
         print("MHA8_MANIFEST_COMPARE_FAIL")
@@ -156,7 +178,10 @@ def main() -> int:
             print(f"  {failure}")
         return 1
 
-    print(f"MHA8_MANIFEST_COMPARE_PASS heads={len(per_head)}")
+    if actual_steps_obj is None:
+        print(f"MHA8_MANIFEST_COMPARE_PASS heads={len(per_head)}")
+    else:
+        print(f"MHA8_MANIFEST_COMPARE_PASS steps={len(actual_steps)} heads={len(per_head)}")
     return 0
 
 
