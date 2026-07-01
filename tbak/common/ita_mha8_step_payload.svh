@@ -6,25 +6,43 @@ class ita_mha8_step_payload extends uvm_object;
 
     step_e step;
     bit    enabled;
+    bit drive_head_streams;
+    bit expect_head_output;
+    bit expect_sum_output;
+    bit drive_ff_streams;
+    bit expect_ff_output;
 
     inp_t        input_payload_by_head  [8][$];
     inp_weight_t weight_payload_by_head [8][$];
     bias_t       bias_payload_by_head   [8][$];
+    inp_t        ff_input_payload       [$];
+    inp_weight_t ff_weight_payload      [$];
+    bias_t       ff_bias_payload        [$];
+
 
     function new(string name = "ita_mha8_step_payload");
         super.new(name);
-        step = Idle;
-        enabled = 1'b0;
+        clear();        
     endfunction : new
 
     function void clear();
         step = Idle;
         enabled = 1'b0;
+        drive_head_streams = 1'b0;
+        expect_head_output = 1'b0;
+        expect_sum_output  = 1'b0;
+        drive_ff_streams   = 1'b0;
+        expect_ff_output   = 1'b0;
+
         for (int unsigned h = 0; h < 8; h++) begin
             input_payload_by_head[h].delete();
             weight_payload_by_head[h].delete();
             bias_payload_by_head[h].delete();
         end
+
+        ff_input_payload.delete();
+        ff_weight_payload.delete();
+        ff_bias_payload.delete();
     endfunction : clear
 
     function bit has_complete_payload(int unsigned h);
@@ -44,7 +62,7 @@ class ita_mha8_step_payload extends uvm_object;
     endfunction : has_any_payload
 
     function void validate_complete();
-        if (!enabled)
+        if (!enabled || !drive_head_streams)
             return;
 
         for (int unsigned h = 0; h < 8; h++) begin
@@ -58,6 +76,28 @@ class ita_mha8_step_payload extends uvm_object;
             end
         end
     endfunction : validate_complete
+
+    function void configure_for_step(step_e step_value);
+        clear();
+        step = step_value;
+        enabled = 1'b1;
+
+        case (step)
+            Q, K, V, QK, AV, OW: begin
+                drive_head_streams = 1'b1;
+                expect_head_output = 1'b1;
+            end
+            F1, F2: begin
+                drive_ff_streams = 1'b1;
+                expect_ff_output = 1'b1;
+            end
+            default:
+                `uvm_fatal("STEP PAYLOAD", $sformatf("No default behavior for step=%s", step.name()))
+        endcase
+
+        if (step == OW)
+            expect_sum_output = 1'b1;
+    endfunction
 endclass
 
 `endif // ITA_MHA8_STEP_PAYLOAD_SVH

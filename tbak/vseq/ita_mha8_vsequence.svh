@@ -28,7 +28,11 @@ class ita_mha8_vsequence extends uvm_sequence;
             step = core.step_order[i];
             payload = core.get_payload(step);
 
-            send_step_payload(payload);
+            if (payload.drive_head_streams)
+                send_step_payload(payload);
+            
+            if (payload.drive_ff_streams)
+                send_ff_payload(payload);
         end
     endtask : body
 
@@ -70,6 +74,37 @@ class ita_mha8_vsequence extends uvm_sequence;
         end
     endtask : send_bias_stream
 
+    // FF streams are global; head_id is unused and kept as 0 for common item metadata.
+    task send_ff_input_stream(ita_mha8_step_payload payload);
+        ita_stream_single_seq inp_seq;
+
+        for (int unsigned beat = 0; beat < payload.ff_input_payload.size(); beat ++) begin
+            inp_seq = ita_stream_single_seq::type_id::create($sformatf("ff_input_seq_%s_b%0d", payload.step.name(), beat));
+            inp_seq.stream = make_stream_item(payload, ITA_STREAM_FF_INPUT, 0, 0, beat, 1'b1);
+            inp_seq.start(p_sequencer.ff_inp_sqr);
+        end
+    endtask : send_ff_input_stream
+
+    task send_ff_weight_stream(ita_mha8_step_payload payload);
+        ita_stream_single_seq weight_seq;
+
+        for (int unsigned beat = 0; beat < payload.ff_weight_payload.size(); beat ++) begin
+            weight_seq = ita_stream_single_seq::type_id::create($sformatf("ff_weight_seq_%s_b%0d", payload.step.name(), beat));
+            weight_seq.stream = make_stream_item(payload, ITA_STREAM_FF_WEIGHT, 0, 0, beat, 1'b1);
+            weight_seq.start(p_sequencer.ff_weight_sqr);
+        end
+    endtask : send_ff_weight_stream
+
+    task send_ff_bias_stream(ita_mha8_step_payload payload);
+        ita_stream_single_seq bias_seq;
+
+        for (int unsigned beat = 0; beat < payload.ff_bias_payload.size(); beat ++) begin
+            bias_seq = ita_stream_single_seq::type_id::create($sformatf("ff_bias_seq_%s_b%0d", payload.step.name(), beat));
+            bias_seq.stream = make_stream_item(payload, ITA_STREAM_FF_BIAS, 0, 0, beat, 1'b1);
+            bias_seq.start(p_sequencer.ff_bias_sqr);
+        end
+    endtask : send_ff_bias_stream
+
     function ita_ctrl_item make_ctrl_item(ita_mha8_core_item core);
         ita_ctrl_item ctrl;
         step_e ctrl_step;
@@ -107,7 +142,7 @@ class ita_mha8_vsequence extends uvm_sequence;
         bit is_lockstep
     );
         ita_stream_item tr;
-        tr = ita_stream_item::type_id::create($sformatf("tr_h%0d_b%0d", head_id, beat_id));
+        tr = ita_stream_item::type_id::create($sformatf("tr_%s_h%0d_b%0d", kind.name(), head_id, beat_id));
 
         tr.kind = kind;
         tr.head_id = head_id;
@@ -133,6 +168,21 @@ class ita_mha8_vsequence extends uvm_sequence;
                     tr.bias = payload.bias_payload_by_head[head_id][beat_id];
                 else
                     tr.bias = '0;
+            ITA_STREAM_FF_INPUT:
+                if (payload.ff_input_payload.size() > beat_id)
+                    tr.inp = payload.ff_input_payload[beat_id];
+                else
+                    tr.inp = '0;
+            ITA_STREAM_FF_WEIGHT:
+                if (payload.ff_weight_payload.size() > beat_id)
+                    tr.weight = payload.ff_weight_payload[beat_id];
+                else
+                    tr.weight = '0;
+            ITA_STREAM_FF_BIAS:
+                if (payload.ff_bias_payload.size() > beat_id)
+                    tr.bias = payload.ff_bias_payload[beat_id];
+                else
+                    tr.bias = '0;
             default:
                 `uvm_warning(get_type_name(), $sformatf("Unhandled stream kind: %s", kind.name()))
         endcase
@@ -149,6 +199,14 @@ class ita_mha8_vsequence extends uvm_sequence;
         end
         wait fork;
     endtask
+
+    task send_ff_payload(ita_mha8_step_payload payload);
+        fork
+            send_ff_input_stream(payload);
+            send_ff_weight_stream(payload);
+            send_ff_bias_stream(payload);
+        join
+    endtask : send_ff_payload
 
 endclass : ita_mha8_vsequence
 `endif // ITA_MHA8_VSEQUENCE_SVH

@@ -10,7 +10,7 @@ class ita_mha8_vsequencer extends uvm_sequencer;
     ita_stream_sequencer bias_sqr        [8];
     ita_stream_sequencer head_output_sqr [8];
     ita_stream_sequencer sum_output_sqr;
-    ita_stream_sequencer ff_input_sqr;
+    ita_stream_sequencer ff_inp_sqr;
     ita_stream_sequencer ff_weight_sqr;
     ita_stream_sequencer ff_bias_sqr;
     ita_stream_sequencer ff_output_sqr;

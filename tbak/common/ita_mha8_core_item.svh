@@ -53,7 +53,7 @@ class ita_mha8_core_item extends uvm_sequence_item;
 
         if (!payload_by_step.exists(step)) begin
             payload_by_step[step] = ita_mha8_step_payload::type_id::create($sformatf("payload_%s", step.name()));
-            payload_by_step[step].step = step;
+            payload_by_step[step].configure_for_step(step);
         end
 
         return payload_by_step[step];
