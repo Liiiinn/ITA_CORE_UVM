@@ -22,6 +22,9 @@ module ita_mha8
     input  requant_const_array_t    head_eps_mult_i    [NumHeads],
     input  requant_const_array_t    head_right_shift_i [NumHeads],
     input  requant_array_t          head_add_i         [NumHeads],
+    input  requant_const_t          sum_eps_mult_i,
+    input  requant_const_t          sum_right_shift_i,
+    input  requant_t                sum_add_i,
 
     input  logic [NumHeads-1:0]     inp_valid_i,
     output logic [NumHeads-1:0]     inp_ready_o,
@@ -146,9 +149,9 @@ module ita_mha8
         .valid_i      (sum_valid_to_sum    ),
         .ready_o      (sum_ready           ),
         .head_oup_i   (per_head_oup_o      ),
-        .eps_mult_i   (head_eps_mult_i[0][6]    ),
-        .right_shift_i(head_right_shift_i[0][6] ),
-        .add_i        (head_add_i[0][6]         ),
+        .eps_mult_i   (sum_eps_mult_i      ),
+        .right_shift_i(sum_right_shift_i   ),
+        .add_i        (sum_add_i           ),
         .valid_o      (sum_valid_o         ),
         .ready_i      (sum_ready_i         ),
         .oup_o        (sum_oup_o           )
