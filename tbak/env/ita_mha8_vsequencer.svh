@@ -4,6 +4,8 @@
 class ita_mha8_vsequencer extends uvm_sequencer;
     `uvm_component_utils(ita_mha8_vsequencer)
 
+    virtual ita_mha8_if vif;
+
     ita_ctrl_sequencer ctrl_sqr;
     ita_stream_sequencer inp_sqr         [8];
     ita_stream_sequencer weight_sqr      [8];

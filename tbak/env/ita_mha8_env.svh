@@ -75,6 +75,7 @@ class ita_mha8_env extends uvm_env;
     function void connect_phase(uvm_phase phase);
         super.connect_phase(phase);
 
+        vsqr.vif = cfg.vif;
         vsqr.ctrl_sqr = ctrl_agt.sqr;
 
         // Stage 7: connect head_output_agt[0].ap to a passive actual-output logger.

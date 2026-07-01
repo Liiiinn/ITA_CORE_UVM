@@ -9,6 +9,9 @@ class ita_ctrl_item extends uvm_sequence_item;
     requant_const_array_t head_eps_mult    [8];
     requant_const_array_t head_right_shift [8];
     requant_array_t       head_add         [8];
+    requant_const_array_t ff_eps_mult;
+    requant_const_array_t ff_right_shift;
+    requant_array_t       ff_add;
     requant_const_t       sum_eps_mult;
     requant_const_t       sum_right_shift;
     requant_t             sum_add;
@@ -30,6 +33,9 @@ class ita_ctrl_item extends uvm_sequence_item;
             head_right_shift[h] = '0;
             head_add[h]         = '0;
         end
+        ff_eps_mult    = '0;
+        ff_right_shift = '0;
+        ff_add         = '0;
         sum_eps_mult    = '0;
         sum_right_shift = '0;
         sum_add         = '0;
@@ -72,6 +78,18 @@ class ita_ctrl_item extends uvm_sequence_item;
             set_head_identity_requant_for_step(h, step);
         end
     endfunction : set_all_heads_identity_requant_for_step
+
+    function void set_ff_identity_requant_for_step(step_e step);
+        int unsigned idx;
+
+        idx = requant_index_for_step(step);
+        ff_eps_mult       = '0;
+        ff_right_shift    = '0;
+        ff_add            = '0;
+        ff_eps_mult[idx]    = 8'd1;
+        ff_right_shift[idx] = 8'd0;
+        ff_add[idx]         = 8'sd0;
+    endfunction : set_ff_identity_requant_for_step
 
     function void set_linear_head_identity_requant(int unsigned head_id);
         // MatMul is not listed in ita_requantization_controller and falls back to index 0.

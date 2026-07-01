@@ -20,6 +20,9 @@ class ita_mha8_core_item extends uvm_sequence_item;
     requant_const_array_t head_eps_mult       [NumHeads];
     requant_const_array_t head_right_shift    [NumHeads];
     requant_array_t       head_add            [NumHeads];
+    requant_const_array_t ff_eps_mult;
+    requant_const_array_t ff_right_shift;
+    requant_array_t       ff_add;
     requant_const_t       sum_eps_mult;
     requant_const_t       sum_right_shift;
     requant_t             sum_add;
@@ -104,6 +107,9 @@ class ita_mha8_core_item extends uvm_sequence_item;
 
     function void clear_requant_config();
         has_requant_config = 1'b0;
+        ff_eps_mult    = '0;
+        ff_right_shift = '0;
+        ff_add         = '0;
         sum_eps_mult    = '0;
         sum_right_shift = '0;
         sum_add         = '0;
@@ -141,6 +147,7 @@ class ita_mha8_core_item extends uvm_sequence_item;
         int unsigned char_idx;
         int unsigned loaded_rows;
         bit sum_requant_seen;
+        bit ff_requant_seen [N_REQUANT_CONSTS];
         string header;
         string line;
         string scan_line;
@@ -158,6 +165,9 @@ class ita_mha8_core_item extends uvm_sequence_item;
         line_no = 1;
         loaded_rows = 0;
         sum_requant_seen = 1'b0;
+        for (int unsigned i = 0; i < N_REQUANT_CONSTS; i++) begin
+            ff_requant_seen[i] = 1'b0;
+        end
 
         while ($fgets(line, fd)) begin
             line_no++;
@@ -204,6 +214,21 @@ class ita_mha8_core_item extends uvm_sequence_item;
             if (step_idx < 0 || step_idx >= N_REQUANT_CONSTS) begin
                 `uvm_warning("CORE RQCSV", $sformatf("Skipping unsupported requant step at line %0d: %s", line_no, step_name))
                 continue;
+            end
+
+            if (step_name == "F1" || step_name == "F2") begin
+                if (!ff_requant_seen[step_idx]) begin
+                    ff_eps_mult[step_idx]    = requant_const_t'(mult_value);
+                    ff_right_shift[step_idx] = requant_const_t'(shift_value);
+                    ff_add[step_idx]         = requant_t'(add_value);
+                    ff_requant_seen[step_idx] = 1'b1;
+                end else if (ff_eps_mult[step_idx]    != requant_const_t'(mult_value) ||
+                             ff_right_shift[step_idx] != requant_const_t'(shift_value) ||
+                             ff_add[step_idx]         != requant_t'(add_value)) begin
+                    `uvm_error("CORE RQCSV",
+                        $sformatf("Inconsistent FF requant row at line %0d for %s: mult=%0d shift=%0d add=%0d",
+                            line_no, step_name, mult_value, shift_value, add_value))
+                end
             end
 
             head_eps_mult[head_id][step_idx]    = requant_const_t'(mult_value);
@@ -378,6 +403,15 @@ class ita_mha8_core_item extends uvm_sequence_item;
                 end
                 "head_bias": begin
                     payload.bias_payload_by_head[head_id].push_back(bias_t'(payload_bits));
+                end
+                "ff_input": begin
+                    payload.ff_input_payload.push_back(inp_t'(payload_bits));
+                end
+                "ff_weight": begin
+                    payload.ff_weight_payload.push_back(inp_weight_t'(payload_bits));
+                end
+                "ff_bias": begin
+                    payload.ff_bias_payload.push_back(bias_t'(payload_bits));
                 end
                 default: begin
                     `uvm_warning("CORE CSV", $sformatf("Skipping unsupported stream kind at line %0d: %s", line_no, kind))

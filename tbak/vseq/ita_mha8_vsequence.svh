@@ -12,13 +12,25 @@ class ita_mha8_vsequence extends uvm_sequence;
     endfunction : new
 
     virtual task body();
-        ita_ctrl_single_seq ctrl_seq;
-
         if (core == null)
             core = ita_mha8_core_item::type_id::create("core");
 
+        if (has_ff_steps()) begin
+            fork
+                send_attention_phase();
+                wait_attention_sum_complete();
+            join
+            send_feedforward_phase();
+        end else begin
+            send_attention_phase();
+        end
+    endtask : body
+
+    task send_attention_phase();
+        ita_ctrl_single_seq ctrl_seq;
+
         ctrl_seq = ita_ctrl_single_seq::type_id::create("ctrl_seq");
-        ctrl_seq.ctrl = make_ctrl_item(core);
+        ctrl_seq.ctrl = make_ctrl_item(core, Attention, first_attention_step());
         ctrl_seq.start(p_sequencer.ctrl_sqr);
 
         foreach (core.step_order[i]) begin
@@ -26,15 +38,120 @@ class ita_mha8_vsequence extends uvm_sequence;
             ita_mha8_step_payload payload;
 
             step = core.step_order[i];
-            payload = core.get_payload(step);
 
+            if (!is_attention_step(step))
+                continue;
+
+            payload = core.get_payload(step);
             if (payload.drive_head_streams)
                 send_step_payload(payload);
-            
+        end
+    endtask
+
+    task send_feedforward_phase();
+        ita_ctrl_single_seq ctrl_seq;
+
+        ctrl_seq = ita_ctrl_single_seq::type_id::create("ff_ctrl_seq");
+        ctrl_seq.ctrl = make_ctrl_item(core, Feedforward, first_ff_step());
+        ctrl_seq.start(p_sequencer.ctrl_sqr);
+
+        foreach (core.step_order[i]) begin
+            step_e step;
+            ita_mha8_step_payload payload;
+
+            step = core.step_order[i];
+
+            if (!is_ff_step(step))
+                continue;
+
+            payload = core.get_payload(step);
             if (payload.drive_ff_streams)
                 send_ff_payload(payload);
         end
-    endtask : body
+    endtask
+
+    function bit is_attention_step(step_e step);
+        return step inside {Q, K, V, QK, AV, OW};
+    endfunction : is_attention_step
+
+    function bit is_ff_step(step_e step);
+        return step inside {F1, F2};
+    endfunction : is_ff_step
+
+    function bit has_ff_steps();
+        foreach (core.step_order[i]) begin
+            if (is_ff_step(core.step_order[i]))
+                return 1'b1;
+        end
+        return 1'b0;
+    endfunction : has_ff_steps
+
+    function step_e first_attention_step();
+        foreach (core.step_order[i]) begin
+            if (is_attention_step(core.step_order[i]))
+                return core.step_order[i];
+        end
+        `uvm_fatal("VSEQ", "No attention step is available for the Attention ctrl phase")
+        return Idle;
+    endfunction : first_attention_step
+
+    function step_e first_ff_step();
+        foreach (core.step_order[i]) begin
+            if (is_ff_step(core.step_order[i]))
+                return core.step_order[i];
+        end
+        `uvm_fatal("VSEQ", "No feed-forward step is available for the Feedforward ctrl phase")
+        return Idle;
+    endfunction : first_ff_step
+
+    function int unsigned expected_sum_output_beats();
+        foreach (core.step_order[i]) begin
+            ita_mha8_step_payload payload;
+
+            payload = core.get_payload(core.step_order[i]);
+            if (payload.expect_sum_output)
+                return payload.input_payload_by_head[0].size();
+        end
+
+        return 0;
+    endfunction : expected_sum_output_beats
+
+    task wait_attention_sum_complete();
+        int unsigned expected_beats;
+        int unsigned seen_beats;
+        int unsigned idle_cycles;
+
+        expected_beats = expected_sum_output_beats();
+        if (expected_beats == 0)
+            return;
+
+        if (p_sequencer.vif == null)
+            `uvm_fatal("VSEQ", "Virtual sequencer vif is not set; cannot wait for sum output completion")
+
+        seen_beats = 0;
+        idle_cycles = 0;
+
+        while (seen_beats < expected_beats) begin
+            @(posedge p_sequencer.vif.clk_i);
+
+            if (!p_sequencer.vif.rst_ni) begin
+                idle_cycles = 0;
+                continue;
+            end
+
+            if (p_sequencer.vif.sum_valid_o && p_sequencer.vif.sum_ready_i) begin
+                seen_beats++;
+                idle_cycles = 0;
+            end else begin
+                idle_cycles++;
+                if (idle_cycles > 1000000) begin
+                    `uvm_fatal("VSEQ",
+                        $sformatf("Timeout waiting for OW sum output completion: seen=%0d expected=%0d",
+                            seen_beats, expected_beats))
+                end
+            end
+        end
+    endtask : wait_attention_sum_complete
 
     task send_head_streams(ita_mha8_step_payload payload, int unsigned head_id);
         fork
@@ -105,14 +222,15 @@ class ita_mha8_vsequence extends uvm_sequence;
         end
     endtask : send_ff_bias_stream
 
-    function ita_ctrl_item make_ctrl_item(ita_mha8_core_item core);
+    function ita_ctrl_item make_ctrl_item(
+        ita_mha8_core_item core,
+        layer_e layer_value,
+        step_e ctrl_step
+    );
         ita_ctrl_item ctrl;
-        step_e ctrl_step;
         ctrl = ita_ctrl_item::type_id::create("ctrl");
 
-        ctrl_step = core.first_payload_step();
-
-        ctrl.ctrl.layer = core.layer;
+        ctrl.ctrl.layer = layer_value;
         ctrl.ctrl.activation = core.activation;
         ctrl.ctrl.tile_s = core.tile_s;
         ctrl.ctrl.tile_e = core.tile_e;
@@ -129,12 +247,20 @@ class ita_mha8_vsequence extends uvm_sequence;
             ctrl.sum_eps_mult    = core.sum_eps_mult;
             ctrl.sum_right_shift = core.sum_right_shift;
             ctrl.sum_add         = core.sum_add;
+            ctrl.ff_eps_mult     = core.ff_eps_mult;
+            ctrl.ff_right_shift  = core.ff_right_shift;
+            ctrl.ff_add          = core.ff_add;
         end else begin
             ctrl.set_all_heads_identity_requant_for_step(ctrl_step);
+            ctrl.set_ff_identity_requant_for_step(ctrl_step);
             ctrl.sum_eps_mult    = 8'd1;
             ctrl.sum_right_shift = 8'd0;
             ctrl.sum_add         = '0;
         end
+
+        ctrl.ctrl.eps_mult    = ctrl.ff_eps_mult;
+        ctrl.ctrl.right_shift = ctrl.ff_right_shift;
+        ctrl.ctrl.add         = ctrl.ff_add;
 
         return ctrl;
     endfunction : make_ctrl_item
