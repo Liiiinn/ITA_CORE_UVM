@@ -215,7 +215,10 @@ PROJECTION_FILES = {
 MULTI_STEP_PROJECTIONS = {
     "QKV": ["Q", "K", "V"],
     "ATTN": ["Q", "K", "V", "QK", "AV", "OW"],
+    "ATTNFF": ["Q", "K", "V", "QK", "AV", "OW", "F1", "F2"],
 }
+
+FF_STEPS = {"F1", "F2"}
 
 
 @dataclass(frozen=True)
@@ -232,6 +235,18 @@ class StepSources:
     expected_source_path: Path
     expected_values: list[int]
     generated_zero_bias: bool = False
+
+
+@dataclass(frozen=True)
+class FfStepSources:
+    input_path: Path
+    input_values: list[int]
+    weight_path: Path
+    weight_values: list[int]
+    bias_path: Path
+    bias_values: list[int]
+    expected_source_path: Path
+    expected_values: list[int]
 
 
 def path_label(path: Path | None, root: Path) -> str:
@@ -350,6 +365,32 @@ def resolve_step_sources(
     )
 
 
+def resolve_ff_step_sources(pyita_dir: Path, step_name: str) -> FfStepSources:
+    if step_name == "F1":
+        input_path = pyita_dir / "FF.txt"
+        weight_path = pyita_dir / "Wff_0.txt"
+        bias_path = pyita_dir / "Bff_0.txt"
+        expected_source_path = pyita_dir / "FFp_0.txt"
+    elif step_name == "F2":
+        input_path = pyita_dir / "FFp_in_0.txt"
+        weight_path = pyita_dir / "Wff2_0.txt"
+        bias_path = pyita_dir / "Bff2_0.txt"
+        expected_source_path = pyita_dir / "FF2p_0.txt"
+    else:
+        raise ValueError(f"Unsupported FF step: {step_name}")
+
+    return FfStepSources(
+        input_path=input_path,
+        input_values=read_values(input_path),
+        weight_path=weight_path,
+        weight_values=read_values(weight_path),
+        bias_path=bias_path,
+        bias_values=read_values(bias_path),
+        expected_source_path=expected_source_path,
+        expected_values=read_values(expected_source_path),
+    )
+
+
 def make_requant_rows(pyita_dir: Path, step: str, heads: int) -> list[dict[str, Any]]:
     vector_root = pyita_dir.parent
     mult_rows = read_table(vector_root / "RQS_ATTN_MUL.txt")
@@ -385,6 +426,30 @@ def make_requant_rows(pyita_dir: Path, step: str, heads: int) -> list[dict[str, 
     return rows
 
 
+def make_ff_requant_row(pyita_dir: Path, step: str) -> dict[str, Any]:
+    vector_root = pyita_dir.parent
+    mult_rows = read_table(vector_root / "RQS_FFN_MUL.txt")
+    shift_rows = read_table(vector_root / "RQS_FFN_SHIFT.txt")
+    add_rows = read_table(vector_root / "RQS_FFN_ADD.txt")
+    column = {"F1": 0, "F2": 1}[step]
+
+    for table_name, table in (
+        ("RQS_FFN_MUL.txt", mult_rows),
+        ("RQS_FFN_SHIFT.txt", shift_rows),
+        ("RQS_FFN_ADD.txt", add_rows),
+    ):
+        if not table or len(table[0]) <= column:
+            raise ValueError(f"{table_name} has no column {column} for step {step}")
+
+    return {
+        "step": step,
+        "head_id": 0,
+        "mult": mult_rows[0][column],
+        "shift": shift_rows[0][column],
+        "add": add_rows[0][column],
+    }
+
+
 def main() -> int:
     root = core_root()
     default_out_dir = root / "sim" / "logger"
@@ -396,7 +461,10 @@ def main() -> int:
         "--projection",
         choices=sorted(PROJECTION_FILES) + sorted(MULTI_STEP_PROJECTIONS),
         default="Q",
-        help="PyITA projection to adapt. QKV emits Q -> K -> V; ATTN emits Q -> K -> V -> QK -> AV -> OW.",
+        help=(
+            "PyITA projection to adapt. QKV emits Q -> K -> V; ATTN emits Q -> K -> V -> QK -> AV -> OW; "
+            "ATTNFF appends F1 -> F2 feed-forward streams."
+        ),
     )
     parser.add_argument("--heads", type=int, default=8, help="Number of MHA heads to adapt, starting at head 0.")
     parser.add_argument("--input-lanes", type=int, default=64, help="Number of int8 lanes in one inp_t payload.")
@@ -428,6 +496,8 @@ def main() -> int:
     projection_lower = projection.lower()
     is_multi_step = projection in MULTI_STEP_PROJECTIONS
     projections = MULTI_STEP_PROJECTIONS[projection] if is_multi_step else [projection]
+    head_projections = [step for step in projections if step not in FF_STEPS]
+    ff_projections = [step for step in projections if step in FF_STEPS]
     if is_multi_step and any(
         value is not None
         for value in (args.source_step, args.input_file, args.weight_prefix, args.bias_prefix, args.expected_source_prefix)
@@ -482,7 +552,7 @@ def main() -> int:
     requant_rows: list[dict[str, Any]] = []
     per_head: list[dict[str, Any]] = [{"head_id": head, "steps": {}} for head in range(args.heads)] if is_multi_step else []
 
-    for step_name in projections:
+    for step_name in head_projections:
         step_lower = step_name.lower()
         step_source_step = step_name
         step_expected_prefix = f"expected_{step_lower}_head" if is_multi_step else expected_prefix
@@ -619,7 +689,7 @@ def main() -> int:
                 per_head.append({"head_id": head, **step_entry})
 
     extra_compare_entries: list[dict[str, Any]] = []
-    if projection == "ATTN":
+    if projection in ("ATTN", "ATTNFF"):
         requant_rows.extend(make_requant_rows(pyita_dir, "SUM", args.heads))
 
         sum_source_path = pyita_dir / "Out_soft_sum.txt"
@@ -649,12 +719,75 @@ def main() -> int:
             }
         )
 
+    for step_name in ff_projections:
+        step_lower = step_name.lower()
+        sources = resolve_ff_step_sources(pyita_dir, step_name)
+        requant_rows.append(make_ff_requant_row(pyita_dir, step_name))
+
+        input_source_beats = source_beats(sources.input_path, sources.input_values, args.input_lanes)
+        weight_source_beats = source_beats(sources.weight_path, sources.weight_values, args.weight_lanes)
+        bias_source_beats = source_beats(sources.bias_path, sources.bias_values, args.bias_lanes)
+
+        expected_beats = args.expected_beats
+        if expected_beats == 0:
+            expected_beats = len(sources.expected_values) // args.output_lanes
+        input_beats = args.input_beats
+        if input_beats == 0:
+            input_beats = expected_beats
+        weight_beats = args.weight_beats
+        if weight_beats == 0:
+            weight_beats = expected_beats
+        bias_beats = args.bias_beats
+        if bias_beats == 0:
+            bias_beats = expected_beats
+
+        require_count(sources.expected_source_path, sources.expected_values, args.output_lanes * expected_beats)
+
+        for beat in range(weight_beats):
+            payload = pack_source_beat(sources.weight_values, args.weight_lanes, 8, beat, weight_source_beats)
+            rows.append(make_row("ff_weight", 0, beat, step_name, payload))
+
+        for beat in range(input_beats):
+            payload = pack_source_beat(sources.input_values, args.input_lanes, 8, beat, input_source_beats)
+            rows.append(make_row("ff_input", 0, beat, step_name, payload))
+
+        for beat in range(bias_beats):
+            payload = pack_source_beat(sources.bias_values, args.bias_lanes, args.bias_bits, beat, bias_source_beats)
+            rows.append(make_row("ff_bias", 0, beat, step_name, payload))
+
+        expected_path = out_dir / f"expected_{step_lower}.txt"
+        actual_path = out_dir / f"actual_{step_lower}.txt"
+        expected_path.parent.mkdir(parents=True, exist_ok=True)
+        with expected_path.open("w", encoding="utf-8") as f:
+            for beat in range(expected_beats):
+                start = beat * args.output_lanes
+                payload = pack_lanes(sources.expected_values[start : start + args.output_lanes], 8)
+                f.write(f"{hex_payload(payload)}\n")
+
+        extra_compare_entries.append(
+            {
+                "step": step_name,
+                "stream": "ff",
+                "expected_source_path": rel_to_core(sources.expected_source_path, root),
+                "expected_path": rel_to_core(expected_path, root),
+                "actual_path": rel_to_core(actual_path, root),
+                "input_path": rel_to_core(sources.input_path, root),
+                "weight_path": rel_to_core(sources.weight_path, root),
+                "bias_path": rel_to_core(sources.bias_path, root),
+                "requant": requant_rows[-1],
+                "input_beats": input_beats,
+                "weight_beats": weight_beats,
+                "bias_beats": bias_beats,
+                "expected_beats": expected_beats,
+            }
+        )
+
     write_stream_csv(stream_path, rows)
     write_requant_csv(requant_path, requant_rows)
 
     compare_cfg: dict[str, Any]
     if is_multi_step:
-        compare_cfg = {"actual_steps": projections, "stream": "per_head"}
+        compare_cfg = {"actual_steps": head_projections, "stream": "per_head"}
         if extra_compare_entries:
             compare_cfg["extra_entries"] = extra_compare_entries
     else:
@@ -681,6 +814,9 @@ def main() -> int:
             "requant_mult_file": "RQS_ATTN_MUL.txt",
             "requant_shift_file": "RQS_ATTN_SHIFT.txt",
             "requant_add_file": "RQS_ATTN_ADD.txt",
+            "ffn_requant_mult_file": "RQS_FFN_MUL.txt" if ff_projections else None,
+            "ffn_requant_shift_file": "RQS_FFN_SHIFT.txt" if ff_projections else None,
+            "ffn_requant_add_file": "RQS_FFN_ADD.txt" if ff_projections else None,
         },
         "compare": compare_cfg,
         "stream_path": rel_to_core(stream_path, root),
@@ -710,11 +846,11 @@ def main() -> int:
     print(f"Wrote {len(requant_rows)} requant rows -> {requant_path}")
     if is_multi_step:
         print(
-            f"Wrote {args.heads * len(projections)} PyITA-{projection} expected files "
+            f"Wrote {args.heads * len(head_projections)} PyITA-{projection} per-head expected files "
             f"-> {out_dir / 'expected_<step>_head<head>.txt'}"
         )
         if extra_compare_entries:
-            print(f"Wrote {len(extra_compare_entries)} extra expected file(s) -> {out_dir / 'expected_ow_sum.txt'}")
+            print(f"Wrote {len(extra_compare_entries)} extra expected file(s) for sum/ff streams")
     else:
         print(f"Wrote {args.heads} PyITA-{projection} expected files -> {out_dir / (expected_prefix + '<head>.txt')}")
     print(f"Wrote manifest -> {manifest_path}")

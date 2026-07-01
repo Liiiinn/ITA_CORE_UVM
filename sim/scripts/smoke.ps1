@@ -6,7 +6,7 @@ param(
     [int]$Heads = 8,
     [ValidateSet("synthetic", "pyita-q")]
     [string]$VectorSource = "synthetic",
-    [ValidateSet("Q", "K", "V", "QKV", "ATTN")]
+    [ValidateSet("Q", "K", "V", "QKV", "ATTN", "ATTNFF")]
     [string]$Projection = "Q",
     [string]$PyitaDir = "",
     [string]$Manifest = "",
@@ -187,7 +187,7 @@ if ($RunGenerateVectors) {
             "--manifest-name", (Split-Path -Leaf $ManifestPath),
             "--dut-step", $DutStep
         )
-        if ($Projection -ne "QKV" -and $Projection -ne "ATTN") {
+        if ($Projection -ne "QKV" -and $Projection -ne "ATTN" -and $Projection -ne "ATTNFF") {
             $genArgs += @("--source-step", $Projection)
         }
         Invoke-PythonStep (Join-Path $ToolsDir "gen_mha8_pyita_vectors.py") $genArgs

@@ -71,8 +71,11 @@ class ita_mha8_scoreboard extends uvm_component;
 
             case(tr.kind)
                 ITA_STREAM_HEAD_INPUT: input_count++;
+                ITA_STREAM_FF_INPUT: input_count++;
                 ITA_STREAM_HEAD_WEIGHT: weight_count++;
+                ITA_STREAM_FF_WEIGHT: weight_count++;
                 ITA_STREAM_HEAD_BIAS: bias_count++;
+                ITA_STREAM_FF_BIAS: bias_count++;
                 default:
                     `uvm_error("ITA_SCB_KIND",
                         $sformatf("Unexpected stream kind=%0d", tr.kind))
@@ -93,22 +96,32 @@ class ita_mha8_scoreboard extends uvm_component;
     endtask : process_output_fifo
 
     function void sanity_check_source(ita_stream_item tr);
-        if (!(tr.kind inside {ITA_STREAM_HEAD_INPUT, ITA_STREAM_HEAD_WEIGHT, ITA_STREAM_HEAD_BIAS}))
+        if (!(tr.kind inside {
+                ITA_STREAM_HEAD_INPUT,
+                ITA_STREAM_HEAD_WEIGHT,
+                ITA_STREAM_HEAD_BIAS,
+                ITA_STREAM_FF_INPUT,
+                ITA_STREAM_FF_WEIGHT,
+                ITA_STREAM_FF_BIAS
+            }))
             `uvm_error("ITA_SCB_KIND", $sformatf("Unexpected source kind=%0d", tr.kind))
 
-        if (tr.head_id >= 8)
+        if (tr.kind inside {ITA_STREAM_HEAD_INPUT, ITA_STREAM_HEAD_WEIGHT, ITA_STREAM_HEAD_BIAS} && tr.head_id >= 8)
             `uvm_error("ITA_SCB_HEAD", $sformatf("Illegal source head_id=%0d", tr.head_id))
 
         case (tr.kind)
-            ITA_STREAM_HEAD_INPUT:
+            ITA_STREAM_HEAD_INPUT,
+            ITA_STREAM_FF_INPUT:
                 if ($isunknown(tr.inp))
                     `uvm_error("ITA_SCB_XZ", "Input payload contains X/Z")
 
-            ITA_STREAM_HEAD_WEIGHT:
+            ITA_STREAM_HEAD_WEIGHT,
+            ITA_STREAM_FF_WEIGHT:
                 if ($isunknown(tr.weight))
                     `uvm_error("ITA_SCB_XZ", "Weight payload contains X/Z")
 
-            ITA_STREAM_HEAD_BIAS:
+            ITA_STREAM_HEAD_BIAS,
+            ITA_STREAM_FF_BIAS:
                 if ($isunknown(tr.bias))
                     `uvm_error("ITA_SCB_XZ", "Bias payload contains X/Z")
         endcase

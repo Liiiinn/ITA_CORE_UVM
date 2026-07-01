@@ -115,6 +115,12 @@ class ita_mha8_logger extends uvm_component;
                     $time, stream_kind_name(tr.kind), tr.head_id, tr.tile_id,
                     tr.inner_tile_id, tr.beat_id, tr.step.name(), tr.is_lockstep, tr.oup);
             end
+            ITA_STREAM_FF_OUTPUT: begin
+                output_count ++;
+                $fwrite(output_fd, "%0t,%s,%0d,%0d,%0d,%0d,%s,%0d,%0h\n",
+                    $time, stream_kind_name(tr.kind), tr.head_id, tr.tile_id,
+                    tr.inner_tile_id, tr.beat_id, tr.step.name(), tr.is_lockstep, tr.oup);
+            end
             default: begin
                 `uvm_warning("LOGGER", $sformatf("unsupported output kind: %s", stream_kind_name(tr.kind)))
                 return;
