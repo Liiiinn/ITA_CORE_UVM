@@ -98,7 +98,7 @@ class ita_mha8_env extends uvm_env;
         // Stage 10: logger CSV output feeds parse_actual.py through the manifest-driven smoke flow.
         // Stage 11: fan in sum and feed-forward analysis ports.
         vsqr.sum_output_sqr = sum_output_agt.sqr;
-        vsqr.ff_input_sqr = ff_input_agt.sqr;
+        vsqr.ff_inp_sqr = ff_input_agt.sqr;
         vsqr.ff_weight_sqr = ff_weight_agt.sqr;
         vsqr.ff_bias_sqr = ff_bias_agt.sqr;
         vsqr.ff_output_sqr = ff_output_agt.sqr;
