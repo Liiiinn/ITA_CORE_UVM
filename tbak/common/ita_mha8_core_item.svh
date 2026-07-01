@@ -4,20 +4,18 @@
 class ita_mha8_core_item extends uvm_sequence_item;
     `uvm_object_utils(ita_mha8_core_item)
 
-    localparam int unsigned NumStepPayloads = 3;
     localparam int unsigned NumHeads = 8;
 
     layer_e      layer;
     activation_e activation;
-    step_e       stream_step;
     tile_t       tile_s;
     tile_t       tile_e;
     tile_t       tile_p;
     tile_t       tile_f;
 
-    ita_mha8_step_payload payloads[NumStepPayloads];
+    ita_mha8_step_payload payload_by_step[step_e];
     step_e step_order[$];
-    // Stage 10: payloads are the UVM stimulus contract for Q/K/V multi-step flow.
+    // Stage 10/11: payload_by_step is the stimulus contract for step-aware MHA8 flows.
 
     requant_const_array_t head_eps_mult       [NumHeads];
     requant_const_array_t head_right_shift    [NumHeads];
@@ -33,7 +31,6 @@ class ita_mha8_core_item extends uvm_sequence_item;
         super.new(name);
         layer = Attention;
         activation = Identity;
-        stream_step = Idle;
         tile_s = 1;
         tile_e = 1;
         tile_p = 1;
@@ -44,42 +41,50 @@ class ita_mha8_core_item extends uvm_sequence_item;
         clear_requant_config();
     endfunction : new
 
-    function int unsigned step_to_slot(step_e step);
-        case (step)
-            Q, MatMul: return 0;
-            K:         return 1;
-            V:         return 2;
-            default: begin
-                `uvm_fatal("CORE_STEP", $sformatf("Unsupported payload step: %s", step.name()))
-                return 0;
-            end
-        endcase
-    endfunction : step_to_slot
+    function bit is_payload_step(step_e step);
+        return step inside {
+            Q, K, V, QK, AV, OW, F1, F2, MatMul
+        };
+    endfunction : is_payload_step
+
+    function ita_mha8_step_payload get_payload(step_e step);
+        if (!is_payload_step(step))
+            `uvm_fatal("CORE STEP", $sformatf("Unsupported payload step: %0d", step))
+
+        if (!payload_by_step.exists(step)) begin
+            payload_by_step[step] = ita_mha8_step_payload::type_id::create($sformatf("payload_%s", step.name()));
+            payload_by_step[step].step = step;
+        end
+
+        return payload_by_step[step];
+    endfunction : get_payload
+
+    function step_e first_payload_step();
+        if (step_order.size() == 0) begin
+            `uvm_fatal("CORE STEP", "No payload steps have been loaded")
+            return Idle;
+        end
+
+        return step_order[0];
+    endfunction : first_payload_step
 
     function step_e parse_step_name(string step_name);
         case (step_name)
             "Q", "q":           return Q;
             "K", "k":           return K;
             "V", "v":           return V;
+            "QK", "qk":         return QK;
+            "AV", "av":         return AV;
+            "OW", "ow":         return OW;
+            "F1", "f1":         return F1;
+            "F2", "f2":         return F2;
             "MatMul", "matmul": return MatMul;
             default: begin
-                `uvm_fatal("CORE_STEP", $sformatf("Unsupported CSV step metadata: %s", step_name))
+                `uvm_fatal("CORE STEP", $sformatf("Unsupported CSV step metadata: %s", step_name))
                 return Idle;
             end
         endcase
     endfunction : parse_step_name
-
-    function ita_mha8_step_payload get_payload(step_e step);
-        int unsigned slot;
-
-        slot = step_to_slot(step);
-        if (payloads[slot] == null) begin
-            payloads[slot] = ita_mha8_step_payload::type_id::create($sformatf("payloads_%0d", slot));
-        end
-        payloads[slot].step = step;
-
-        return payloads[slot];
-    endfunction : get_payload
 
     function void add_step_to_order(step_e step);
         foreach (step_order[i]) begin
@@ -91,12 +96,7 @@ class ita_mha8_core_item extends uvm_sequence_item;
 
     function void clear_payloads();
         step_order.delete();
-        for (int unsigned slot = 0; slot < NumStepPayloads; slot++) begin
-            if (payloads[slot] == null) begin
-                payloads[slot] = ita_mha8_step_payload::type_id::create($sformatf("payloads_%0d", slot));
-            end
-            payloads[slot].clear();
-        end
+        payload_by_step.delete();
     endfunction : clear_payloads
 
     function void clear_requant_config();
@@ -165,19 +165,19 @@ class ita_mha8_core_item extends uvm_sequence_item;
                 step_name, head_id, mult_value, shift_value, add_value);
             if (code != 5) begin
                 if (line.len() != 0) begin
-                    `uvm_warning("CORE_RQCSV", $sformatf("Skipping malformed requant line %0d: %s", line_no, line))
+                    `uvm_warning("CORE RQCSV", $sformatf("Skipping malformed requant line %0d: %s", line_no, line))
                 end
                 continue;
             end
 
             if (head_id >= NumHeads) begin
-                `uvm_warning("CORE_RQCSV", $sformatf("Skipping illegal head row at line %0d: head_id=%0d", line_no, head_id))
+                `uvm_warning("CORE RQCSV", $sformatf("Skipping illegal head row at line %0d: head_id=%0d", line_no, head_id))
                 continue;
             end
 
             step_idx = requant_index_from_step_name(step_name);
             if (step_idx < 0 || step_idx >= N_REQUANT_CONSTS) begin
-                `uvm_warning("CORE_RQCSV", $sformatf("Skipping unsupported requant step at line %0d: %s", line_no, step_name))
+                `uvm_warning("CORE RQCSV", $sformatf("Skipping unsupported requant step at line %0d: %s", line_no, step_name))
                 continue;
             end
 
@@ -191,9 +191,9 @@ class ita_mha8_core_item extends uvm_sequence_item;
         has_requant_config = (loaded_rows != 0);
 
         if (!has_requant_config) begin
-            `uvm_error("CORE_RQCSV", $sformatf("No requant rows loaded from %s", requant_vector_path))
+            `uvm_error("CORE RQCSV", $sformatf("No requant rows loaded from %s", requant_vector_path))
         end else begin
-            `uvm_info("CORE_RQCSV",
+            `uvm_info("CORE RQCSV",
                 $sformatf("Loaded %0d requant rows from %s", loaded_rows, requant_vector_path),
                 UVM_LOW)
         end
@@ -230,7 +230,7 @@ class ita_mha8_core_item extends uvm_sequence_item;
             if (char_idx < 512) begin
                 value[char_idx +: 4] = nibble;
             end else begin
-                `uvm_warning("CORE_CSV", $sformatf("Payload is wider than 512 bits and will be truncated: %s", payload_text))
+                `uvm_warning("CORE CSV", $sformatf("Payload is wider than 512 bits and will be truncated: %s", payload_text))
                 break;
             end
             nibble_idx++;
@@ -267,22 +267,24 @@ class ita_mha8_core_item extends uvm_sequence_item;
         int unsigned char_idx;
         bit [511:0] payload_bits;
         step_e row_step;
+        step_e first_step;
         ita_mha8_step_payload payload;
         ita_mha8_step_payload log_payload;
+        bit warned_step_mismatch;
 
         layer = layer_value;
         activation = activation_value;
-        stream_step = stream_step_value;
         tile_s = tile_s_value;
         tile_e = tile_e_value;
         tile_p = tile_p_value;
         tile_f = tile_f_value;
         this.stream_vector_path = stream_vector_path;
+        warned_step_mismatch = 1'b0;
         clear_payloads();
 
         fd = $fopen(stream_vector_path, "r");
         if (fd == 0) begin
-            `uvm_fatal("CORE_CSV", $sformatf("Failed to open stream vector CSV: %s", stream_vector_path))
+            `uvm_fatal("CORE CSV", $sformatf("Failed to open stream vector CSV: %s", stream_vector_path))
         end
 
         void'($fgets(header, fd));
@@ -308,17 +310,27 @@ class ita_mha8_core_item extends uvm_sequence_item;
 
             if (code != 8) begin
                 if (line.len() != 0) begin
-                    `uvm_warning("CORE_CSV", $sformatf("Skipping malformed CSV line %0d: %s", line_no, line))
+                    `uvm_warning("CORE CSV", $sformatf("Skipping malformed CSV line %0d: %s", line_no, line))
                 end
                 continue;
             end
 
             if (head_id >= NumHeads) begin
-                `uvm_warning("CORE_CSV", $sformatf("Skipping illegal head row at line %0d: head_id=%0d", line_no, head_id))
+                `uvm_warning("CORE CSV", $sformatf("Skipping illegal head row at line %0d: head_id=%0d", line_no, head_id))
                 continue;
             end
 
-            row_step = (step_name == "") ? stream_step : parse_step_name(step_name);
+            if (step_name == "") begin
+                `uvm_fatal("CORE CSV", $sformatf("CSV line %0d does not provide a step field", line_no))
+            end
+
+            row_step = parse_step_name(step_name);
+            if (!warned_step_mismatch && stream_step_value != Idle && row_step != stream_step_value) begin
+                `uvm_warning("CORE CSV",
+                    $sformatf("Compatibility step argument %s differs from CSV step %s at line %0d; using CSV step",
+                        stream_step_value.name(), row_step.name(), line_no))
+                warned_step_mismatch = 1'b1;
+            end
             payload = get_payload(row_step);
             payload.enabled = 1'b1;
             payload.step = row_step;
@@ -343,7 +355,7 @@ class ita_mha8_core_item extends uvm_sequence_item;
                     payload.bias_payload_by_head[head_id].push_back(bias_t'(payload_bits));
                 end
                 default: begin
-                    `uvm_warning("CORE_CSV", $sformatf("Skipping unsupported stream kind at line %0d: %s", line_no, kind))
+                    `uvm_warning("CORE CSV", $sformatf("Skipping unsupported stream kind at line %0d: %s", line_no, kind))
                 end
             endcase
         end
@@ -355,15 +367,13 @@ class ita_mha8_core_item extends uvm_sequence_item;
             payload.validate_complete();
         end
 
-        if (stream_step == Idle && step_order.size() != 0) begin
-            stream_step = step_order[0];
-        end
-        log_payload = (step_order.size() == 0) ? null : get_payload(stream_step);
+        first_step = first_payload_step();
+        log_payload = get_payload(first_step);
 
-        `uvm_info("CORE_CSV",
-            $sformatf("Loaded stream CSV %s: layer=%s stream_step=%s steps=%0d head0 input=%0d weight=%0d bias=%0d",
-                stream_vector_path, layer.name(), stream_step.name(), step_order.size(),
-                (log_payload == null) ? 0 : log_payload.input_payload_by_head[0].size(),
+        `uvm_info("CORE CSV",
+            $sformatf("Loaded stream CSV %s: layer=%s first_step=%s steps=%0d head0 input=%0d weight=%0d bias=%0d",
+                stream_vector_path, layer.name(), first_step.name(), step_order.size(),
+                  (log_payload == null) ? 0 : log_payload.input_payload_by_head[0].size(),
                 (log_payload == null) ? 0 : log_payload.weight_payload_by_head[0].size(),
                 (log_payload == null) ? 0 : log_payload.bias_payload_by_head[0].size()),
             UVM_LOW)

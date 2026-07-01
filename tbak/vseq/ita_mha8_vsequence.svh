@@ -75,9 +75,7 @@ class ita_mha8_vsequence extends uvm_sequence;
         step_e ctrl_step;
         ctrl = ita_ctrl_item::type_id::create("ctrl");
 
-        ctrl_step = core.stream_step;
-        if (ctrl_step == Idle)
-            ctrl_step = (core.layer == Linear) ? MatMul : Q;
+        ctrl_step = core.first_payload_step();
 
         ctrl.ctrl.layer = core.layer;
         ctrl.ctrl.activation = core.activation;
