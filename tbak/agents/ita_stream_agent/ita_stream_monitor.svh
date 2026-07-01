@@ -100,7 +100,7 @@ class ita_stream_monitor extends uvm_monitor;
             end
             ITA_STREAM_SUM_OUTPUT: begin
                 tr.oup = cfg.vif.sum_oup_o;
-                tr.step = cfg.vif.sum_step_dbg;
+                tr.step = OW;
                 tr.tile_id = cfg.vif.sum_tile_id_dbg;
                 tr.inner_tile_id = cfg.vif.sum_inner_id_dbg;
                 tr.beat_id = cfg.vif.sum_beat_id_dbg;
