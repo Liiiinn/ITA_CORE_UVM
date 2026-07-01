@@ -33,6 +33,9 @@ class ita_ctrl_driver extends uvm_driver #(ita_ctrl_item);
 
     task drive_idle();
         cfg.vif.ctrl_i <= '0;
+        cfg.vif.sum_eps_mult_i <= '0;
+        cfg.vif.sum_right_shift_i <= '0;
+        cfg.vif.sum_add_i <= '0;
         for (int unsigned h = 0; h < 8; h++) begin
             cfg.vif.head_eps_mult_i[h]    <= '0;
             cfg.vif.head_right_shift_i[h] <= '0;
@@ -44,6 +47,9 @@ class ita_ctrl_driver extends uvm_driver #(ita_ctrl_item);
         @(posedge cfg.vif.clk_i);
         // Stage 2: drive cfg.vif.ctrl_i from tr.ctrl and generate a one-cycle start pulse.
         cfg.vif.ctrl_i <= tr.ctrl;
+        cfg.vif.sum_eps_mult_i <= tr.sum_eps_mult;
+        cfg.vif.sum_right_shift_i <= tr.sum_right_shift;
+        cfg.vif.sum_add_i <= tr.sum_add;
         // Stage 2: drive head_eps_mult_i/head_right_shift_i/head_add_i from tr for head0 first.
         for (int unsigned h = 0; h < 8; h++) begin  
             cfg.vif.head_eps_mult_i[h] <= tr.head_eps_mult[h];

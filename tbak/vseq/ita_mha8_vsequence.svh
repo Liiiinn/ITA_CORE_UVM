@@ -126,8 +126,14 @@ class ita_mha8_vsequence extends uvm_sequence;
                 ctrl.head_right_shift[h] = core.head_right_shift[h];
                 ctrl.head_add[h]         = core.head_add[h];
             end
+            ctrl.sum_eps_mult    = core.sum_eps_mult;
+            ctrl.sum_right_shift = core.sum_right_shift;
+            ctrl.sum_add         = core.sum_add;
         end else begin
             ctrl.set_all_heads_identity_requant_for_step(ctrl_step);
+            ctrl.sum_eps_mult    = 8'd1;
+            ctrl.sum_right_shift = 8'd0;
+            ctrl.sum_add         = '0;
         end
 
         return ctrl;

@@ -29,6 +29,9 @@ class ita_ctrl_monitor extends uvm_monitor;
                 // Stage 2: sample cfg.vif.ctrl_i when start is observed and publish it on ap.
                 tr = ita_ctrl_item::type_id::create("tr");
                 tr.ctrl = cfg.vif.ctrl_i;
+                tr.sum_eps_mult = cfg.vif.sum_eps_mult_i;
+                tr.sum_right_shift = cfg.vif.sum_right_shift_i;
+                tr.sum_add = cfg.vif.sum_add_i;
                 for (int unsigned h = 0; h < 8; h++) begin
                     tr.head_eps_mult[h] = cfg.vif.head_eps_mult_i[h];
                     tr.head_right_shift[h] = cfg.vif.head_right_shift_i[h];

@@ -20,6 +20,9 @@ class ita_mha8_core_item extends uvm_sequence_item;
     requant_const_array_t head_eps_mult       [NumHeads];
     requant_const_array_t head_right_shift    [NumHeads];
     requant_array_t       head_add            [NumHeads];
+    requant_const_t       sum_eps_mult;
+    requant_const_t       sum_right_shift;
+    requant_t             sum_add;
     bit                   has_requant_config;
     string                requant_vector_path;
     // Stage 10: optional PyITA requant CSV lets Q/K/V compare use the same constants as the source vectors.
@@ -101,6 +104,9 @@ class ita_mha8_core_item extends uvm_sequence_item;
 
     function void clear_requant_config();
         has_requant_config = 1'b0;
+        sum_eps_mult    = '0;
+        sum_right_shift = '0;
+        sum_add         = '0;
         for (int unsigned h = 0; h < NumHeads; h++) begin
             head_eps_mult[h]    = '0;
             head_right_shift[h] = '0;
@@ -116,8 +122,6 @@ class ita_mha8_core_item extends uvm_sequence_item;
             "QK":     return 3;
             "AV":     return 4;
             "OW":     return 5;
-            "SUM":    return 6; // MHA8 head-sum reuses slot 6 in ita_mha8.sv
-            "OW_SUM": return 6;
             "F1":     return 6;
             "F2":     return 7;
             "MatMul": return 0;
@@ -136,6 +140,7 @@ class ita_mha8_core_item extends uvm_sequence_item;
         int unsigned shift_value;
         int unsigned char_idx;
         int unsigned loaded_rows;
+        bit sum_requant_seen;
         string header;
         string line;
         string scan_line;
@@ -152,6 +157,7 @@ class ita_mha8_core_item extends uvm_sequence_item;
         void'($fgets(header, fd));
         line_no = 1;
         loaded_rows = 0;
+        sum_requant_seen = 1'b0;
 
         while ($fgets(line, fd)) begin
             line_no++;
@@ -174,6 +180,23 @@ class ita_mha8_core_item extends uvm_sequence_item;
 
             if (head_id >= NumHeads) begin
                 `uvm_warning("CORE RQCSV", $sformatf("Skipping illegal head row at line %0d: head_id=%0d", line_no, head_id))
+                continue;
+            end
+
+            if (step_name == "SUM" || step_name == "OW_SUM") begin
+                if (!sum_requant_seen) begin
+                    sum_eps_mult    = requant_const_t'(mult_value);
+                    sum_right_shift = requant_const_t'(shift_value);
+                    sum_add         = requant_t'(add_value);
+                    sum_requant_seen = 1'b1;
+                end else if (sum_eps_mult    != requant_const_t'(mult_value) ||
+                             sum_right_shift != requant_const_t'(shift_value) ||
+                             sum_add         != requant_t'(add_value)) begin
+                    `uvm_error("CORE RQCSV",
+                        $sformatf("Inconsistent sum requant row at line %0d: mult=%0d shift=%0d add=%0d",
+                            line_no, mult_value, shift_value, add_value))
+                end
+                loaded_rows++;
                 continue;
             end
 

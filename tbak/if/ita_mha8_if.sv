@@ -13,6 +13,9 @@ interface ita_mha8_if
     requant_const_array_t    head_eps_mult_i    [NumHeads];
     requant_const_array_t    head_right_shift_i [NumHeads];
     requant_array_t          head_add_i         [NumHeads];
+    requant_const_t          sum_eps_mult_i;
+    requant_const_t          sum_right_shift_i;
+    requant_t                sum_add_i;
     // TODO Stage 8: add head0 requant X/Z assertions while ctrl_i.start is asserted.
 
     logic [NumHeads-1:0]     inp_valid_i;
@@ -98,6 +101,9 @@ interface ita_mha8_if
     initial begin
         rst_ni = 0;
         ctrl_i = '0;
+        sum_eps_mult_i = '0;
+        sum_right_shift_i = '0;
+        sum_add_i = '0;
         inp_valid_i = '0;
         inp_weight_valid_i = '0;
         inp_bias_valid_i = '0;

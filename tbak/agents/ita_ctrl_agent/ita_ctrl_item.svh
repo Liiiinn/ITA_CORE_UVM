@@ -9,6 +9,9 @@ class ita_ctrl_item extends uvm_sequence_item;
     requant_const_array_t head_eps_mult    [8];
     requant_const_array_t head_right_shift [8];
     requant_array_t       head_add         [8];
+    requant_const_t       sum_eps_mult;
+    requant_const_t       sum_right_shift;
+    requant_t             sum_add;
     // Stage 2: initialize head0 requant defaults first; keep the per-head shape for Stage 11.
 
     function new(string name = "ita_ctrl_item");
@@ -27,6 +30,9 @@ class ita_ctrl_item extends uvm_sequence_item;
             head_right_shift[h] = '0;
             head_add[h]         = '0;
         end
+        sum_eps_mult    = '0;
+        sum_right_shift = '0;
+        sum_add         = '0;
     endfunction : new
 
     function int unsigned requant_index_for_step(step_e step);
