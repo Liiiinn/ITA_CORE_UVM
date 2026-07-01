@@ -61,7 +61,8 @@ def run(cmd: list[str], dry_run: bool) -> int:
 @dataclass(frozen=True)
 class EntryResult:
     step: str
-    head: int
+    head: int | None
+    stream: str
     expected: Path
     actual: Path
     status: str
@@ -72,7 +73,8 @@ class EntryResult:
         return self.status == "PASS"
 
     def summary_line(self) -> str:
-        line = f"{self.status} {self.step}/head{self.head}: expected={self.expected.name} actual={self.actual.name}"
+        target = f"head{self.head}" if self.head is not None else self.stream
+        line = f"{self.status} {self.step}/{target}: expected={self.expected.name} actual={self.actual.name}"
         if self.detail:
             line += f" ({self.detail})"
         return line
@@ -129,7 +131,13 @@ def main() -> int:
     elif not actual_csv.is_absolute():
         actual_csv = core_root() / actual_csv
 
-    def run_compare_for_entry(step: str, head: int, expected: Path, actual_txt: Path) -> EntryResult:
+    def run_compare_for_entry(
+        step: str,
+        head: int | None,
+        entry_stream: str,
+        expected: Path,
+        actual_txt: Path,
+    ) -> EntryResult:
         parse_cmd = [
             sys.executable,
             str(tool_dir() / "parse_actual.py"),
@@ -140,12 +148,12 @@ def main() -> int:
             "--phase",
             step,
             "--stream",
-            stream,
-            "--head",
-            str(head),
+            entry_stream,
             "--out",
             str(actual_txt),
         ]
+        if head is not None:
+            parse_cmd.extend(["--head", str(head)])
 
         compare_cmd = [
             sys.executable,
@@ -162,12 +170,12 @@ def main() -> int:
 
         parse_rc = run(parse_cmd, args.dry_run)
         if parse_rc != 0:
-            return EntryResult(step, head, expected, actual_txt, "FAIL", f"parse_actual exit code {parse_rc}")
+            return EntryResult(step, head, entry_stream, expected, actual_txt, "FAIL", f"parse_actual exit code {parse_rc}")
 
         compare_rc = run(compare_cmd, args.dry_run)
         if compare_rc != 0:
-            return EntryResult(step, head, expected, actual_txt, "FAIL", f"compare exit code {compare_rc}")
-        return EntryResult(step, head, expected, actual_txt, "PASS", "dry-run" if args.dry_run else "")
+            return EntryResult(step, head, entry_stream, expected, actual_txt, "FAIL", f"compare exit code {compare_rc}")
+        return EntryResult(step, head, entry_stream, expected, actual_txt, "PASS", "dry-run" if args.dry_run else "")
 
     results: list[EntryResult] = []
     for entry in per_head:
@@ -178,7 +186,7 @@ def main() -> int:
         if actual_steps_obj is None:
             expected = resolve_manifest_path(str(require_key(entry, "expected_path")), manifest_path)
             actual_txt = resolve_manifest_path(str(require_key(entry, "actual_path")), manifest_path)
-            results.append(run_compare_for_entry(actual_steps[0], head, expected, actual_txt))
+            results.append(run_compare_for_entry(actual_steps[0], head, stream, expected, actual_txt))
         else:
             steps_cfg = require_key(entry, "steps")
             if not isinstance(steps_cfg, dict):
@@ -189,7 +197,24 @@ def main() -> int:
                     raise ValueError(f"per_head head{head} step {step} must be an object")
                 expected = resolve_manifest_path(str(require_key(step_cfg, "expected_path")), manifest_path)
                 actual_txt = resolve_manifest_path(str(require_key(step_cfg, "actual_path")), manifest_path)
-                results.append(run_compare_for_entry(step, head, expected, actual_txt))
+                results.append(run_compare_for_entry(step, head, stream, expected, actual_txt))
+
+    extra_entries = compare_cfg.get("extra_entries", [])
+    if extra_entries is None:
+        extra_entries = []
+    if not isinstance(extra_entries, list):
+        raise ValueError("Manifest compare.extra_entries must be a list when present")
+
+    for extra_entry in extra_entries:
+        if not isinstance(extra_entry, dict):
+            raise ValueError(f"Invalid compare.extra_entries entry: {extra_entry!r}")
+
+        step = str(require_key(extra_entry, "step"))
+        entry_stream = str(require_key(extra_entry, "stream"))
+        head = int(extra_entry["head"]) if "head" in extra_entry and extra_entry["head"] is not None else None
+        expected = resolve_manifest_path(str(require_key(extra_entry, "expected_path")), manifest_path)
+        actual_txt = resolve_manifest_path(str(require_key(extra_entry, "actual_path")), manifest_path)
+        results.append(run_compare_for_entry(step, head, entry_stream, expected, actual_txt))
 
     passed = [result for result in results if result.passed]
     failed = [result for result in results if not result.passed]
@@ -197,7 +222,7 @@ def main() -> int:
     print(
         "MHA8_MANIFEST_COMPARE_SUMMARY "
         f"total={len(results)} passed={len(passed)} failed={len(failed)} "
-        f"steps={len(actual_steps)} heads={len(per_head)}"
+        f"steps={len(actual_steps)} heads={len(per_head)} extra_entries={len(extra_entries)}"
     )
     if passed:
         print("  PASS_ENTRIES:")
@@ -213,9 +238,9 @@ def main() -> int:
         return 1
 
     if actual_steps_obj is None:
-        print(f"MHA8_MANIFEST_COMPARE_PASS heads={len(per_head)}")
+        print(f"MHA8_MANIFEST_COMPARE_PASS heads={len(per_head)} extra_entries={len(extra_entries)}")
     else:
-        print(f"MHA8_MANIFEST_COMPARE_PASS steps={len(actual_steps)} heads={len(per_head)}")
+        print(f"MHA8_MANIFEST_COMPARE_PASS steps={len(actual_steps)} heads={len(per_head)} extra_entries={len(extra_entries)}")
     return 0
 
 
