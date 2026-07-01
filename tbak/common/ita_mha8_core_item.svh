@@ -116,6 +116,8 @@ class ita_mha8_core_item extends uvm_sequence_item;
             "QK":     return 3;
             "AV":     return 4;
             "OW":     return 5;
+            "SUM":    return 6; // MHA8 head-sum reuses slot 6 in ita_mha8.sv
+            "OW_SUM": return 6;
             "F1":     return 6;
             "F2":     return 7;
             "MatMul": return 0;

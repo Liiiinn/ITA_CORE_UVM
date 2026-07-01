@@ -179,6 +179,8 @@ def step_requant_column(step: str) -> int:
         "QK": 3,
         "AV": 4,
         "OW": 5,
+        "SUM": 6,
+        "OW_SUM": 6,
         "F1": 6,
         "F2": 7,
         "MatMul": 0,
@@ -616,11 +618,10 @@ def main() -> int:
             else:
                 per_head.append({"head_id": head, **step_entry})
 
-    write_stream_csv(stream_path, rows)
-    write_requant_csv(requant_path, requant_rows)
-
     extra_compare_entries: list[dict[str, Any]] = []
     if projection == "ATTN":
+        requant_rows.extend(make_requant_rows(pyita_dir, "SUM", args.heads))
+
         sum_source_path = pyita_dir / "Out_soft_sum.txt"
         sum_values = read_values(sum_source_path)
         sum_expected_beats = args.expected_beats
@@ -647,6 +648,9 @@ def main() -> int:
                 "expected_beats": sum_expected_beats,
             }
         )
+
+    write_stream_csv(stream_path, rows)
+    write_requant_csv(requant_path, requant_rows)
 
     compare_cfg: dict[str, Any]
     if is_multi_step:
