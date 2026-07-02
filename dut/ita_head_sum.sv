@@ -14,17 +14,30 @@ module ita_head_sum
     input  requant_const_t                       eps_mult_i,
     input  requant_const_t                       right_shift_i,
     input  requant_t                             add_i,
+    input  counter_t                             tile_id_dbg_i,
+    input  counter_t                             inner_id_dbg_i,
+    input  counter_t                             beat_id_dbg_i,
     output logic                                  valid_o,
     input  logic                                  ready_i,
-    output requant_oup_t                          oup_o
+    output requant_oup_t                          oup_o,
+    output counter_t                              tile_id_dbg_o,
+    output counter_t                              inner_id_dbg_o,
+    output counter_t                              beat_id_dbg_o
 );
 
     oup_t sum;
     requant_oup_t requant_oup;
     fifo_data_t fifo_data_in, fifo_data_out;
+    counter_t tile_id_q1, tile_id_q2, tile_id_fifo_out;
+    counter_t inner_id_q1, inner_id_q2, inner_id_fifo_out;
+    counter_t beat_id_q1, beat_id_q2, beat_id_fifo_out;
     logic calc_en, calc_en_q1, calc_en_q2;
     logic fifo_full, fifo_empty, fifo_push, fifo_pop;
+    logic tile_id_fifo_full, tile_id_fifo_empty;
+    logic inner_id_fifo_full, inner_id_fifo_empty;
+    logic beat_id_fifo_full, beat_id_fifo_empty;
     fifo_usage_t fifo_usage;
+    fifo_usage_t tile_id_fifo_usage, inner_id_fifo_usage, beat_id_fifo_usage;
     int unsigned fifo_reserved;
 
     assign calc_en = valid_i && ready_o;
@@ -34,6 +47,9 @@ module ita_head_sum
     assign fifo_pop = valid_o && ready_i;
     assign valid_o = !fifo_empty;
     assign oup_o = valid_o ? fifo_data_out : '0;
+    assign tile_id_dbg_o = valid_o ? tile_id_fifo_out : '0;
+    assign inner_id_dbg_o = valid_o ? inner_id_fifo_out : '0;
+    assign beat_id_dbg_o = valid_o ? beat_id_fifo_out : '0;
     assign fifo_data_in = {>>WI{requant_oup}};
 
     always_comb begin
@@ -62,9 +78,21 @@ module ita_head_sum
         if (!rst_ni) begin
             calc_en_q1 <= 1'b0;
             calc_en_q2 <= 1'b0;
+            tile_id_q1 <= '0;
+            tile_id_q2 <= '0;
+            inner_id_q1 <= '0;
+            inner_id_q2 <= '0;
+            beat_id_q1 <= '0;
+            beat_id_q2 <= '0;
         end else begin
             calc_en_q1 <= calc_en;
             calc_en_q2 <= calc_en_q1;
+            tile_id_q1 <= tile_id_dbg_i;
+            tile_id_q2 <= tile_id_q1;
+            inner_id_q1 <= inner_id_dbg_i;
+            inner_id_q2 <= inner_id_q1;
+            beat_id_q1 <= beat_id_dbg_i;
+            beat_id_q2 <= beat_id_q1;
         end
     end
 
@@ -84,6 +112,60 @@ module ita_head_sum
         .push_i    (fifo_push        ),
         .data_o    (fifo_data_out    ),
         .pop_i     (fifo_pop         )
+    );
+
+    fifo_v3 #(
+        .FALL_THROUGH(1'b0            ),
+        .DATA_WIDTH  ($bits(counter_t)),
+        .DEPTH       (FifoDepth       )
+    ) i_tile_id_fifo (
+        .clk_i     (clk_i             ),
+        .rst_ni    (rst_ni            ),
+        .flush_i   (1'b0              ),
+        .testmode_i(1'b0              ),
+        .full_o    (tile_id_fifo_full ),
+        .empty_o   (tile_id_fifo_empty),
+        .usage_o   (tile_id_fifo_usage),
+        .data_i    (tile_id_q2        ),
+        .push_i    (fifo_push         ),
+        .data_o    (tile_id_fifo_out  ),
+        .pop_i     (fifo_pop          )
+    );
+
+    fifo_v3 #(
+        .FALL_THROUGH(1'b0             ),
+        .DATA_WIDTH  ($bits(counter_t) ),
+        .DEPTH       (FifoDepth        )
+    ) i_inner_id_fifo (
+        .clk_i     (clk_i              ),
+        .rst_ni    (rst_ni             ),
+        .flush_i   (1'b0               ),
+        .testmode_i(1'b0               ),
+        .full_o    (inner_id_fifo_full ),
+        .empty_o   (inner_id_fifo_empty),
+        .usage_o   (inner_id_fifo_usage),
+        .data_i    (inner_id_q2        ),
+        .push_i    (fifo_push          ),
+        .data_o    (inner_id_fifo_out  ),
+        .pop_i     (fifo_pop           )
+    );
+
+    fifo_v3 #(
+        .FALL_THROUGH(1'b0            ),
+        .DATA_WIDTH  ($bits(counter_t)),
+        .DEPTH       (FifoDepth       )
+    ) i_beat_id_fifo (
+        .clk_i     (clk_i             ),
+        .rst_ni    (rst_ni            ),
+        .flush_i   (1'b0              ),
+        .testmode_i(1'b0              ),
+        .full_o    (beat_id_fifo_full ),
+        .empty_o   (beat_id_fifo_empty),
+        .usage_o   (beat_id_fifo_usage),
+        .data_i    (beat_id_q2        ),
+        .push_i    (fifo_push         ),
+        .data_o    (beat_id_fifo_out  ),
+        .pop_i     (fifo_pop          )
     );
 
 endmodule

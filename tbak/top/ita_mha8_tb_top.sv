@@ -42,9 +42,15 @@ module ita_mha8_tb_top;
         .per_head_busy_o      (vif.per_head_busy_o),
         .per_head_oup_o       (vif.per_head_oup_o),
         .per_head_step_o      (vif.per_head_step_o),
+        .per_head_tile_id_dbg_o(vif.per_head_tile_id_dbg),
+        .per_head_inner_id_dbg_o(vif.per_head_inner_id_dbg),
+        .per_head_beat_id_dbg_o(vif.per_head_beat_id_dbg),
         .sum_valid_o          (vif.sum_valid_o),
         .sum_ready_i          (vif.sum_ready_i),
         .sum_oup_o            (vif.sum_oup_o),
+        .sum_tile_id_dbg_o    (vif.sum_tile_id_dbg),
+        .sum_inner_id_dbg_o   (vif.sum_inner_id_dbg),
+        .sum_beat_id_dbg_o    (vif.sum_beat_id_dbg),
         .ff_inp_valid_i       (vif.ff_inp_valid_i),
         .ff_inp_ready_o       (vif.ff_inp_ready_o),
         .ff_inp_weight_valid_i(vif.ff_inp_weight_valid_i),
@@ -59,6 +65,9 @@ module ita_mha8_tb_top;
         .ff_busy_o            (vif.ff_busy_o),
         .ff_oup_o             (vif.ff_oup_o),
         .ff_step_o            (vif.ff_step_o),
+        .ff_tile_id_dbg_o     (vif.ff_tile_id_dbg),
+        .ff_inner_id_dbg_o    (vif.ff_inner_id_dbg),
+        .ff_beat_id_dbg_o     (vif.ff_beat_id_dbg),
         .phase_mismatch_o     (vif.phase_mismatch_o)
     );
 

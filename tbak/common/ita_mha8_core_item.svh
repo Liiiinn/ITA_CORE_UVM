@@ -14,8 +14,9 @@ class ita_mha8_core_item extends uvm_sequence_item;
     tile_t       tile_f;
 
     ita_mha8_step_payload payload_by_step[step_e];
+    ita_mha8_step_payload payload_schedule[$];
     step_e step_order[$];
-    // Stage 10/11: payload_by_step is the stimulus contract for step-aware MHA8 flows.
+    // Stage 10/11: payload_schedule preserves CSV tile order; payload_by_step is the step summary view.
 
     requant_const_array_t head_eps_mult       [NumHeads];
     requant_const_array_t head_right_shift    [NumHeads];
@@ -100,9 +101,27 @@ class ita_mha8_core_item extends uvm_sequence_item;
         step_order.push_back(step);
     endfunction : add_step_to_order
 
+    function ita_mha8_step_payload create_schedule_payload(
+        step_e step,
+        int unsigned tile_id,
+        int unsigned inner_tile_id
+    );
+        ita_mha8_step_payload payload;
+
+        payload = ita_mha8_step_payload::type_id::create(
+            $sformatf("schedule_%0d_%s_t%0d_i%0d", payload_schedule.size(), step.name(), tile_id, inner_tile_id));
+        payload.configure_for_step(step);
+        payload.tile_id = tile_id;
+        payload.inner_tile_id = inner_tile_id;
+        payload_schedule.push_back(payload);
+
+        return payload;
+    endfunction : create_schedule_payload
+
     function void clear_payloads();
         step_order.delete();
         payload_by_step.delete();
+        payload_schedule.delete();
     endfunction : clear_payloads
 
     function void clear_requant_config();
@@ -319,8 +338,13 @@ class ita_mha8_core_item extends uvm_sequence_item;
         step_e row_step;
         step_e first_step;
         ita_mha8_step_payload payload;
+        ita_mha8_step_payload schedule_payload;
         ita_mha8_step_payload log_payload;
         bit warned_step_mismatch;
+        bit have_schedule_payload;
+        step_e schedule_step;
+        int unsigned schedule_tile_id;
+        int unsigned schedule_inner_tile_id;
 
         layer = layer_value;
         activation = activation_value;
@@ -330,6 +354,10 @@ class ita_mha8_core_item extends uvm_sequence_item;
         tile_f = tile_f_value;
         this.stream_vector_path = stream_vector_path;
         warned_step_mismatch = 1'b0;
+        have_schedule_payload = 1'b0;
+        schedule_step = Idle;
+        schedule_tile_id = 0;
+        schedule_inner_tile_id = 0;
         clear_payloads();
 
         fd = $fopen(stream_vector_path, "r");
@@ -386,6 +414,17 @@ class ita_mha8_core_item extends uvm_sequence_item;
             payload.step = row_step;
             add_step_to_order(row_step);
 
+            if (!have_schedule_payload ||
+                schedule_step != row_step ||
+                schedule_tile_id != tile_id ||
+                schedule_inner_tile_id != inner_tile_id) begin
+                schedule_payload = create_schedule_payload(row_step, tile_id, inner_tile_id);
+                schedule_step = row_step;
+                schedule_tile_id = tile_id;
+                schedule_inner_tile_id = inner_tile_id;
+                have_schedule_payload = 1'b1;
+            end
+
             if (payload_text.len() >= 2 &&
                 (payload_text.substr(0, 1) == "0x" || payload_text.substr(0, 1) == "0X")) begin
                 payload_hex = payload_text.substr(2, payload_text.len() - 1);
@@ -397,21 +436,27 @@ class ita_mha8_core_item extends uvm_sequence_item;
             case (kind)
                 "head_input": begin
                     payload.input_payload_by_head[head_id].push_back(inp_t'(payload_bits));
+                    schedule_payload.input_payload_by_head[head_id].push_back(inp_t'(payload_bits));
                 end
                 "head_weight": begin
                     payload.weight_payload_by_head[head_id].push_back(inp_weight_t'(payload_bits));
+                    schedule_payload.weight_payload_by_head[head_id].push_back(inp_weight_t'(payload_bits));
                 end
                 "head_bias": begin
                     payload.bias_payload_by_head[head_id].push_back(bias_t'(payload_bits));
+                    schedule_payload.bias_payload_by_head[head_id].push_back(bias_t'(payload_bits));
                 end
                 "ff_input": begin
                     payload.ff_input_payload.push_back(inp_t'(payload_bits));
+                    schedule_payload.ff_input_payload.push_back(inp_t'(payload_bits));
                 end
                 "ff_weight": begin
                     payload.ff_weight_payload.push_back(inp_weight_t'(payload_bits));
+                    schedule_payload.ff_weight_payload.push_back(inp_weight_t'(payload_bits));
                 end
                 "ff_bias": begin
                     payload.ff_bias_payload.push_back(bias_t'(payload_bits));
+                    schedule_payload.ff_bias_payload.push_back(bias_t'(payload_bits));
                 end
                 default: begin
                     `uvm_warning("CORE CSV", $sformatf("Skipping unsupported stream kind at line %0d: %s", line_no, kind))
@@ -425,13 +470,16 @@ class ita_mha8_core_item extends uvm_sequence_item;
             payload = get_payload(step_order[i]);
             payload.validate_complete();
         end
+        foreach (payload_schedule[i]) begin
+            payload_schedule[i].validate_complete();
+        end
 
         first_step = first_payload_step();
         log_payload = get_payload(first_step);
 
         `uvm_info("CORE CSV",
-            $sformatf("Loaded stream CSV %s: layer=%s first_step=%s steps=%0d head0 input=%0d weight=%0d bias=%0d",
-                stream_vector_path, layer.name(), first_step.name(), step_order.size(),
+            $sformatf("Loaded stream CSV %s: layer=%s first_step=%s steps=%0d schedule_segments=%0d head0 input=%0d weight=%0d bias=%0d",
+                stream_vector_path, layer.name(), first_step.name(), step_order.size(), payload_schedule.size(),
                   (log_payload == null) ? 0 : log_payload.input_payload_by_head[0].size(),
                 (log_payload == null) ? 0 : log_payload.weight_payload_by_head[0].size(),
                 (log_payload == null) ? 0 : log_payload.bias_payload_by_head[0].size()),

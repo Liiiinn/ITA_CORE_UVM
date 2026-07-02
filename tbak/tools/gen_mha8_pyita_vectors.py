@@ -158,17 +158,42 @@ def write_manifest(path: Path, manifest: dict[str, Any]) -> None:
         f.write("\n")
 
 
-def make_row(kind: str, head: int, beat: int, step: str, payload: int) -> dict[str, Any]:
+def make_row(
+    kind: str,
+    head: int,
+    tile_id: int,
+    inner_tile_id: int,
+    beat: int,
+    step: str,
+    payload: int,
+) -> dict[str, Any]:
     return {
         "kind": kind,
         "head_id": head,
-        "tile_id": 0,
-        "inner_tile_id": 0,
+        "tile_id": tile_id,
+        "inner_tile_id": inner_tile_id,
         "beat_id": beat,
         "step": step,
         "is_lockstep": 1,
         "payload": hex_payload(payload),
     }
+
+
+def native_tb_phase_group(step: str) -> tuple[int, int]:
+    mapping = {
+        "Q": (0, 0),
+        "K": (1, 0),
+        "V": (2, 0),
+        "QK": (3, 0),
+        "AV": (3, 1),
+        "OW": (4, 0),
+        "F1": (5, 0),
+        "F2": (6, 0),
+    }
+    try:
+        return mapping[step]
+    except KeyError as exc:
+        raise ValueError(f"Unsupported native ITA TB step: {step}") from exc
 
 
 def step_requant_column(step: str) -> int:
@@ -478,6 +503,16 @@ def main() -> int:
     parser.add_argument("--bias-beats", type=int, default=0, help="Number of bias beats emitted per head; 0 matches expected beats.")
     parser.add_argument("--expected-beats", type=int, default=0, help="Number of expected output beats emitted per head; 0 uses all Qp rows.")
     parser.add_argument("--tile-beats", type=int, default=256, help="Handshake beats in one 64x64/16 ITA output tile.")
+    parser.add_argument("--tile-s", type=int, default=1, help="DUT ctrl tile_s value used for ATTN/ATTNFF scheduling.")
+    parser.add_argument("--tile-e", type=int, default=1, help="DUT ctrl tile_e value used for ATTN/ATTNFF scheduling.")
+    parser.add_argument("--tile-p", type=int, default=1, help="DUT ctrl tile_p value used for ATTN/ATTNFF scheduling.")
+    parser.add_argument("--tile-f", type=int, default=1, help="DUT ctrl tile_f value used for ATTNFF scheduling.")
+    parser.add_argument(
+        "--activation",
+        choices=("Identity", "Relu", "Gelu"),
+        default="Identity",
+        help="Activation recorded in the manifest and passed through smoke to UVM.",
+    )
     parser.add_argument("--source-step", help="PyITA source step recorded in the manifest; defaults to --projection.")
     parser.add_argument("--dut-step", default="MatMul", help="DUT compare step used by the current UVM Linear path.")
     parser.add_argument("--input-file", help="Override projection input file name, e.g. Q.txt.")
@@ -528,7 +563,19 @@ def main() -> int:
 
     if args.heads <= 0 or args.heads > 8:
         raise ValueError("--heads must be in the range 1..8")
-    for name in ("input_lanes", "weight_lanes", "weight_row_width", "bias_lanes", "bias_bits", "output_lanes", "tile_beats"):
+    for name in (
+        "input_lanes",
+        "weight_lanes",
+        "weight_row_width",
+        "bias_lanes",
+        "bias_bits",
+        "output_lanes",
+        "tile_beats",
+        "tile_s",
+        "tile_e",
+        "tile_p",
+        "tile_f",
+    ):
         if getattr(args, name) <= 0:
             raise ValueError(f"--{name.replace('_', '-')} must be greater than zero")
     for name in ("weight_beats", "input_beats", "bias_beats", "expected_beats"):
@@ -551,6 +598,10 @@ def main() -> int:
     rows: list[dict[str, Any]] = []
     requant_rows: list[dict[str, Any]] = []
     per_head: list[dict[str, Any]] = [{"head_id": head, "steps": {}} for head in range(args.heads)] if is_multi_step else []
+    native_tb_stream_order = projection in ("ATTN", "ATTNFF")
+    tile_aware = native_tb_stream_order
+    head_stream_info: dict[tuple[str, int], dict[str, Any]] = {}
+    ff_stream_info: dict[str, dict[str, Any]] = {}
 
     for step_name in head_projections:
         step_lower = step_name.lower()
@@ -614,41 +665,42 @@ def main() -> int:
             )
             require_count(sources.expected_source_path, sources.expected_values, args.output_lanes * expected_beats)
 
-            for beat in range(weight_beats):
-                if is_multi_step:
-                    payload = pack_source_beat(
-                        sources.stream_weight_values, args.weight_lanes, 8, beat, weight_source_beats
-                    )
-                else:
-                    start = beat * args.weight_lanes
-                    payload = pack_lanes(sources.stream_weight_values[start : start + args.weight_lanes], 8)
-                rows.append(make_row("head_weight", head, beat, step_name, payload))
-
-            for beat in range(input_beats):
-                if is_multi_step:
-                    payload = pack_source_beat(sources.stream_input_values, args.input_lanes, 8, beat, input_source_beats)
-                else:
-                    start = beat * args.input_lanes
-                    payload = pack_lanes(sources.stream_input_values[start : start + args.input_lanes], 8)
-                rows.append(make_row("head_input", head, beat, step_name, payload))
-
-            for beat in range(bias_beats):
-                if sources.generated_zero_bias:
-                    source_beat = 0
-                elif bias_repeat == 1:
-                    source_beat = beat
-                else:
-                    group = beat // (args.tile_beats * bias_repeat)
-                    group_offset = beat % (args.tile_beats * bias_repeat)
-                    source_beat = group * args.tile_beats + (group_offset % args.tile_beats)
-                    if source_beat >= bias_source_beats:
-                        raise ValueError(
-                            f"Expanded bias beat {beat} maps outside source beats: "
-                            f"source_beat={source_beat} source_beats={bias_source_beats}"
+            if not tile_aware:
+                for beat in range(weight_beats):
+                    if is_multi_step:
+                        payload = pack_source_beat(
+                            sources.stream_weight_values, args.weight_lanes, 8, beat, weight_source_beats
                         )
-                start = source_beat * args.bias_lanes
-                payload = pack_lanes(sources.bias_values[start : start + args.bias_lanes], args.bias_bits)
-                rows.append(make_row("head_bias", head, beat, step_name, payload))
+                    else:
+                        start = beat * args.weight_lanes
+                        payload = pack_lanes(sources.stream_weight_values[start : start + args.weight_lanes], 8)
+                    rows.append(make_row("head_weight", head, 0, 0, beat, step_name, payload))
+
+                for beat in range(input_beats):
+                    if is_multi_step:
+                        payload = pack_source_beat(sources.stream_input_values, args.input_lanes, 8, beat, input_source_beats)
+                    else:
+                        start = beat * args.input_lanes
+                        payload = pack_lanes(sources.stream_input_values[start : start + args.input_lanes], 8)
+                    rows.append(make_row("head_input", head, 0, 0, beat, step_name, payload))
+
+                for beat in range(bias_beats):
+                    if sources.generated_zero_bias:
+                        source_beat = 0
+                    elif bias_repeat == 1:
+                        source_beat = beat
+                    else:
+                        group = beat // (args.tile_beats * bias_repeat)
+                        group_offset = beat % (args.tile_beats * bias_repeat)
+                        source_beat = group * args.tile_beats + (group_offset % args.tile_beats)
+                        if source_beat >= bias_source_beats:
+                            raise ValueError(
+                                f"Expanded bias beat {beat} maps outside source beats: "
+                                f"source_beat={source_beat} source_beats={bias_source_beats}"
+                            )
+                    start = source_beat * args.bias_lanes
+                    payload = pack_lanes(sources.bias_values[start : start + args.bias_lanes], args.bias_bits)
+                    rows.append(make_row("head_bias", head, 0, 0, beat, step_name, payload))
 
             expected_path = out_dir / f"{step_expected_prefix}{head}.txt"
             actual_path = out_dir / f"{step_actual_prefix}{head}.txt"
@@ -687,6 +739,98 @@ def main() -> int:
                 per_head[head]["steps"][step_name] = step_entry
             else:
                 per_head.append({"head_id": head, **step_entry})
+
+            if tile_aware:
+                head_stream_info[(step_name, head)] = {
+                    "sources": sources,
+                    "input_source_beats": input_source_beats,
+                    "weight_source_beats": weight_source_beats,
+                    "bias_source_beats": bias_source_beats,
+                    "input_cursor": 0,
+                    "weight_cursor": 0,
+                    "bias_cursor": 0,
+                }
+
+    def emit_head_segment(step_name: str, tile_id: int, inner_tile_id: int, beats: int | None = None) -> None:
+        segment_beats = args.tile_beats if beats is None else beats
+        for head in range(args.heads):
+            info = head_stream_info[(step_name, head)]
+            sources: StepSources = info["sources"]
+
+            for _ in range(segment_beats):
+                beat = info["weight_cursor"]
+                payload = pack_source_beat(
+                    sources.stream_weight_values,
+                    args.weight_lanes,
+                    8,
+                    beat,
+                    info["weight_source_beats"],
+                )
+                rows.append(make_row("head_weight", head, tile_id, inner_tile_id, beat, step_name, payload))
+                info["weight_cursor"] += 1
+
+            for _ in range(segment_beats):
+                beat = info["input_cursor"]
+                payload = pack_source_beat(
+                    sources.stream_input_values,
+                    args.input_lanes,
+                    8,
+                    beat,
+                    info["input_source_beats"],
+                )
+                rows.append(make_row("head_input", head, tile_id, inner_tile_id, beat, step_name, payload))
+                info["input_cursor"] += 1
+
+            for _ in range(segment_beats):
+                beat = info["bias_cursor"]
+                source_beat = 0 if sources.generated_zero_bias else beat
+                payload = pack_source_beat(
+                    sources.bias_values,
+                    args.bias_lanes,
+                    args.bias_bits,
+                    source_beat,
+                    info["bias_source_beats"],
+                )
+                rows.append(make_row("head_bias", head, tile_id, inner_tile_id, beat, step_name, payload))
+                info["bias_cursor"] += 1
+
+    def emit_attention_tile_schedule() -> None:
+        for step_name in ("Q", "K", "V"):
+            if step_name not in head_projections:
+                continue
+            for tile_id in range(args.tile_s * args.tile_p):
+                for inner_tile_id in range(args.tile_e):
+                    emit_head_segment(step_name, tile_id, inner_tile_id)
+
+        if "QK" in head_projections or "AV" in head_projections:
+            for softmax_tile in range(args.tile_s):
+                if "QK" in head_projections:
+                    for tile in range(args.tile_s):
+                        for inner_tile_id in range(args.tile_p):
+                            emit_head_segment("QK", softmax_tile * args.tile_s + tile, inner_tile_id)
+                if "AV" in head_projections:
+                    for tile in range(args.tile_p):
+                        for inner_tile_id in range(args.tile_s):
+                            emit_head_segment("AV", softmax_tile * args.tile_p + tile, inner_tile_id)
+
+        if "OW" in head_projections:
+            for tile_id in range(args.tile_s * args.tile_e):
+                for inner_tile_id in range(args.tile_p):
+                    emit_head_segment("OW", tile_id, inner_tile_id)
+
+    def emit_native_tb_attention_schedule() -> None:
+        head_beats = args.tile_beats * args.tile_s * args.tile_e * args.tile_p
+        for step_name in ("Q", "K", "V", "QK", "AV", "OW"):
+            if step_name not in head_projections:
+                continue
+            phase, group = native_tb_phase_group(step_name)
+            emit_head_segment(step_name, phase, group, head_beats)
+
+    if tile_aware:
+        if native_tb_stream_order:
+            emit_native_tb_attention_schedule()
+        else:
+            emit_attention_tile_schedule()
 
     extra_compare_entries: list[dict[str, Any]] = []
     if projection in ("ATTN", "ATTNFF"):
@@ -743,17 +887,18 @@ def main() -> int:
 
         require_count(sources.expected_source_path, sources.expected_values, args.output_lanes * expected_beats)
 
-        for beat in range(weight_beats):
-            payload = pack_source_beat(sources.weight_values, args.weight_lanes, 8, beat, weight_source_beats)
-            rows.append(make_row("ff_weight", 0, beat, step_name, payload))
+        if not tile_aware:
+            for beat in range(weight_beats):
+                payload = pack_source_beat(sources.weight_values, args.weight_lanes, 8, beat, weight_source_beats)
+                rows.append(make_row("ff_weight", 0, 0, 0, beat, step_name, payload))
 
-        for beat in range(input_beats):
-            payload = pack_source_beat(sources.input_values, args.input_lanes, 8, beat, input_source_beats)
-            rows.append(make_row("ff_input", 0, beat, step_name, payload))
+            for beat in range(input_beats):
+                payload = pack_source_beat(sources.input_values, args.input_lanes, 8, beat, input_source_beats)
+                rows.append(make_row("ff_input", 0, 0, 0, beat, step_name, payload))
 
-        for beat in range(bias_beats):
-            payload = pack_source_beat(sources.bias_values, args.bias_lanes, args.bias_bits, beat, bias_source_beats)
-            rows.append(make_row("ff_bias", 0, beat, step_name, payload))
+            for beat in range(bias_beats):
+                payload = pack_source_beat(sources.bias_values, args.bias_lanes, args.bias_bits, beat, bias_source_beats)
+                rows.append(make_row("ff_bias", 0, 0, 0, beat, step_name, payload))
 
         expected_path = out_dir / f"expected_{step_lower}.txt"
         actual_path = out_dir / f"actual_{step_lower}.txt"
@@ -782,6 +927,68 @@ def main() -> int:
             }
         )
 
+        if tile_aware:
+            ff_stream_info[step_name] = {
+                "sources": sources,
+                "input_source_beats": input_source_beats,
+                "weight_source_beats": weight_source_beats,
+                "bias_source_beats": bias_source_beats,
+                "input_cursor": 0,
+                "weight_cursor": 0,
+                "bias_cursor": 0,
+            }
+
+    def emit_ff_segment(step_name: str, tile_id: int, inner_tile_id: int, beats: int | None = None) -> None:
+        segment_beats = args.tile_beats if beats is None else beats
+        info = ff_stream_info[step_name]
+        sources: FfStepSources = info["sources"]
+
+        for _ in range(segment_beats):
+            beat = info["weight_cursor"]
+            payload = pack_source_beat(sources.weight_values, args.weight_lanes, 8, beat, info["weight_source_beats"])
+            rows.append(make_row("ff_weight", 0, tile_id, inner_tile_id, beat, step_name, payload))
+            info["weight_cursor"] += 1
+
+        for _ in range(segment_beats):
+            beat = info["input_cursor"]
+            payload = pack_source_beat(sources.input_values, args.input_lanes, 8, beat, info["input_source_beats"])
+            rows.append(make_row("ff_input", 0, tile_id, inner_tile_id, beat, step_name, payload))
+            info["input_cursor"] += 1
+
+        for _ in range(segment_beats):
+            beat = info["bias_cursor"]
+            payload = pack_source_beat(sources.bias_values, args.bias_lanes, args.bias_bits, beat, info["bias_source_beats"])
+            rows.append(make_row("ff_bias", 0, tile_id, inner_tile_id, beat, step_name, payload))
+            info["bias_cursor"] += 1
+
+    def emit_ff_tile_schedule() -> None:
+        if "F1" in ff_stream_info:
+            for tile_id in range(args.tile_s * args.tile_f):
+                for inner_tile_id in range(args.tile_e):
+                    emit_ff_segment("F1", tile_id, inner_tile_id)
+
+        if "F2" in ff_stream_info:
+            for tile_id in range(args.tile_s * args.tile_e):
+                for inner_tile_id in range(args.tile_f):
+                    emit_ff_segment("F2", tile_id, inner_tile_id)
+
+    def emit_native_tb_ff_schedule() -> None:
+        if "F1" in ff_stream_info:
+            phase, group = native_tb_phase_group("F1")
+            f1_beats = args.tile_beats * args.tile_s * args.tile_f * args.tile_e
+            emit_ff_segment("F1", phase, group, f1_beats)
+
+        if "F2" in ff_stream_info:
+            phase, group = native_tb_phase_group("F2")
+            f2_beats = args.tile_beats * args.tile_s * args.tile_e * args.tile_f
+            emit_ff_segment("F2", phase, group, f2_beats)
+
+    if tile_aware and ff_stream_info:
+        if native_tb_stream_order:
+            emit_native_tb_ff_schedule()
+        else:
+            emit_ff_tile_schedule()
+
     write_stream_csv(stream_path, rows)
     write_requant_csv(requant_path, requant_rows)
 
@@ -796,7 +1003,7 @@ def main() -> int:
     manifest = {
         "name": f"pyita_{projection_lower}_mha8_adapter",
         "layer": "Attention" if is_multi_step or args.dut_step == source_step else "Linear",
-        "activation": "Identity",
+        "activation": args.activation,
         "heads": args.heads,
         "step": projection if is_multi_step else args.dut_step,
         "stream": "per_head",
@@ -822,10 +1029,15 @@ def main() -> int:
         "stream_path": rel_to_core(stream_path, root),
         "requant_path": rel_to_core(requant_path, root),
         "actual_csv": rel_to_core(actual_csv_path, root),
-        "tile_s": 1,
-        "tile_e": 1,
-        "tile_p": 1,
-        "tile_f": 1,
+        "tile_s": args.tile_s,
+        "tile_e": args.tile_e,
+        "tile_p": args.tile_p,
+        "tile_f": args.tile_f,
+        "schedule": (
+            "native_tb_stream_order"
+            if native_tb_stream_order
+            else ("controller_tile_order" if tile_aware else "step_major")
+        ),
         "input_lanes": args.input_lanes,
         "weight_lanes": args.weight_lanes,
         "weight_row_width": args.weight_row_width,

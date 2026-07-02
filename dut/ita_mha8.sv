@@ -42,10 +42,16 @@ module ita_mha8
     output logic [NumHeads-1:0]     per_head_busy_o,
     output requant_oup_t            per_head_oup_o  [NumHeads],
     output step_e                   per_head_step_o [NumHeads],
+    output counter_t                per_head_tile_id_dbg_o  [NumHeads],
+    output counter_t                per_head_inner_id_dbg_o [NumHeads],
+    output counter_t                per_head_beat_id_dbg_o  [NumHeads],
 
     output logic                    sum_valid_o,
     input  logic                    sum_ready_i,
     output requant_oup_t            sum_oup_o,
+    output counter_t                sum_tile_id_dbg_o,
+    output counter_t                sum_inner_id_dbg_o,
+    output counter_t                sum_beat_id_dbg_o,
     input  logic                    ff_inp_valid_i,
     output logic                    ff_inp_ready_o,
     input  logic                    ff_inp_weight_valid_i,
@@ -60,6 +66,9 @@ module ita_mha8
     output logic                    ff_busy_o,
     output requant_oup_t            ff_oup_o,
     output step_e                   ff_step_o,
+    output counter_t                ff_tile_id_dbg_o,
+    output counter_t                ff_inner_id_dbg_o,
+    output counter_t                ff_beat_id_dbg_o,
     output logic                    phase_mismatch_o
 );
 
@@ -137,7 +146,10 @@ module ita_mha8
             .inp_weight_i      (inp_weight_i[h]       ),
             .inp_bias_i        (inp_bias_i[h]         ),
             .oup_o             (per_head_oup_o[h]     ),
-            .oup_step_o        (per_head_step_o[h]    )
+            .oup_step_o        (per_head_step_o[h]    ),
+            .oup_tile_id_dbg_o (per_head_tile_id_dbg_o[h] ),
+            .oup_inner_id_dbg_o(per_head_inner_id_dbg_o[h]),
+            .oup_beat_id_dbg_o (per_head_beat_id_dbg_o[h] )
         );
     end
 
@@ -152,9 +164,15 @@ module ita_mha8
         .eps_mult_i   (sum_eps_mult_i      ),
         .right_shift_i(sum_right_shift_i   ),
         .add_i        (sum_add_i           ),
+        .tile_id_dbg_i(per_head_tile_id_dbg_o[0] ),
+        .inner_id_dbg_i(per_head_inner_id_dbg_o[0]),
+        .beat_id_dbg_i(per_head_beat_id_dbg_o[0] ),
         .valid_o      (sum_valid_o         ),
         .ready_i      (sum_ready_i         ),
-        .oup_o        (sum_oup_o           )
+        .oup_o        (sum_oup_o           ),
+        .tile_id_dbg_o(sum_tile_id_dbg_o   ),
+        .inner_id_dbg_o(sum_inner_id_dbg_o ),
+        .beat_id_dbg_o(sum_beat_id_dbg_o   )
     );
 
     ita i_ffn (
@@ -174,7 +192,10 @@ module ita_mha8
         .inp_weight_i      (ff_inp_weight_i       ),
         .inp_bias_i        (ff_inp_bias_i         ),
         .oup_o             (ff_oup_o              ),
-        .oup_step_o        (ff_step_o             )
+        .oup_step_o        (ff_step_o             ),
+        .oup_tile_id_dbg_o (ff_tile_id_dbg_o      ),
+        .oup_inner_id_dbg_o(ff_inner_id_dbg_o     ),
+        .oup_beat_id_dbg_o (ff_beat_id_dbg_o      )
     );
 
     // pragma translate_off

@@ -8,6 +8,8 @@ param(
     [string]$VectorSource = "synthetic",
     [ValidateSet("Q", "K", "V", "QKV", "ATTN", "ATTNFF")]
     [string]$Projection = "Q",
+    [ValidateSet("Auto", "Identity", "Relu", "Gelu")]
+    [string]$Activation = "Auto",
     [string]$PyitaDir = "",
     [string]$Manifest = "",
     [string]$StreamName = "",
@@ -139,6 +141,7 @@ $TileS = 1
 $TileE = 1
 $TileP = 1
 $TileF = 1
+$ResolvedActivation = "Identity"
 if ([System.IO.Path]::GetFullPath($VectorOutDir) -eq [System.IO.Path]::GetFullPath($LoggerDir)) {
     $StreamPlusArg = "logger/$StreamName"
     if ($RequantName -ne "") {
@@ -177,6 +180,17 @@ if ($RunGenerateVectors) {
                 throw "Invalid tile dimensions derived from $PyitaCaseName"
             }
         }
+        if ($Activation -eq "Auto") {
+            if ($PyitaCaseName -match "_Relu") {
+                $ResolvedActivation = "Relu"
+            } elseif ($PyitaCaseName -match "_Gelu") {
+                $ResolvedActivation = "Gelu"
+            } else {
+                $ResolvedActivation = "Identity"
+            }
+        } else {
+            $ResolvedActivation = $Activation
+        }
         $genArgs = @(
             "--pyita-dir", $ResolvedPyitaDir,
             "--projection", $Projection,
@@ -185,7 +199,12 @@ if ($RunGenerateVectors) {
             "--stream-name", $StreamName,
             "--requant-name", $RequantName,
             "--manifest-name", (Split-Path -Leaf $ManifestPath),
-            "--dut-step", $DutStep
+            "--dut-step", $DutStep,
+            "--tile-s", [string]$TileS,
+            "--tile-e", [string]$TileE,
+            "--tile-p", [string]$TileP,
+            "--tile-f", [string]$TileF,
+            "--activation", $ResolvedActivation
         )
         if ($Projection -ne "QKV" -and $Projection -ne "ATTN" -and $Projection -ne "ATTNFF") {
             $genArgs += @("--source-step", $Projection)
@@ -225,6 +244,7 @@ if (($IsLinearDirected -or $IsQDirected -or $IsQkvDirected -or $IsAttnDirected) 
         $vsimArgs += "+ITA_TILE_E=$TileE"
         $vsimArgs += "+ITA_TILE_P=$TileP"
         $vsimArgs += "+ITA_TILE_F=$TileF"
+        $vsimArgs += "+ITA_ACTIVATION=$ResolvedActivation"
     }
 }
 

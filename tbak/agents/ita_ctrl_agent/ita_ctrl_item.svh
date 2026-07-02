@@ -23,6 +23,9 @@ class ita_ctrl_item extends uvm_sequence_item;
         // Stage 2: set ctrl.layer, ctrl.activation, tile_s/e/p/f, and ctrl.start in the sequence or item helper.
         ctrl.layer = Attention;
         ctrl.activation = Identity;
+        ctrl.activation_requant_mult = 8'd1;
+        ctrl.activation_requant_shift = 8'd0;
+        ctrl.activation_requant_add = '0;
         ctrl.tile_s = 1;
         ctrl.tile_e = 1;
         ctrl.tile_p = 1;

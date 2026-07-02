@@ -30,13 +30,19 @@ module ita
     input  bias_t        inp_bias_i        ,
     // Output
     output requant_oup_t oup_o             ,
-    output step_e        oup_step_o
+    output step_e        oup_step_o        ,
+    output counter_t     oup_tile_id_dbg_o ,
+    output counter_t     oup_inner_id_dbg_o,
+    output counter_t     oup_beat_id_dbg_o
 );
 
     step_e  step, step_q1, step_q2, step_q3, step_q4, step_q5, step_q6, step_q7, step_q8, step_q9, step_q10;
     logic   calc_en, calc_en_q1, calc_en_q2, calc_en_q3, calc_en_q4, calc_en_q5, calc_en_q6, calc_en_q7, calc_en_q8, calc_en_q9, calc_en_q10;
     logic   first_inner_tile, first_inner_tile_q1, first_inner_tile_q2, first_inner_tile_q3;
     logic   last_inner_tile, last_inner_tile_q1, last_inner_tile_q2, last_inner_tile_q3, last_inner_tile_q4, last_inner_tile_q5, last_inner_tile_q6, last_inner_tile_q7, last_inner_tile_q8, last_inner_tile_q9, last_inner_tile_q10;
+    counter_t tile_id_dbg, tile_id_dbg_q1, tile_id_dbg_q2, tile_id_dbg_q3, tile_id_dbg_q4, tile_id_dbg_q5, tile_id_dbg_q6, tile_id_dbg_q7, tile_id_dbg_q8, tile_id_dbg_q9, tile_id_dbg_q10;
+    counter_t inner_id_dbg, inner_id_dbg_q1, inner_id_dbg_q2, inner_id_dbg_q3, inner_id_dbg_q4, inner_id_dbg_q5, inner_id_dbg_q6, inner_id_dbg_q7, inner_id_dbg_q8, inner_id_dbg_q9, inner_id_dbg_q10;
+    counter_t beat_id_dbg, beat_id_dbg_q1, beat_id_dbg_q2, beat_id_dbg_q3, beat_id_dbg_q4, beat_id_dbg_q5, beat_id_dbg_q6, beat_id_dbg_q7, beat_id_dbg_q8, beat_id_dbg_q9, beat_id_dbg_q10;
 
     logic         weight_valid, weight_ready;
     inp_t         inp, inp_stream_soft;
@@ -56,6 +62,13 @@ module ita
     logic [$bits(step_e)-1:0] step_to_fifo, step_from_fifo;
     logic                    step_fifo_full, step_fifo_empty;
     fifo_usage_t             step_fifo_usage;
+    counter_t                tile_id_to_fifo, tile_id_from_fifo;
+    counter_t                inner_id_to_fifo, inner_id_from_fifo;
+    counter_t                beat_id_to_fifo, beat_id_from_fifo;
+    logic                    tile_id_fifo_full, tile_id_fifo_empty;
+    logic                    inner_id_fifo_full, inner_id_fifo_empty;
+    logic                    beat_id_fifo_full, beat_id_fifo_empty;
+    fifo_usage_t             tile_id_fifo_usage, inner_id_fifo_usage, beat_id_fifo_usage;
 
     // Softmax signals
     logic pop_softmax_fifo;
@@ -106,7 +119,39 @@ module ita
             step_q3               <= Idle;
             step_q2               <= Idle;
             step_q1               <= Idle;
+            tile_id_dbg_q10       <= '0;
+            tile_id_dbg_q9        <= '0;
+            tile_id_dbg_q8        <= '0;
+            tile_id_dbg_q7        <= '0;
+            tile_id_dbg_q6        <= '0;
+            tile_id_dbg_q5        <= '0;
+            tile_id_dbg_q4        <= '0;
+            tile_id_dbg_q3        <= '0;
+            tile_id_dbg_q2        <= '0;
+            tile_id_dbg_q1        <= '0;
+            inner_id_dbg_q10      <= '0;
+            inner_id_dbg_q9       <= '0;
+            inner_id_dbg_q8       <= '0;
+            inner_id_dbg_q7       <= '0;
+            inner_id_dbg_q6       <= '0;
+            inner_id_dbg_q5       <= '0;
+            inner_id_dbg_q4       <= '0;
+            inner_id_dbg_q3       <= '0;
+            inner_id_dbg_q2       <= '0;
+            inner_id_dbg_q1       <= '0;
+            beat_id_dbg_q10       <= '0;
+            beat_id_dbg_q9        <= '0;
+            beat_id_dbg_q8        <= '0;
+            beat_id_dbg_q7        <= '0;
+            beat_id_dbg_q6        <= '0;
+            beat_id_dbg_q5        <= '0;
+            beat_id_dbg_q4        <= '0;
+            beat_id_dbg_q3        <= '0;
+            beat_id_dbg_q2        <= '0;
+            beat_id_dbg_q1        <= '0;
             activation_q8         <= Identity;
+            activation_q10        <= Identity;
+            activation_q9         <= Identity;
             activation_q7         <= Identity;
             activation_q6         <= Identity;
             activation_q5         <= Identity;
@@ -148,6 +193,36 @@ module ita
             step_q3               <= step_q2;
             step_q2               <= step_q1;
             step_q1               <= step;
+            tile_id_dbg_q10       <= tile_id_dbg_q9;
+            tile_id_dbg_q9        <= tile_id_dbg_q8;
+            tile_id_dbg_q8        <= tile_id_dbg_q7;
+            tile_id_dbg_q7        <= tile_id_dbg_q6;
+            tile_id_dbg_q6        <= tile_id_dbg_q5;
+            tile_id_dbg_q5        <= tile_id_dbg_q4;
+            tile_id_dbg_q4        <= tile_id_dbg_q3;
+            tile_id_dbg_q3        <= tile_id_dbg_q2;
+            tile_id_dbg_q2        <= tile_id_dbg_q1;
+            tile_id_dbg_q1        <= tile_id_dbg;
+            inner_id_dbg_q10      <= inner_id_dbg_q9;
+            inner_id_dbg_q9       <= inner_id_dbg_q8;
+            inner_id_dbg_q8       <= inner_id_dbg_q7;
+            inner_id_dbg_q7       <= inner_id_dbg_q6;
+            inner_id_dbg_q6       <= inner_id_dbg_q5;
+            inner_id_dbg_q5       <= inner_id_dbg_q4;
+            inner_id_dbg_q4       <= inner_id_dbg_q3;
+            inner_id_dbg_q3       <= inner_id_dbg_q2;
+            inner_id_dbg_q2       <= inner_id_dbg_q1;
+            inner_id_dbg_q1       <= inner_id_dbg;
+            beat_id_dbg_q10       <= beat_id_dbg_q9;
+            beat_id_dbg_q9        <= beat_id_dbg_q8;
+            beat_id_dbg_q8        <= beat_id_dbg_q7;
+            beat_id_dbg_q7        <= beat_id_dbg_q6;
+            beat_id_dbg_q6        <= beat_id_dbg_q5;
+            beat_id_dbg_q5        <= beat_id_dbg_q4;
+            beat_id_dbg_q4        <= beat_id_dbg_q3;
+            beat_id_dbg_q3        <= beat_id_dbg_q2;
+            beat_id_dbg_q2        <= beat_id_dbg_q1;
+            beat_id_dbg_q1        <= beat_id_dbg;
             activation_q10        <= activation_q9;
             activation_q9         <= activation_q8;
             activation_q8         <= activation_q7;
@@ -183,7 +258,13 @@ module ita
 
     assign oup_o      = valid_o ? data_from_fifo : '0;
     assign oup_step_o = valid_o ? step_e'(step_from_fifo) : Idle;
+    assign oup_tile_id_dbg_o  = valid_o ? tile_id_from_fifo : '0;
+    assign oup_inner_id_dbg_o = valid_o ? inner_id_from_fifo : '0;
+    assign oup_beat_id_dbg_o  = valid_o ? beat_id_from_fifo : '0;
     assign step_to_fifo = step_q10;
+    assign tile_id_to_fifo = tile_id_dbg_q10;
+    assign inner_id_to_fifo = inner_id_dbg_q10;
+    assign beat_id_to_fifo = beat_id_dbg_q10;
 
     ita_controller i_controller (
         .clk_i                (clk_i              ),
@@ -204,6 +285,9 @@ module ita
         .calc_en_o            (calc_en            ),
         .first_inner_tile_o   (first_inner_tile   ),
         .last_inner_tile_o    (last_inner_tile    ),
+        .tile_id_dbg_o        (tile_id_dbg        ),
+        .inner_tile_id_dbg_o  (inner_id_dbg       ),
+        .beat_id_dbg_o        (beat_id_dbg        ),
         .busy_o               (busy_o             )
     );
 
@@ -304,8 +388,8 @@ module ita
     ita_activation i_activation (
         .clk_i           (clk_i        ),
         .rst_ni          (rst_ni       ),
-        .activation_i    (activation_q7),
-        .activation_q2_i (activation_q9),
+        .activation_i    ((step_q7 == F1) ? activation_q7 : Identity),
+        .activation_q2_i ((step_q9 == F1) ? activation_q9 : Identity),
         .calc_en_i       (calc_en_q6 && last_inner_tile_q6),
         .calc_en_q_i     (calc_en_q7 && last_inner_tile_q7),
         .b_i             (ctrl_i.gelu_b),
@@ -378,6 +462,60 @@ module ita
         .push_i    (push_to_fifo  ),
         .data_o    (step_from_fifo),
         .pop_i     (pop_from_fifo )
+    );
+
+    fifo_v3 #(
+        .FALL_THROUGH(1'b0             ),
+        .DATA_WIDTH  ($bits(counter_t) ),
+        .DEPTH       (FifoDepth        )
+    ) i_tile_id_fifo (
+        .clk_i     (clk_i             ),
+        .rst_ni    (rst_ni            ),
+        .flush_i   (1'b0              ),
+        .testmode_i(1'b0              ),
+        .full_o    (tile_id_fifo_full ),
+        .empty_o   (tile_id_fifo_empty),
+        .usage_o   (tile_id_fifo_usage),
+        .data_i    (tile_id_to_fifo   ),
+        .push_i    (push_to_fifo      ),
+        .data_o    (tile_id_from_fifo ),
+        .pop_i     (pop_from_fifo     )
+    );
+
+    fifo_v3 #(
+        .FALL_THROUGH(1'b0              ),
+        .DATA_WIDTH  ($bits(counter_t)  ),
+        .DEPTH       (FifoDepth         )
+    ) i_inner_id_fifo (
+        .clk_i     (clk_i              ),
+        .rst_ni    (rst_ni             ),
+        .flush_i   (1'b0               ),
+        .testmode_i(1'b0               ),
+        .full_o    (inner_id_fifo_full ),
+        .empty_o   (inner_id_fifo_empty),
+        .usage_o   (inner_id_fifo_usage),
+        .data_i    (inner_id_to_fifo   ),
+        .push_i    (push_to_fifo       ),
+        .data_o    (inner_id_from_fifo ),
+        .pop_i     (pop_from_fifo      )
+    );
+
+    fifo_v3 #(
+        .FALL_THROUGH(1'b0             ),
+        .DATA_WIDTH  ($bits(counter_t) ),
+        .DEPTH       (FifoDepth        )
+    ) i_beat_id_fifo (
+        .clk_i     (clk_i             ),
+        .rst_ni    (rst_ni            ),
+        .flush_i   (1'b0              ),
+        .testmode_i(1'b0              ),
+        .full_o    (beat_id_fifo_full ),
+        .empty_o   (beat_id_fifo_empty),
+        .usage_o   (beat_id_fifo_usage),
+        .data_i    (beat_id_to_fifo   ),
+        .push_i    (push_to_fifo      ),
+        .data_o    (beat_id_from_fifo ),
+        .pop_i     (pop_from_fifo     )
     );
 
     ita_weight_controller i_weight_controller (

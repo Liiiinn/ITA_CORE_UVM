@@ -6,6 +6,8 @@ class ita_mha8_step_payload extends uvm_object;
 
     step_e step;
     bit    enabled;
+    int unsigned tile_id;
+    int unsigned inner_tile_id;
     bit drive_head_streams;
     bit expect_head_output;
     bit expect_sum_output;
@@ -28,6 +30,8 @@ class ita_mha8_step_payload extends uvm_object;
     function void clear();
         step = Idle;
         enabled = 1'b0;
+        tile_id = 0;
+        inner_tile_id = 0;
         drive_head_streams = 1'b0;
         expect_head_output = 1'b0;
         expect_sum_output  = 1'b0;

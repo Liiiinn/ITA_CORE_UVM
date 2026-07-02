@@ -53,15 +53,18 @@ interface ita_mha8_if
     logic [NumHeads-1:0]     per_head_busy_o;
     requant_oup_t            per_head_oup_o  [NumHeads];
     step_e                   per_head_step_o [NumHeads];
+    counter_t                per_head_tile_id_dbg  [NumHeads];
+    counter_t                per_head_inner_id_dbg [NumHeads];
+    counter_t                per_head_beat_id_dbg  [NumHeads];
     // Stage 8: add head0 output backpressure stability assertion after output ready driving exists.
 
     logic                    sum_valid_o;
     logic                    sum_ready_i;
     requant_oup_t            sum_oup_o;
     step_e                   sum_step_dbg;
-    int unsigned             sum_tile_id_dbg;
-    int unsigned             sum_inner_id_dbg;
-    int unsigned             sum_beat_id_dbg;
+    counter_t                sum_tile_id_dbg;
+    counter_t                sum_inner_id_dbg;
+    counter_t                sum_beat_id_dbg;
     // Stage 11: add sum output assertions and monitor hooks after heads 0-7 are enabled.
 
     logic                    ff_inp_valid_i;
@@ -94,6 +97,9 @@ interface ita_mha8_if
     logic                    ff_busy_o;
     requant_oup_t            ff_oup_o;
     step_e                   ff_step_o;
+    counter_t                ff_tile_id_dbg;
+    counter_t                ff_inner_id_dbg;
+    counter_t                ff_beat_id_dbg;
     logic                    phase_mismatch_o;
     // Stage 11: add feed-forward stream assertions after the FF path is added to active tests.
 

@@ -28,6 +28,9 @@ module ita_controller
     output logic     calc_en_o            ,
     output logic     first_inner_tile_o   ,
     output logic     last_inner_tile_o    ,
+    output counter_t tile_id_dbg_o        ,
+    output counter_t inner_tile_id_dbg_o  ,
+    output counter_t beat_id_dbg_o        ,
     output logic     busy_o
 );
 
@@ -43,6 +46,9 @@ module ita_controller
 
     assign step_o    = step_q;
     assign busy_o    = busy_q;
+    assign tile_id_dbg_o       = tile_q;
+    assign inner_tile_id_dbg_o = inner_tile_q;
+    assign beat_id_dbg_o       = count_q;
 
     always_comb begin
         count_d            = count_q;

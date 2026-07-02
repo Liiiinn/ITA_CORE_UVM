@@ -96,7 +96,9 @@ class ita_stream_monitor extends uvm_monitor;
             ITA_STREAM_HEAD_OUTPUT: begin
                 tr.oup = cfg.vif.per_head_oup_o[cfg.head_id];
                 tr.step = cfg.vif.per_head_step_o[cfg.head_id];
-                tr.beat_id = sample_count;
+                tr.tile_id = cfg.vif.per_head_tile_id_dbg[cfg.head_id];
+                tr.inner_tile_id = cfg.vif.per_head_inner_id_dbg[cfg.head_id];
+                tr.beat_id = cfg.vif.per_head_beat_id_dbg[cfg.head_id];
             end
             ITA_STREAM_SUM_OUTPUT: begin
                 tr.oup = cfg.vif.sum_oup_o;
@@ -132,7 +134,9 @@ class ita_stream_monitor extends uvm_monitor;
             ITA_STREAM_FF_OUTPUT: begin
                 tr.oup = cfg.vif.ff_oup_o;
                 tr.step = cfg.vif.ff_step_o;
-                tr.beat_id = sample_count;
+                tr.tile_id = cfg.vif.ff_tile_id_dbg;
+                tr.inner_tile_id = cfg.vif.ff_inner_id_dbg;
+                tr.beat_id = cfg.vif.ff_beat_id_dbg;
             end
         endcase
         // Stage 7: write sampled output transactions to logger through ap.

@@ -18,6 +18,8 @@ class ita_mha8_attn_directed_test extends ita_mha8_base_test;
         int unsigned tile_e;
         int unsigned tile_p;
         int unsigned tile_f;
+        string activation_name;
+        activation_e activation_value;
 
         phase.raise_objection(this);
 
@@ -35,7 +37,18 @@ class ita_mha8_attn_directed_test extends ita_mha8_base_test;
         void'($value$plusargs("ITA_TILE_P=%d", tile_p));
         void'($value$plusargs("ITA_TILE_F=%d", tile_f));
 
-        core.load_stream_csv(stream_path, Attention, Idle, Identity, tile_s, tile_e, tile_p, tile_f);
+        activation_value = Identity;
+        if ($value$plusargs("ITA_ACTIVATION=%s", activation_name)) begin
+            case (activation_name)
+                "Identity", "identity": activation_value = Identity;
+                "Relu",     "relu":     activation_value = Relu;
+                "Gelu",     "gelu":     activation_value = Gelu;
+                default:
+                    `uvm_fatal("ATTN_TEST", $sformatf("Unsupported ITA_ACTIVATION=%s", activation_name))
+            endcase
+        end
+
+        core.load_stream_csv(stream_path, Attention, Idle, activation_value, tile_s, tile_e, tile_p, tile_f);
         if ($value$plusargs("ITA_REQUANT_CSV=%s", requant_path))
             core.load_requant_csv(requant_path);
 

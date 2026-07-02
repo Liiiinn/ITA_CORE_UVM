@@ -33,16 +33,14 @@ class ita_mha8_vsequence extends uvm_sequence;
         ctrl_seq.ctrl = make_ctrl_item(core, Attention, first_attention_step());
         ctrl_seq.start(p_sequencer.ctrl_sqr);
 
-        foreach (core.step_order[i]) begin
-            step_e step;
+        foreach (core.payload_schedule[i]) begin
             ita_mha8_step_payload payload;
 
-            step = core.step_order[i];
+            payload = core.payload_schedule[i];
 
-            if (!is_attention_step(step))
+            if (!is_attention_step(payload.step))
                 continue;
 
-            payload = core.get_payload(step);
             if (payload.drive_head_streams)
                 send_step_payload(payload);
         end
@@ -55,16 +53,14 @@ class ita_mha8_vsequence extends uvm_sequence;
         ctrl_seq.ctrl = make_ctrl_item(core, Feedforward, first_ff_step());
         ctrl_seq.start(p_sequencer.ctrl_sqr);
 
-        foreach (core.step_order[i]) begin
-            step_e step;
+        foreach (core.payload_schedule[i]) begin
             ita_mha8_step_payload payload;
 
-            step = core.step_order[i];
+            payload = core.payload_schedule[i];
 
-            if (!is_ff_step(step))
+            if (!is_ff_step(payload.step))
                 continue;
 
-            payload = core.get_payload(step);
             if (payload.drive_ff_streams)
                 send_ff_payload(payload);
         end
@@ -109,8 +105,11 @@ class ita_mha8_vsequence extends uvm_sequence;
             ita_mha8_step_payload payload;
 
             payload = core.get_payload(core.step_order[i]);
-            if (payload.expect_sum_output)
-                return payload.input_payload_by_head[0].size();
+            if (payload.expect_sum_output) begin
+                if (core.tile_p == 0)
+                    return payload.input_payload_by_head[0].size();
+                return payload.input_payload_by_head[0].size() / core.tile_p;
+            end
         end
 
         return 0;
@@ -228,15 +227,19 @@ class ita_mha8_vsequence extends uvm_sequence;
         step_e ctrl_step
     );
         ita_ctrl_item ctrl;
+        int unsigned activation_requant_idx;
         ctrl = ita_ctrl_item::type_id::create("ctrl");
 
         ctrl.ctrl.layer = layer_value;
-        ctrl.ctrl.activation = core.activation;
+        ctrl.ctrl.activation = (layer_value == Feedforward) ? core.activation : Identity;
         ctrl.ctrl.tile_s = core.tile_s;
         ctrl.ctrl.tile_e = core.tile_e;
         ctrl.ctrl.tile_p = core.tile_p;
         ctrl.ctrl.tile_f = core.tile_f;
         ctrl.ctrl.start = 1'b1;
+        ctrl.ctrl.activation_requant_mult  = 8'd1;
+        ctrl.ctrl.activation_requant_shift = 8'd0;
+        ctrl.ctrl.activation_requant_add   = '0;
 
         if (core.has_requant_config) begin
             for (int unsigned h = 0; h < 8; h++) begin
@@ -250,6 +253,13 @@ class ita_mha8_vsequence extends uvm_sequence;
             ctrl.ff_eps_mult     = core.ff_eps_mult;
             ctrl.ff_right_shift  = core.ff_right_shift;
             ctrl.ff_add          = core.ff_add;
+
+            if (layer_value == Feedforward && core.activation != Identity) begin
+                activation_requant_idx = ctrl.requant_index_for_step(F1);
+                ctrl.ctrl.activation_requant_mult  = core.ff_eps_mult[activation_requant_idx];
+                ctrl.ctrl.activation_requant_shift = core.ff_right_shift[activation_requant_idx];
+                ctrl.ctrl.activation_requant_add   = core.ff_add[activation_requant_idx];
+            end
         end else begin
             ctrl.set_all_heads_identity_requant_for_step(ctrl_step);
             ctrl.set_ff_identity_requant_for_step(ctrl_step);
@@ -278,8 +288,8 @@ class ita_mha8_vsequence extends uvm_sequence;
 
         tr.kind = kind;
         tr.head_id = head_id;
-        tr.tile_id = 0;
-        tr.inner_tile_id = inner_tile_id;
+        tr.tile_id = payload.tile_id;
+        tr.inner_tile_id = payload.inner_tile_id;
         tr.beat_id = beat_id;
         tr.is_lockstep = is_lockstep;
         tr.step = payload.step;
