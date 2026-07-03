@@ -927,13 +927,22 @@ def main() -> int:
             expected_beats = len(sources.expected_values) // args.output_lanes
         input_beats = args.input_beats
         if input_beats == 0:
-            input_beats = expected_beats
+            input_beats = input_source_beats
         weight_beats = args.weight_beats
         if weight_beats == 0:
-            weight_beats = expected_beats
+            weight_beats = weight_source_beats
         bias_beats = args.bias_beats
         if bias_beats == 0:
-            bias_beats = expected_beats
+            bias_beats = max(input_beats, weight_beats)
+
+        if bias_beats < bias_source_beats:
+            raise ValueError(
+                f"Requested FF bias beats ({bias_beats}) are fewer than source bias beats ({bias_source_beats})"
+            )
+        if (bias_beats % bias_source_beats) != 0:
+            raise ValueError(
+                f"FF bias beats ({bias_beats}) must be an integer multiple of source bias beats ({bias_source_beats})"
+            )
 
         require_count(sources.expected_source_path, sources.expected_values, args.output_lanes * expected_beats)
 

@@ -20,7 +20,10 @@ class ita_mha8_vsequence extends uvm_sequence;
                 send_attention_phase();
                 wait_attention_sum_complete();
             join
-            send_feedforward_phase();
+            fork
+                send_feedforward_phase();
+                wait_feedforward_complete();
+            join
         end else begin
             send_attention_phase();
         end
@@ -151,6 +154,71 @@ class ita_mha8_vsequence extends uvm_sequence;
             end
         end
     endtask : wait_attention_sum_complete
+
+    function bit ff_output_segment(ita_mha8_step_payload payload);
+        if (!payload.expect_ff_output)
+            return 1'b0;
+
+        case (payload.step)
+            F1: return core.tile_e != 0 && payload.inner_tile_id == core.tile_e - 1;
+            F2: return core.tile_f != 0 && payload.inner_tile_id == core.tile_f - 1;
+            default: return 1'b0;
+        endcase
+    endfunction : ff_output_segment
+
+    function int unsigned expected_ff_output_beats();
+        int unsigned beats;
+        int unsigned output_beats_per_segment;
+
+        beats = 0;
+        output_beats_per_segment = M * M / N;
+        foreach (core.payload_schedule[i]) begin
+            ita_mha8_step_payload payload;
+
+            payload = core.payload_schedule[i];
+            if (ff_output_segment(payload))
+                beats += output_beats_per_segment;
+        end
+
+        return beats;
+    endfunction : expected_ff_output_beats
+
+    task wait_feedforward_complete();
+        int unsigned expected_beats;
+        int unsigned seen_beats;
+        int unsigned idle_cycles;
+
+        expected_beats = expected_ff_output_beats();
+        if (expected_beats == 0)
+            return;
+
+        if (p_sequencer.vif == null)
+            `uvm_fatal("VSEQ", "Virtual sequencer vif is not set; cannot wait for FF output completion")
+
+        seen_beats = 0;
+        idle_cycles = 0;
+
+        while (seen_beats < expected_beats) begin
+            @(posedge p_sequencer.vif.clk_i);
+
+            if (!p_sequencer.vif.rst_ni) begin
+                idle_cycles = 0;
+                continue;
+            end
+
+            if (p_sequencer.vif.ff_valid_o && p_sequencer.vif.ff_ready_i) begin
+                seen_beats++;
+                idle_cycles = 0;
+            end else begin
+                idle_cycles++;
+                if (idle_cycles > 1000000) begin
+                    `uvm_fatal("VSEQ",
+                        $sformatf("Timeout waiting for FF output completion: seen=%0d expected=%0d",
+                            seen_beats, expected_beats))
+                end
+            end
+        end
+    endtask : wait_feedforward_complete
 
     task send_head_streams(ita_mha8_step_payload payload, int unsigned head_id);
         fork
