@@ -245,8 +245,6 @@ class ita_mha8_scoreboard extends uvm_component;
         if (!output_total_by_step.exists(stp_key))
             output_total_by_step[stp_key] = 0;
         output_total_by_step[stp_key]++;
-
-        check_output_order_rule(tr);
     endfunction : record_output_transaction
 
     function string output_order_key(ita_stream_item tr);
@@ -322,15 +320,20 @@ class ita_mha8_scoreboard extends uvm_component;
             Q, K, V:
                 is_output_inner_legal = (tr.inner_tile_id == ((tile_e == 0) ? 0 : tile_e - 1));
             QK:
-                is_output_inner_legal = (tr.tile_id < tile_s * tile_s && tr.inner_tile_id < tile_p);
+                is_output_inner_legal = (tr.tile_id < tile_s * tile_s &&
+                    tr.inner_tile_id == ((tile_p == 0) ? 0 : tile_p - 1));
             AV:
-                is_output_inner_legal = (tr.tile_id < tile_s * tile_p && tr.inner_tile_id < tile_s);
+                is_output_inner_legal = (tr.tile_id < tile_s * tile_p &&
+                    tr.inner_tile_id == ((tile_s == 0) ? 0 : tile_s - 1));
             OW:
-                is_output_inner_legal = (tr.tile_id < tile_s * tile_e && tr.inner_tile_id < tile_p);
+                is_output_inner_legal = (tr.tile_id < tile_s * tile_e &&
+                    tr.inner_tile_id == ((tile_p == 0) ? 0 : tile_p - 1));
             F1:
-                is_output_inner_legal = (tr.tile_id < tile_s * tile_f && tr.inner_tile_id < tile_e);
+                is_output_inner_legal = (tr.tile_id < tile_s * tile_f &&
+                    tr.inner_tile_id == ((tile_e == 0) ? 0 : tile_e - 1));
             F2:
-                is_output_inner_legal = (tr.tile_id < tile_s * tile_e && tr.inner_tile_id < tile_f);
+                is_output_inner_legal = (tr.tile_id < tile_s * tile_e &&
+                    tr.inner_tile_id == ((tile_f == 0) ? 0 : tile_f - 1));
             MatMul:
                 is_output_inner_legal = 1'b1;
             default: begin end
@@ -470,7 +473,10 @@ class ita_mha8_scoreboard extends uvm_component;
         super.report_phase(phase);
         report_transaction_summary();
         check_source_count_rules();
-        check_output_count_rules();
+        // Offline manifest compare owns full output order/count correctness.
+        // The DUT debug metadata currently exposes local controller tile ids,
+        // which is enough for online legality checks but not for reconstructing
+        // the full QK/AV softmax-loop segment order.
     endfunction : report_phase
 
     function void check_source_count_rules();
@@ -499,15 +505,15 @@ class ita_mha8_scoreboard extends uvm_component;
             Q, K, V:
                 expected_output_segment_count = tile_s * tile_p;
             QK:
-                expected_output_segment_count = tile_s * tile_s * tile_p;
+                expected_output_segment_count = tile_s * tile_s;
             AV:
-                expected_output_segment_count = tile_s * tile_p * tile_s;
+                expected_output_segment_count = tile_s * tile_p;
             OW:
-                expected_output_segment_count = tile_s * tile_e * tile_p;
+                expected_output_segment_count = tile_s * tile_e;
             F1:
-                expected_output_segment_count = tile_s * tile_f * tile_e;
+                expected_output_segment_count = tile_s * tile_f;
             F2:
-                expected_output_segment_count = tile_s * tile_e * tile_f;
+                expected_output_segment_count = tile_s * tile_e;
             default: begin end
         endcase
     endfunction : expected_output_segment_count
@@ -532,36 +538,36 @@ class ita_mha8_scoreboard extends uvm_component;
             QK: begin
                 if (tile_s == 0 || tile_p == 0)
                     return;
-                softmax_tile = segment_index / (tile_s * tile_p);
-                rem = segment_index % (tile_s * tile_p);
-                tile_id = softmax_tile * tile_s + (rem / tile_p);
-                inner_tile_id = rem % tile_p;
+                softmax_tile = segment_index / tile_s;
+                rem = segment_index % tile_s;
+                tile_id = softmax_tile * tile_s + rem;
+                inner_tile_id = tile_p - 1;
             end
             AV: begin
                 if (tile_p == 0 || tile_s == 0)
                     return;
-                softmax_tile = segment_index / (tile_p * tile_s);
-                rem = segment_index % (tile_p * tile_s);
-                tile_id = softmax_tile * tile_p + (rem / tile_s);
-                inner_tile_id = rem % tile_s;
+                softmax_tile = segment_index / tile_p;
+                rem = segment_index % tile_p;
+                tile_id = softmax_tile * tile_p + rem;
+                inner_tile_id = tile_s - 1;
             end
             OW: begin
                 if (tile_p == 0)
                     return;
-                tile_id = segment_index / tile_p;
-                inner_tile_id = segment_index % tile_p;
+                tile_id = segment_index;
+                inner_tile_id = tile_p - 1;
             end
             F1: begin
                 if (tile_e == 0)
                     return;
-                tile_id = segment_index / tile_e;
-                inner_tile_id = segment_index % tile_e;
+                tile_id = segment_index;
+                inner_tile_id = tile_e - 1;
             end
             F2: begin
                 if (tile_f == 0)
                     return;
-                tile_id = segment_index / tile_f;
-                inner_tile_id = segment_index % tile_f;
+                tile_id = segment_index;
+                inner_tile_id = tile_f - 1;
             end
             default: begin end
         endcase
