@@ -598,8 +598,7 @@ def main() -> int:
     rows: list[dict[str, Any]] = []
     requant_rows: list[dict[str, Any]] = []
     per_head: list[dict[str, Any]] = [{"head_id": head, "steps": {}} for head in range(args.heads)] if is_multi_step else []
-    native_tb_stream_order = projection in ("ATTN", "ATTNFF")
-    tile_aware = native_tb_stream_order
+    tile_aware = is_multi_step
     head_stream_info: dict[tuple[str, int], dict[str, Any]] = {}
     ff_stream_info: dict[str, dict[str, Any]] = {}
 
@@ -746,18 +745,54 @@ def main() -> int:
                     "input_source_beats": input_source_beats,
                     "weight_source_beats": weight_source_beats,
                     "bias_source_beats": bias_source_beats,
+                    "input_beats": input_beats,
+                    "weight_beats": weight_beats,
+                    "bias_beats": bias_beats,
                     "input_cursor": 0,
                     "weight_cursor": 0,
                     "bias_cursor": 0,
                 }
 
+    def segment_beats(total_beats: int, segments: int, step_name: str, stream_name: str) -> int:
+        if segments <= 0:
+            raise ValueError(f"{step_name}/{stream_name} has invalid segment count {segments}")
+        if total_beats % segments != 0:
+            raise ValueError(
+                f"{step_name}/{stream_name} beats ({total_beats}) are not divisible by "
+                f"controller segments ({segments})"
+            )
+        return total_beats // segments
+
+    def head_step_segments(step_name: str) -> int:
+        if step_name in ("Q", "K", "V"):
+            return args.tile_s * args.tile_p * args.tile_e
+        if step_name in ("QK", "AV"):
+            return args.tile_s * args.tile_s * args.tile_p
+        if step_name == "OW":
+            return args.tile_s * args.tile_e * args.tile_p
+        raise ValueError(f"Unsupported head stream step for controller schedule: {step_name}")
+
     def emit_head_segment(step_name: str, tile_id: int, inner_tile_id: int, beats: int | None = None) -> None:
-        segment_beats = args.tile_beats if beats is None else beats
         for head in range(args.heads):
             info = head_stream_info[(step_name, head)]
             sources: StepSources = info["sources"]
+            weight_segment_beats = (
+                segment_beats(info["weight_beats"], head_step_segments(step_name), step_name, "weight")
+                if beats is None
+                else beats
+            )
+            input_segment_beats = (
+                segment_beats(info["input_beats"], head_step_segments(step_name), step_name, "input")
+                if beats is None
+                else beats
+            )
+            bias_segment_beats = (
+                segment_beats(info["bias_beats"], head_step_segments(step_name), step_name, "bias")
+                if beats is None
+                else beats
+            )
 
-            for _ in range(segment_beats):
+            for _ in range(weight_segment_beats):
                 beat = info["weight_cursor"]
                 payload = pack_source_beat(
                     sources.stream_weight_values,
@@ -769,7 +804,7 @@ def main() -> int:
                 rows.append(make_row("head_weight", head, tile_id, inner_tile_id, beat, step_name, payload))
                 info["weight_cursor"] += 1
 
-            for _ in range(segment_beats):
+            for _ in range(input_segment_beats):
                 beat = info["input_cursor"]
                 payload = pack_source_beat(
                     sources.stream_input_values,
@@ -781,7 +816,7 @@ def main() -> int:
                 rows.append(make_row("head_input", head, tile_id, inner_tile_id, beat, step_name, payload))
                 info["input_cursor"] += 1
 
-            for _ in range(segment_beats):
+            for _ in range(bias_segment_beats):
                 beat = info["bias_cursor"]
                 source_beat = 0 if sources.generated_zero_bias else beat
                 payload = pack_source_beat(
@@ -818,19 +853,20 @@ def main() -> int:
                 for inner_tile_id in range(args.tile_p):
                     emit_head_segment("OW", tile_id, inner_tile_id)
 
-    def emit_native_tb_attention_schedule() -> None:
-        head_beats = args.tile_beats * args.tile_s * args.tile_e * args.tile_p
-        for step_name in ("Q", "K", "V", "QK", "AV", "OW"):
-            if step_name not in head_projections:
-                continue
-            phase, group = native_tb_phase_group(step_name)
-            emit_head_segment(step_name, phase, group, head_beats)
+    def verify_head_stream_cursors() -> None:
+        for (step_name, head), info in sorted(head_stream_info.items()):
+            for stream_name in ("weight", "input", "bias"):
+                cursor = info[f"{stream_name}_cursor"]
+                expected = info[f"{stream_name}_beats"]
+                if cursor != expected:
+                    raise ValueError(
+                        f"{step_name}/head{head}/{stream_name} emitted {cursor} beat(s), "
+                        f"but manifest records {expected}"
+                    )
 
     if tile_aware:
-        if native_tb_stream_order:
-            emit_native_tb_attention_schedule()
-        else:
-            emit_attention_tile_schedule()
+        emit_attention_tile_schedule()
+        verify_head_stream_cursors()
 
     extra_compare_entries: list[dict[str, Any]] = []
     if projection in ("ATTN", "ATTNFF"):
@@ -933,29 +969,53 @@ def main() -> int:
                 "input_source_beats": input_source_beats,
                 "weight_source_beats": weight_source_beats,
                 "bias_source_beats": bias_source_beats,
+                "input_beats": input_beats,
+                "weight_beats": weight_beats,
+                "bias_beats": bias_beats,
                 "input_cursor": 0,
                 "weight_cursor": 0,
                 "bias_cursor": 0,
             }
 
+    def ff_step_segments(step_name: str) -> int:
+        if step_name == "F1":
+            return args.tile_s * args.tile_f * args.tile_e
+        if step_name == "F2":
+            return args.tile_s * args.tile_e * args.tile_f
+        raise ValueError(f"Unsupported FF stream step for controller schedule: {step_name}")
+
     def emit_ff_segment(step_name: str, tile_id: int, inner_tile_id: int, beats: int | None = None) -> None:
-        segment_beats = args.tile_beats if beats is None else beats
         info = ff_stream_info[step_name]
         sources: FfStepSources = info["sources"]
+        weight_segment_beats = (
+            segment_beats(info["weight_beats"], ff_step_segments(step_name), step_name, "weight")
+            if beats is None
+            else beats
+        )
+        input_segment_beats = (
+            segment_beats(info["input_beats"], ff_step_segments(step_name), step_name, "input")
+            if beats is None
+            else beats
+        )
+        bias_segment_beats = (
+            segment_beats(info["bias_beats"], ff_step_segments(step_name), step_name, "bias")
+            if beats is None
+            else beats
+        )
 
-        for _ in range(segment_beats):
+        for _ in range(weight_segment_beats):
             beat = info["weight_cursor"]
             payload = pack_source_beat(sources.weight_values, args.weight_lanes, 8, beat, info["weight_source_beats"])
             rows.append(make_row("ff_weight", 0, tile_id, inner_tile_id, beat, step_name, payload))
             info["weight_cursor"] += 1
 
-        for _ in range(segment_beats):
+        for _ in range(input_segment_beats):
             beat = info["input_cursor"]
             payload = pack_source_beat(sources.input_values, args.input_lanes, 8, beat, info["input_source_beats"])
             rows.append(make_row("ff_input", 0, tile_id, inner_tile_id, beat, step_name, payload))
             info["input_cursor"] += 1
 
-        for _ in range(segment_beats):
+        for _ in range(bias_segment_beats):
             beat = info["bias_cursor"]
             payload = pack_source_beat(sources.bias_values, args.bias_lanes, args.bias_bits, beat, info["bias_source_beats"])
             rows.append(make_row("ff_bias", 0, tile_id, inner_tile_id, beat, step_name, payload))
@@ -972,22 +1032,20 @@ def main() -> int:
                 for inner_tile_id in range(args.tile_f):
                     emit_ff_segment("F2", tile_id, inner_tile_id)
 
-    def emit_native_tb_ff_schedule() -> None:
-        if "F1" in ff_stream_info:
-            phase, group = native_tb_phase_group("F1")
-            f1_beats = args.tile_beats * args.tile_s * args.tile_f * args.tile_e
-            emit_ff_segment("F1", phase, group, f1_beats)
-
-        if "F2" in ff_stream_info:
-            phase, group = native_tb_phase_group("F2")
-            f2_beats = args.tile_beats * args.tile_s * args.tile_e * args.tile_f
-            emit_ff_segment("F2", phase, group, f2_beats)
+    def verify_ff_stream_cursors() -> None:
+        for step_name, info in sorted(ff_stream_info.items()):
+            for stream_name in ("weight", "input", "bias"):
+                cursor = info[f"{stream_name}_cursor"]
+                expected = info[f"{stream_name}_beats"]
+                if cursor != expected:
+                    raise ValueError(
+                        f"{step_name}/ff/{stream_name} emitted {cursor} beat(s), "
+                        f"but manifest records {expected}"
+                    )
 
     if tile_aware and ff_stream_info:
-        if native_tb_stream_order:
-            emit_native_tb_ff_schedule()
-        else:
-            emit_ff_tile_schedule()
+        emit_ff_tile_schedule()
+        verify_ff_stream_cursors()
 
     write_stream_csv(stream_path, rows)
     write_requant_csv(requant_path, requant_rows)
@@ -1033,11 +1091,7 @@ def main() -> int:
         "tile_e": args.tile_e,
         "tile_p": args.tile_p,
         "tile_f": args.tile_f,
-        "schedule": (
-            "native_tb_stream_order"
-            if native_tb_stream_order
-            else ("controller_tile_order" if tile_aware else "step_major")
-        ),
+        "schedule": "controller_tile_order" if tile_aware else "step_major",
         "input_lanes": args.input_lanes,
         "weight_lanes": args.weight_lanes,
         "weight_row_width": args.weight_row_width,
