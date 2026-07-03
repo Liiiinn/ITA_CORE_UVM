@@ -23,6 +23,8 @@ class ita_mha8_base_test extends uvm_test;
         cfg.vif = vif;
         cfg.create_default_agent_configs();
         // Stage 2-5: override cfg from derived tests before env is created.
+        // TODO S13_REGRESSION: add future plusargs to enable SVA, online coverage, and structural predictor modes.
+        // TODO S13_REGRESSION: define directed coverage targets for S64/S128/S256 and Identity/Relu/Gelu cases.
 
         uvm_config_db#(ita_mha8_env_config)::set(this, "env", "cfg", cfg);
         env = ita_mha8_env::type_id::create("env", this);
@@ -30,6 +32,7 @@ class ita_mha8_base_test extends uvm_test;
 
     task run_phase(uvm_phase phase);
         // TODO Stage 1: keep this base test build-only; do not start ctrl or stream sequences here.
+        // TODO S13_REGRESSION: document pass criteria as UVM_ERROR=0, SVA violation=0, SCB errors=0, timeout=0, offline compare PASS, and coverage goal met.
     endtask : run_phase
 
 endclass : ita_mha8_base_test

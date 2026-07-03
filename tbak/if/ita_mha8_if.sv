@@ -103,6 +103,13 @@ interface ita_mha8_if
     logic                    phase_mismatch_o;
     // Stage 11: add feed-forward stream assertions after the FF path is added to active tests.
 
+    // TODO S13_ONLINE_SVA: expand protocol assertions for all head/FF/sum streams.
+    // TODO S13_ONLINE_SVA: assert valid && !ready keeps valid high and payload/debug metadata stable.
+    // TODO S13_ONLINE_SVA: assert ctrl_i.start, layer, activation, tile fields, requant fields, and payloads are never X/Z when active.
+    // TODO S13_ONLINE_SVA: assert reset leaves driver-owned pins, ready signals, and debug metadata in legal idle states.
+    // TODO S13_ONLINE_SVA: assert ctrl start/done/active-window timing once job lifecycle signals are exposed.
+    // TODO S13_ONLINE_COV: add assertion/cover hooks for no-stall, short-stall, long-stall, and valid && !ready backpressure cases.
+
     // TODO ·: initialize or tie off driver-owned pins needed for an idle smoke shell.
     initial begin
         rst_ni = 0;

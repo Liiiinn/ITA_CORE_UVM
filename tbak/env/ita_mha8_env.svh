@@ -22,6 +22,10 @@ class ita_mha8_env extends uvm_env;
     ita_mha8_logger logger;
     ita_mha8_scoreboard scb;
     // Stage 11: create sum and feed-forward agents after full head-path coverage exists.
+    // TODO S13_ONLINE_COV: instantiate/connect future ita_mha8_coverage collector alongside logger and scoreboard.
+    // TODO S13_STRUCT_PREDICTOR: instantiate/connect future structural predictor for cfg-derived transaction expectations.
+    // TODO S13_ONLINE_COV: pass tile cfg, activation, layer, projection/test mode, and vector source into coverage/predictor components.
+    // TODO S13_ONLINE_COV: add env_config knobs such as enable_online_cov and enable_structural_predictor.
 
     function new(string name = "ita_mha8_env", uvm_component parent = null);
         super.new(name, parent);

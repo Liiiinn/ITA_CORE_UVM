@@ -141,6 +141,10 @@ class ita_stream_monitor extends uvm_monitor;
         endcase
         // Stage 7: write sampled output transactions to logger through ap.
         // Stage 8: send sampled transactions to the smoke scoreboard.
+        // TODO S13_ONLINE_COV: keep this post-handshake sample point as the canonical coverage transaction source.
+        // TODO S13_ONLINE_COV: classify first/middle/last beat buckets from tr.beat_id and structural expected counts.
+        // TODO S13_ONLINE_COV: cover valid-ready stall categories after monitor captures pre-handshake valid/ready history.
+        // TODO S13_STRUCT_PREDICTOR: preserve sampled step/head/tile/inner/beat metadata for predictor and scoreboard diagnostics.
         ap.write(tr);
         sample_count++;
     endfunction : sample_item

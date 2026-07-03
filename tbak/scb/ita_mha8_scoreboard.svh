@@ -32,6 +32,14 @@ class ita_mha8_scoreboard extends uvm_component;
     int unsigned rule_error_count;
     int unsigned max_rule_errors;
 
+    // TODO S13_ONLINE_SCB: keep this scoreboard non-numerical; offline manifest compare owns golden value checking.
+    // TODO S13_ONLINE_SCB: add beat_id continuity checks per kind/step/head/tile/inner transaction key.
+    // TODO S13_ONLINE_SCB: add duplicate/missing beat detection using recorded source/output transaction keys.
+    // TODO S13_ONLINE_SCB: add output active-window checks once job/phase active metadata is observable.
+    // TODO S13_ONLINE_SCB: add back-to-back job state-clear checks before accepting the next job's first transaction.
+    // TODO S13_STRUCT_PREDICTOR: compare transaction counts against cfg/manifest-derived structural expected counts only, not numeric payloads.
+    // TODO S13_STRUCT_PREDICTOR: avoid full QK/AV global output order checks unless DUT exposes enough softmax-loop debug metadata.
+
     function new(string name = "ita_mha8_scoreboard", uvm_component parent = null);
         super.new(name, parent);
 
