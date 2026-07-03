@@ -11,6 +11,7 @@ sim/modelsim.ini
 sim/logger
 .venv
 tbak/tools/__pycache__
+tbak/scb/ita_mha8_scoreboard.bak
 # Additional Ruby/bundler ignore for when you run: bundle install
 /vendor
 
