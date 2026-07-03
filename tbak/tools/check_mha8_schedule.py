@@ -266,6 +266,16 @@ def check_stream_step(
         expected_total = expected_beats_for_entry(entry, kind)
         if expected_total is None:
             expected_total = sum(segment.beats for segment in segments)
+        if len(segments) == 0:
+            errors.append(f"empty_segment_schedule kind={kind} step={step} head={head}")
+            break
+        if expected_total % len(segments) != 0:
+            errors.append(
+                f"segment_count_mismatch kind={kind} step={step} head={head} "
+                f"total={expected_total} segments={len(segments)}"
+            )
+            break
+        expected_segment_beats = expected_total // len(segments)
         actual_total = 0
         cursor = 0
 
@@ -279,7 +289,7 @@ def check_stream_step(
                 )
                 break
 
-            beat_error = check_beat_list(group.beats, cursor, segment.beats)
+            beat_error = check_beat_list(group.beats, cursor, expected_segment_beats)
             if beat_error is not None:
                 errors.append(
                     f"{beat_error} kind={kind} step={step} head={head} segment={seg_index} "
@@ -287,7 +297,7 @@ def check_stream_step(
                 )
                 break
 
-            cursor += segment.beats
+            cursor += expected_segment_beats
             actual_total += len(group.beats)
 
         if actual_total != expected_total and not errors:

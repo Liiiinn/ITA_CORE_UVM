@@ -1,0 +1,36 @@
+MHA8_MANIFEST_COMPARE_LOG
+timestamp=2026-07-03T10:34:33
+manifest=D:\UNI2\UVM\ITA_CORE_UVM\sim\logger\uvm_pyita_attnff_mha8_manifest.json
+actual_csv=D:\UNI2\UVM\ITA_CORE_UVM\sim\logger\ita_mha8_output.csv
+dry_run=True
+log_path=D:\UNI2\UVM\ITA_CORE_UVM\ITA_CORE_UVM\sim\output\compare_logs\_smoke_compare_log_test.log
+PY> D:\Python\python.exe D:\UNI2\UVM\ITA_CORE_UVM\tbak\tools\parse_actual.py --input D:\UNI2\UVM\ITA_CORE_UVM\sim\logger\ita_mha8_output.csv --format uvm-csv --phase Q --stream per_head --out D:\UNI2\UVM\ITA_CORE_UVM\sim\logger\actual_q_head0.txt --head 0
+PY> D:\Python\python.exe D:\UNI2\UVM\ITA_CORE_UVM\tbak\tools\compare.py --expected D:\UNI2\UVM\ITA_CORE_UVM\sim\logger\expected_q_head0.txt --actual D:\UNI2\UVM\ITA_CORE_UVM\sim\logger\actual_q_head0.txt --row-words 1
+PY> D:\Python\python.exe D:\UNI2\UVM\ITA_CORE_UVM\tbak\tools\parse_actual.py --input D:\UNI2\UVM\ITA_CORE_UVM\sim\logger\ita_mha8_output.csv --format uvm-csv --phase K --stream per_head --out D:\UNI2\UVM\ITA_CORE_UVM\sim\logger\actual_k_head0.txt --head 0
+PY> D:\Python\python.exe D:\UNI2\UVM\ITA_CORE_UVM\tbak\tools\compare.py --expected D:\UNI2\UVM\ITA_CORE_UVM\sim\logger\expected_k_head0.txt --actual D:\UNI2\UVM\ITA_CORE_UVM\sim\logger\actual_k_head0.txt --row-words 1
+PY> D:\Python\python.exe D:\UNI2\UVM\ITA_CORE_UVM\tbak\tools\parse_actual.py --input D:\UNI2\UVM\ITA_CORE_UVM\sim\logger\ita_mha8_output.csv --format uvm-csv --phase V --stream per_head --out D:\UNI2\UVM\ITA_CORE_UVM\sim\logger\actual_v_head0.txt --head 0
+PY> D:\Python\python.exe D:\UNI2\UVM\ITA_CORE_UVM\tbak\tools\compare.py --expected D:\UNI2\UVM\ITA_CORE_UVM\sim\logger\expected_v_head0.txt --actual D:\UNI2\UVM\ITA_CORE_UVM\sim\logger\actual_v_head0.txt --row-words 1
+PY> D:\Python\python.exe D:\UNI2\UVM\ITA_CORE_UVM\tbak\tools\parse_actual.py --input D:\UNI2\UVM\ITA_CORE_UVM\sim\logger\ita_mha8_output.csv --format uvm-csv --phase QK --stream per_head --out D:\UNI2\UVM\ITA_CORE_UVM\sim\logger\actual_qk_head0.txt --head 0
+PY> D:\Python\python.exe D:\UNI2\UVM\ITA_CORE_UVM\tbak\tools\compare.py --expected D:\UNI2\UVM\ITA_CORE_UVM\sim\logger\expected_qk_head0.txt --actual D:\UNI2\UVM\ITA_CORE_UVM\sim\logger\actual_qk_head0.txt --row-words 1
+PY> D:\Python\python.exe D:\UNI2\UVM\ITA_CORE_UVM\tbak\tools\parse_actual.py --input D:\UNI2\UVM\ITA_CORE_UVM\sim\logger\ita_mha8_output.csv --format uvm-csv --phase AV --stream per_head --out D:\UNI2\UVM\ITA_CORE_UVM\sim\logger\actual_av_head0.txt --head 0
+PY> D:\Python\python.exe D:\UNI2\UVM\ITA_CORE_UVM\tbak\tools\compare.py --expected D:\UNI2\UVM\ITA_CORE_UVM\sim\logger\expected_av_head0.txt --actual D:\UNI2\UVM\ITA_CORE_UVM\sim\logger\actual_av_head0.txt --row-words 1
+PY> D:\Python\python.exe D:\UNI2\UVM\ITA_CORE_UVM\tbak\tools\parse_actual.py --input D:\UNI2\UVM\ITA_CORE_UVM\sim\logger\ita_mha8_output.csv --format uvm-csv --phase OW --stream per_head --out D:\UNI2\UVM\ITA_CORE_UVM\sim\logger\actual_ow_head0.txt --head 0
+PY> D:\Python\python.exe D:\UNI2\UVM\ITA_CORE_UVM\tbak\tools\compare.py --expected D:\UNI2\UVM\ITA_CORE_UVM\sim\logger\expected_ow_head0.txt --actual D:\UNI2\UVM\ITA_CORE_UVM\sim\logger\actual_ow_head0.txt --row-words 1
+PY> D:\Python\python.exe D:\UNI2\UVM\ITA_CORE_UVM\tbak\tools\parse_actual.py --input D:\UNI2\UVM\ITA_CORE_UVM\sim\logger\ita_mha8_output.csv --format uvm-csv --phase OW --stream sum --out D:\UNI2\UVM\ITA_CORE_UVM\sim\logger\actual_ow_sum.txt
+PY> D:\Python\python.exe D:\UNI2\UVM\ITA_CORE_UVM\tbak\tools\compare.py --expected D:\UNI2\UVM\ITA_CORE_UVM\sim\logger\expected_ow_sum.txt --actual D:\UNI2\UVM\ITA_CORE_UVM\sim\logger\actual_ow_sum.txt --row-words 1
+PY> D:\Python\python.exe D:\UNI2\UVM\ITA_CORE_UVM\tbak\tools\parse_actual.py --input D:\UNI2\UVM\ITA_CORE_UVM\sim\logger\ita_mha8_output.csv --format uvm-csv --phase F1 --stream ff --out D:\UNI2\UVM\ITA_CORE_UVM\sim\logger\actual_f1.txt
+PY> D:\Python\python.exe D:\UNI2\UVM\ITA_CORE_UVM\tbak\tools\compare.py --expected D:\UNI2\UVM\ITA_CORE_UVM\sim\logger\expected_f1.txt --actual D:\UNI2\UVM\ITA_CORE_UVM\sim\logger\actual_f1.txt --row-words 1
+PY> D:\Python\python.exe D:\UNI2\UVM\ITA_CORE_UVM\tbak\tools\parse_actual.py --input D:\UNI2\UVM\ITA_CORE_UVM\sim\logger\ita_mha8_output.csv --format uvm-csv --phase F2 --stream ff --out D:\UNI2\UVM\ITA_CORE_UVM\sim\logger\actual_f2.txt
+PY> D:\Python\python.exe D:\UNI2\UVM\ITA_CORE_UVM\tbak\tools\compare.py --expected D:\UNI2\UVM\ITA_CORE_UVM\sim\logger\expected_f2.txt --actual D:\UNI2\UVM\ITA_CORE_UVM\sim\logger\actual_f2.txt --row-words 1
+MHA8_MANIFEST_COMPARE_SUMMARY total=9 passed=9 failed=0 steps=6 heads=1 extra_entries=3
+  PASS_ENTRIES:
+    PASS Q/head0: expected=expected_q_head0.txt actual=actual_q_head0.txt (dry-run)
+    PASS K/head0: expected=expected_k_head0.txt actual=actual_k_head0.txt (dry-run)
+    PASS V/head0: expected=expected_v_head0.txt actual=actual_v_head0.txt (dry-run)
+    PASS QK/head0: expected=expected_qk_head0.txt actual=actual_qk_head0.txt (dry-run)
+    PASS AV/head0: expected=expected_av_head0.txt actual=actual_av_head0.txt (dry-run)
+    PASS OW/head0: expected=expected_ow_head0.txt actual=actual_ow_head0.txt (dry-run)
+    PASS OW/sum: expected=expected_ow_sum.txt actual=actual_ow_sum.txt (dry-run)
+    PASS F1/ff: expected=expected_f1.txt actual=actual_f1.txt (dry-run)
+    PASS F2/ff: expected=expected_f2.txt actual=actual_f2.txt (dry-run)
+MHA8_MANIFEST_COMPARE_PASS steps=6 heads=1 extra_entries=3

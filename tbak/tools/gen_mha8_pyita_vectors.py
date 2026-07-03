@@ -498,9 +498,9 @@ def main() -> int:
     parser.add_argument("--bias-lanes", type=int, default=16, help="Number of bias lanes in one bias_t payload.")
     parser.add_argument("--bias-bits", type=int, default=24, help="Bit width used to pack each bias lane.")
     parser.add_argument("--output-lanes", type=int, default=16, help="Number of int8 lanes in one requant_oup_t payload.")
-    parser.add_argument("--weight-beats", type=int, default=0, help="Number of weight beats emitted per head; 0 uses all Wq rows.")
-    parser.add_argument("--input-beats", type=int, default=0, help="Number of input beats emitted per head; 0 matches expected beats.")
-    parser.add_argument("--bias-beats", type=int, default=0, help="Number of bias beats emitted per head; 0 matches expected beats.")
+    parser.add_argument("--weight-beats", type=int, default=0, help="Number of weight beats emitted per head; 0 uses all stream weight rows.")
+    parser.add_argument("--input-beats", type=int, default=0, help="Number of input beats emitted per head; 0 uses all stream input rows.")
+    parser.add_argument("--bias-beats", type=int, default=0, help="Number of bias beats emitted per head; 0 matches the emitted input/weight stream length.")
     parser.add_argument("--expected-beats", type=int, default=0, help="Number of expected output beats emitted per head; 0 uses all Qp rows.")
     parser.add_argument("--tile-beats", type=int, default=256, help="Handshake beats in one 64x64/16 ITA output tile.")
     parser.add_argument("--tile-s", type=int, default=1, help="DUT ctrl tile_s value used for ATTN/ATTNFF scheduling.")
@@ -636,13 +636,13 @@ def main() -> int:
                 expected_beats = len(sources.expected_values) // args.output_lanes
             input_beats = args.input_beats
             if input_beats == 0:
-                input_beats = expected_beats if is_multi_step else input_source_beats
-            bias_beats = args.bias_beats
-            if bias_beats == 0:
-                bias_beats = expected_beats
+                input_beats = input_source_beats
             weight_beats = args.weight_beats
             if weight_beats == 0:
-                weight_beats = expected_beats if is_multi_step else weight_source_beats
+                weight_beats = weight_source_beats
+            bias_beats = args.bias_beats
+            if bias_beats == 0:
+                bias_beats = max(input_beats, weight_beats)
 
             if bias_beats < bias_source_beats:
                 raise ValueError(
@@ -751,6 +751,7 @@ def main() -> int:
                     "input_cursor": 0,
                     "weight_cursor": 0,
                     "bias_cursor": 0,
+                    "bias_source_cursor": 0,
                 }
 
     def segment_beats(total_beats: int, segments: int, step_name: str, stream_name: str) -> int:
@@ -772,10 +773,20 @@ def main() -> int:
             return args.tile_s * args.tile_e * args.tile_p
         raise ValueError(f"Unsupported head stream step for controller schedule: {step_name}")
 
+    def head_segment_uses_real_bias(step_name: str, inner_tile_id: int) -> bool:
+        if step_name in ("QK", "AV"):
+            return False
+        if step_name in ("Q", "K", "V"):
+            return inner_tile_id == args.tile_e - 1
+        if step_name == "OW":
+            return inner_tile_id == args.tile_p - 1
+        raise ValueError(f"Unsupported head stream step for bias gating: {step_name}")
+
     def emit_head_segment(step_name: str, tile_id: int, inner_tile_id: int, beats: int | None = None) -> None:
         for head in range(args.heads):
             info = head_stream_info[(step_name, head)]
             sources: StepSources = info["sources"]
+            use_real_bias = head_segment_uses_real_bias(step_name, inner_tile_id) and not sources.generated_zero_bias
             weight_segment_beats = (
                 segment_beats(info["weight_beats"], head_step_segments(step_name), step_name, "weight")
                 if beats is None
@@ -818,14 +829,17 @@ def main() -> int:
 
             for _ in range(bias_segment_beats):
                 beat = info["bias_cursor"]
-                source_beat = 0 if sources.generated_zero_bias else beat
-                payload = pack_source_beat(
-                    sources.bias_values,
-                    args.bias_lanes,
-                    args.bias_bits,
-                    source_beat,
-                    info["bias_source_beats"],
-                )
+                if use_real_bias:
+                    payload = pack_source_beat(
+                        sources.bias_values,
+                        args.bias_lanes,
+                        args.bias_bits,
+                        info["bias_source_cursor"],
+                        info["bias_source_beats"],
+                    )
+                    info["bias_source_cursor"] += 1
+                else:
+                    payload = 0
                 rows.append(make_row("head_bias", head, tile_id, inner_tile_id, beat, step_name, payload))
                 info["bias_cursor"] += 1
 
@@ -975,6 +989,7 @@ def main() -> int:
                 "input_cursor": 0,
                 "weight_cursor": 0,
                 "bias_cursor": 0,
+                "bias_source_cursor": 0,
             }
 
     def ff_step_segments(step_name: str) -> int:
@@ -984,9 +999,17 @@ def main() -> int:
             return args.tile_s * args.tile_e * args.tile_f
         raise ValueError(f"Unsupported FF stream step for controller schedule: {step_name}")
 
+    def ff_segment_uses_real_bias(step_name: str, inner_tile_id: int) -> bool:
+        if step_name == "F1":
+            return inner_tile_id == args.tile_e - 1
+        if step_name == "F2":
+            return inner_tile_id == args.tile_f - 1
+        raise ValueError(f"Unsupported FF stream step for bias gating: {step_name}")
+
     def emit_ff_segment(step_name: str, tile_id: int, inner_tile_id: int, beats: int | None = None) -> None:
         info = ff_stream_info[step_name]
         sources: FfStepSources = info["sources"]
+        use_real_bias = ff_segment_uses_real_bias(step_name, inner_tile_id)
         weight_segment_beats = (
             segment_beats(info["weight_beats"], ff_step_segments(step_name), step_name, "weight")
             if beats is None
@@ -1017,7 +1040,17 @@ def main() -> int:
 
         for _ in range(bias_segment_beats):
             beat = info["bias_cursor"]
-            payload = pack_source_beat(sources.bias_values, args.bias_lanes, args.bias_bits, beat, info["bias_source_beats"])
+            if use_real_bias:
+                payload = pack_source_beat(
+                    sources.bias_values,
+                    args.bias_lanes,
+                    args.bias_bits,
+                    info["bias_source_cursor"],
+                    info["bias_source_beats"],
+                )
+                info["bias_source_cursor"] += 1
+            else:
+                payload = 0
             rows.append(make_row("ff_bias", 0, tile_id, inner_tile_id, beat, step_name, payload))
             info["bias_cursor"] += 1
 

@@ -231,7 +231,7 @@ class ita_mha8_vsequence extends uvm_sequence;
         ctrl = ita_ctrl_item::type_id::create("ctrl");
 
         ctrl.ctrl.layer = layer_value;
-        ctrl.ctrl.activation = (layer_value == Feedforward) ? core.activation : Identity;
+        ctrl.ctrl.activation = core.activation;
         ctrl.ctrl.tile_s = core.tile_s;
         ctrl.ctrl.tile_e = core.tile_e;
         ctrl.ctrl.tile_p = core.tile_p;
