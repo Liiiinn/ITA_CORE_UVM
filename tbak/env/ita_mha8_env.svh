@@ -68,6 +68,10 @@ class ita_mha8_env extends uvm_env;
         ff_output_agt = ita_stream_agent::type_id::create("ff_output_agt", this);
 
         logger = ita_mha8_logger::type_id::create("logger", this);
+        uvm_config_db#(int unsigned)::set(this, "scb", "tile_s", cfg.tile_s);
+        uvm_config_db#(int unsigned)::set(this, "scb", "tile_e", cfg.tile_e);
+        uvm_config_db#(int unsigned)::set(this, "scb", "tile_p", cfg.tile_p);
+        uvm_config_db#(int unsigned)::set(this, "scb", "tile_f", cfg.tile_f);
         scb = ita_mha8_scoreboard::type_id::create("scb", this);
         vsqr = ita_mha8_vsequencer::type_id::create("vsqr", this);
     endfunction : build_phase

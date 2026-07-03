@@ -6,6 +6,11 @@ class ita_mha8_env_config extends uvm_object;
 
     virtual ita_mha8_if vif;
 
+    int unsigned tile_s = 1;
+    int unsigned tile_e = 1;
+    int unsigned tile_p = 1;
+    int unsigned tile_f = 1;
+
     ita_ctrl_config ctrl_cfg;
     ita_stream_config input_cfg       [8];
     ita_stream_config weight_cfg      [8];
@@ -24,6 +29,8 @@ class ita_mha8_env_config extends uvm_object;
     endfunction : new
 
     function void create_default_agent_configs();
+        load_tile_plusargs();
+
         // Stage 2: allocate ctrl_cfg and bind cfg.vif to the ctrl agent config.
         ctrl_cfg = ita_ctrl_config::type_id::create("ctrl_cfg");
         ctrl_cfg.vif = vif;
@@ -60,6 +67,13 @@ class ita_mha8_env_config extends uvm_object;
         cfg.is_active = is_active;
         return cfg;
     endfunction : create_stream_cfg
+
+    function void load_tile_plusargs();
+        void'($value$plusargs("ITA_TILE_S=%d", tile_s));
+        void'($value$plusargs("ITA_TILE_E=%d", tile_e));
+        void'($value$plusargs("ITA_TILE_P=%d", tile_p));
+        void'($value$plusargs("ITA_TILE_F=%d", tile_f));
+    endfunction : load_tile_plusargs
 
 endclass : ita_mha8_env_config
 
