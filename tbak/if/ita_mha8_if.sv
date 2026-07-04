@@ -61,7 +61,6 @@ interface ita_mha8_if
     logic                    sum_valid_o;
     logic                    sum_ready_i;
     requant_oup_t            sum_oup_o;
-    step_e                   sum_step_dbg;
     counter_t                sum_tile_id_dbg;
     counter_t                sum_inner_id_dbg;
     counter_t                sum_beat_id_dbg;
@@ -103,6 +102,11 @@ interface ita_mha8_if
     logic                    phase_mismatch_o;
     // Stage 11: add feed-forward stream assertions after the FF path is added to active tests.
 
+    tile_t                   sva_tile_s_q;
+    tile_t                   sva_tile_e_q;
+    tile_t                   sva_tile_p_q;
+    tile_t                   sva_tile_f_q;
+
     // TODO S13_ONLINE_SVA: expand protocol assertions for all head/FF/sum streams.
     // TODO S13_ONLINE_SVA: assert valid && !ready keeps valid high and payload/debug metadata stable.
     // TODO S13_ONLINE_SVA: assert ctrl_i.start, layer, activation, tile fields, requant fields, and payloads are never X/Z when active.
@@ -122,6 +126,7 @@ interface ita_mha8_if
         inp_bias_valid_i = '0;
         per_head_ready_i = '0;
         sum_ready_i = '0;
+        ff_ready_i = '0;
 
         for (int unsigned h = 0; h < NumHeads; h++) begin
             head_eps_mult_i[h]    = '0;
@@ -170,6 +175,25 @@ interface ita_mha8_if
         ff_inp_bias_lockstep_dbg = 1'b0;
     end
     // Stage 8: implement early assertion blocks for X/Z, timeout, valid-ready, and backpressure.
+
+    always_ff @(posedge clk_i or negedge rst_ni) begin
+        if (!rst_ni) begin
+            sva_tile_s_q <= '0;
+            sva_tile_e_q <= '0;
+            sva_tile_p_q <= '0;
+            sva_tile_f_q <= '0;
+        end else if (ctrl_i.start && !$isunknown({
+            ctrl_i.tile_s,
+            ctrl_i.tile_e,
+            ctrl_i.tile_p,
+            ctrl_i.tile_f
+        })) begin
+            sva_tile_s_q <= ctrl_i.tile_s;
+            sva_tile_e_q <= ctrl_i.tile_e;
+            sva_tile_p_q <= ctrl_i.tile_p;
+            sva_tile_f_q <= ctrl_i.tile_f;
+        end
+    end
 
     generate
         for (genvar h = 0; h < NumHeads; h ++) begin : gen_head_assertion
@@ -231,6 +255,143 @@ interface ita_mha8_if
                     per_head_valid_o[h] && !per_head_ready_i[h]
                     |=> per_head_valid_o[h] && $stable(per_head_oup_o[h]) && $stable(per_head_step_o[h]);
             endproperty
+            
+            property inp_dbg_known_when_valid;
+                @(posedge clk_i) disable iff (!rst_ni)
+                    inp_valid_i[h] |-> !$isunknown({
+                        inp_step_dbg[h],
+                        inp_tile_id_dbg[h],
+                        inp_inner_id_dbg[h],
+                        inp_beat_id_dbg[h],
+                        inp_lockstep_dbg[h]
+                    });
+            endproperty : inp_dbg_known_when_valid
+
+            property weight_dbg_known_when_valid;
+                @(posedge clk_i) disable iff (!rst_ni)
+                    inp_weight_valid_i[h] |-> !$isunknown({
+                        inp_weight_step_dbg[h],
+                        inp_weight_tile_id_dbg[h],
+                        inp_weight_inner_id_dbg[h],
+                        inp_weight_beat_id_dbg[h],
+                        inp_weight_lockstep_dbg[h]
+                    });
+            endproperty : weight_dbg_known_when_valid
+
+            property bias_dbg_known_when_valid;
+                @(posedge clk_i) disable iff (!rst_ni)
+                    inp_bias_valid_i[h] |-> !$isunknown({
+                        inp_bias_step_dbg[h],
+                        inp_bias_tile_id_dbg[h],
+                        inp_bias_inner_id_dbg[h],
+                        inp_bias_beat_id_dbg[h],
+                        inp_bias_lockstep_dbg[h]
+                    });
+            endproperty : bias_dbg_known_when_valid
+
+            property head_output_dbg_known_when_valid;
+                @(posedge clk_i) disable iff (!rst_ni)
+                    per_head_valid_o[h] |-> !$isunknown({
+                        per_head_oup_o[h],
+                        per_head_step_o[h],
+                        per_head_tile_id_dbg[h],
+                        per_head_inner_id_dbg[h],
+                        per_head_beat_id_dbg[h]
+                    });
+            endproperty : head_output_dbg_known_when_valid
+
+            property inp_dbg_stable_until_ready;
+                @(posedge clk_i) disable iff (!rst_ni)
+                    inp_valid_i[h] && !inp_ready_o[h]
+                    |=> inp_valid_i[h] && $stable({
+                        inp_step_dbg[h],
+                        inp_tile_id_dbg[h],
+                        inp_inner_id_dbg[h],
+                        inp_beat_id_dbg[h],
+                        inp_lockstep_dbg[h]
+                    });
+            endproperty : inp_dbg_stable_until_ready
+
+            property weight_dbg_stable_until_ready;
+                @(posedge clk_i) disable iff (!rst_ni)
+                    inp_weight_valid_i[h] && !inp_weight_ready_o[h]
+                    |=> inp_weight_valid_i[h] && $stable({
+                        inp_weight_step_dbg[h],
+                        inp_weight_tile_id_dbg[h],
+                        inp_weight_inner_id_dbg[h],
+                        inp_weight_beat_id_dbg[h],
+                        inp_weight_lockstep_dbg[h]
+                    });
+            endproperty : weight_dbg_stable_until_ready
+
+            property bias_dbg_stable_until_ready;
+                @(posedge clk_i) disable iff (!rst_ni)
+                    inp_bias_valid_i[h] && !inp_bias_ready_o[h]
+                    |=> inp_bias_valid_i[h] && $stable({
+                        inp_bias_step_dbg[h],
+                        inp_bias_tile_id_dbg[h],
+                        inp_bias_inner_id_dbg[h],
+                        inp_bias_beat_id_dbg[h],
+                        inp_bias_lockstep_dbg[h]
+                    });
+            endproperty : bias_dbg_stable_until_ready
+
+            property head_output_dbg_stable_until_ready;
+                @(posedge clk_i) disable iff (!rst_ni)
+                    per_head_valid_o[h] && !per_head_ready_i[h]
+                    |=> per_head_valid_o[h] && $stable({
+                        per_head_step_o[h],
+                        per_head_tile_id_dbg[h],
+                        per_head_inner_id_dbg[h],
+                        per_head_beat_id_dbg[h]
+                    });
+            endproperty : head_output_dbg_stable_until_ready
+
+            property head_requant_known_when_ctrl_start;
+                @(posedge clk_i) disable iff (!rst_ni)
+                    ctrl_i.start |-> !$isunknown({
+                        head_eps_mult_i[h],
+                        head_right_shift_i[h],
+                        head_add_i[h]
+                    });
+            endproperty : head_requant_known_when_ctrl_start
+
+            property head_index_in_mha8_range;
+                @(posedge clk_i) disable iff (!rst_ni)
+                    h < 8;
+            endproperty : head_index_in_mha8_range
+
+            property inp_step_legal_when_valid;
+                @(posedge clk_i) disable iff (!rst_ni)
+                    inp_valid_i[h] |-> inp_step_dbg[h] inside {Q, K, V, QK, AV, OW, MatMul};
+            endproperty : inp_step_legal_when_valid
+
+            property weight_step_legal_when_valid;
+                @(posedge clk_i) disable iff (!rst_ni)
+                    inp_weight_valid_i[h] |-> inp_weight_step_dbg[h] inside {Q, K, V, QK, AV, OW, MatMul};
+            endproperty : weight_step_legal_when_valid
+
+            property bias_step_legal_when_valid;
+                @(posedge clk_i) disable iff (!rst_ni)
+                    inp_bias_valid_i[h] |-> inp_bias_step_dbg[h] inside {Q, K, V, QK, AV, OW, MatMul};
+            endproperty : bias_step_legal_when_valid
+
+            property head_output_step_legal_when_valid;
+                @(posedge clk_i) disable iff (!rst_ni)
+                    per_head_valid_o[h] |-> per_head_step_o[h] inside {Q, K, V, QK, AV, OW, MatMul};
+            endproperty : head_output_step_legal_when_valid
+
+            property head_output_last_inner_legal;
+                @(posedge clk_i) disable iff (!rst_ni)
+                    per_head_valid_o[h] && (per_head_step_o[h] inside {Q, K, V})
+                    |-> (sva_tile_e_q != 0 && per_head_inner_id_dbg[h] == sva_tile_e_q - 1);
+            endproperty : head_output_last_inner_legal
+
+            property head_ow_output_last_inner_legal;
+                @(posedge clk_i) disable iff (!rst_ni)
+                    per_head_valid_o[h] && per_head_step_o[h] == OW
+                    |-> (sva_tile_p_q != 0 && per_head_inner_id_dbg[h] == sva_tile_p_q - 1);
+            endproperty : head_ow_output_last_inner_legal
 
             inp_payload_known_when_valid_a: assert property(inp_payload_known_when_valid);
             weight_payload_known_when_valid_a: assert property(weight_payload_known_when_valid);
@@ -241,8 +402,244 @@ interface ita_mha8_if
             weight_stable_until_a: assert property(weight_stable_until_ready);
             bias_stable_until_a: assert property(bias_stable_until_ready);
             head_output_stable_until_ready_a: assert property(head_output_stable_until_ready);
+            inp_dbg_known_when_valid_a: assert property(inp_dbg_known_when_valid);
+            weight_dbg_known_when_valid_a: assert property(weight_dbg_known_when_valid);
+            bias_dbg_known_when_valid_a: assert property(bias_dbg_known_when_valid);
+            head_output_dbg_known_when_valid_a: assert property(head_output_dbg_known_when_valid);
+            inp_dbg_stable_until_ready_a: assert property(inp_dbg_stable_until_ready);
+            weight_dbg_stable_until_ready_a: assert property(weight_dbg_stable_until_ready);
+            bias_dbg_stable_until_ready_a: assert property(bias_dbg_stable_until_ready);
+            head_output_dbg_stable_until_ready_a: assert property(head_output_dbg_stable_until_ready);
+            head_requant_known_when_ctrl_start_a: assert property(head_requant_known_when_ctrl_start);
+            head_index_in_mha8_range_a: assert property(head_index_in_mha8_range);
+            inp_step_legal_when_valid_a: assert property(inp_step_legal_when_valid);
+            weight_step_legal_when_valid_a: assert property(weight_step_legal_when_valid);
+            bias_step_legal_when_valid_a: assert property(bias_step_legal_when_valid);
+            head_output_step_legal_when_valid_a: assert property(head_output_step_legal_when_valid);
+            head_output_last_inner_legal_a: assert property(head_output_last_inner_legal);
+            head_ow_output_last_inner_legal_a: assert property(head_ow_output_last_inner_legal);
         end
     endgenerate
+
+    property sum_ctrl_known;
+        @(posedge clk_i) disable iff (!rst_ni)
+            !$isunknown({sum_valid_o, sum_ready_i});
+    endproperty : sum_ctrl_known
+
+    property sum_output_known_when_valid;
+        @(posedge clk_i) disable iff (!rst_ni)
+            sum_valid_o |-> !$isunknown({
+                sum_oup_o,
+                sum_step_dbg,
+                sum_tile_id_dbg,
+                sum_inner_id_dbg,
+                sum_beat_id_dbg
+            });
+    endproperty : sum_output_known_when_valid
+
+    property sum_output_stable_until_ready;
+        @(posedge clk_i) disable iff (!rst_ni)
+            sum_valid_o && !sum_ready_i
+            |=> sum_valid_o && $stable({
+                sum_oup_o,
+                sum_step_dbg,
+                sum_tile_id_dbg,
+                sum_inner_id_dbg,
+                sum_beat_id_dbg
+            });
+    endproperty : sum_output_stable_until_ready
+
+    property sum_output_last_inner_legal;
+        @(posedge clk_i) disable iff (!rst_ni)
+            sum_valid_o |-> (sva_tile_p_q != 0 && sum_inner_id_dbg == sva_tile_p_q - 1);
+    endproperty : sum_output_last_inner_legal
+
+    property ff_stream_ctrl_known;
+        @(posedge clk_i) disable iff (!rst_ni)
+            !$isunknown({
+                ff_inp_valid_i,
+                ff_inp_weight_valid_i,
+                ff_inp_bias_valid_i,
+                ff_ready_i
+            });
+    endproperty : ff_stream_ctrl_known
+
+    property ff_inp_ready_known_when_valid;
+        @(posedge clk_i) disable iff (!rst_ni)
+            ff_inp_valid_i |-> !$isunknown(ff_inp_ready_o);
+    endproperty : ff_inp_ready_known_when_valid
+
+    property ff_weight_ready_known_when_valid;
+        @(posedge clk_i) disable iff (!rst_ni)
+            ff_inp_weight_valid_i |-> !$isunknown(ff_inp_weight_ready_o);
+    endproperty : ff_weight_ready_known_when_valid
+
+    property ff_bias_ready_known_when_valid;
+        @(posedge clk_i) disable iff (!rst_ni)
+            ff_inp_bias_valid_i |-> !$isunknown(ff_inp_bias_ready_o);
+    endproperty : ff_bias_ready_known_when_valid
+
+    property ff_valid_known_when_ready;
+        @(posedge clk_i) disable iff (!rst_ni)
+            ff_ready_i |-> !$isunknown(ff_valid_o);
+    endproperty : ff_valid_known_when_ready
+
+    property ff_inp_payload_known_when_valid;
+        @(posedge clk_i) disable iff (!rst_ni)
+            ff_inp_valid_i |-> !$isunknown(ff_inp_i);
+    endproperty : ff_inp_payload_known_when_valid
+
+    property ff_weight_payload_known_when_valid;
+        @(posedge clk_i) disable iff (!rst_ni)
+            ff_inp_weight_valid_i |-> !$isunknown(ff_inp_weight_i);
+    endproperty : ff_weight_payload_known_when_valid
+
+    property ff_bias_payload_known_when_valid;
+        @(posedge clk_i) disable iff (!rst_ni)
+            ff_inp_bias_valid_i |-> !$isunknown(ff_inp_bias_i);
+    endproperty : ff_bias_payload_known_when_valid
+
+    property ff_output_known_when_valid;
+        @(posedge clk_i) disable iff (!rst_ni)
+            ff_valid_o |-> !$isunknown({
+                ff_oup_o,
+                ff_step_o,
+                ff_tile_id_dbg,
+                ff_inner_id_dbg,
+                ff_beat_id_dbg
+            });
+    endproperty : ff_output_known_when_valid
+
+    property ff_inp_dbg_known_when_valid;
+        @(posedge clk_i) disable iff (!rst_ni)
+            ff_inp_valid_i |-> !$isunknown({
+                ff_inp_step_dbg,
+                ff_inp_tile_id_dbg,
+                ff_inp_inner_id_dbg,
+                ff_inp_beat_id_dbg,
+                ff_inp_lockstep_dbg
+            });
+    endproperty : ff_inp_dbg_known_when_valid
+
+    property ff_weight_dbg_known_when_valid;
+        @(posedge clk_i) disable iff (!rst_ni)
+            ff_inp_weight_valid_i |-> !$isunknown({
+                ff_inp_weight_step_dbg,
+                ff_inp_weight_tile_id_dbg,
+                ff_inp_weight_inner_id_dbg,
+                ff_inp_weight_beat_id_dbg,
+                ff_inp_weight_lockstep_dbg
+            });
+    endproperty : ff_weight_dbg_known_when_valid
+
+    property ff_bias_dbg_known_when_valid;
+        @(posedge clk_i) disable iff (!rst_ni)
+            ff_inp_bias_valid_i |-> !$isunknown({
+                ff_inp_bias_step_dbg,
+                ff_inp_bias_tile_id_dbg,
+                ff_inp_bias_inner_id_dbg,
+                ff_inp_bias_beat_id_dbg,
+                ff_inp_bias_lockstep_dbg
+            });
+    endproperty : ff_bias_dbg_known_when_valid
+
+    property ff_inp_stable_until_ready;
+        @(posedge clk_i) disable iff (!rst_ni)
+            ff_inp_valid_i && !ff_inp_ready_o
+            |=> ff_inp_valid_i && $stable(ff_inp_i);
+    endproperty : ff_inp_stable_until_ready
+
+    property ff_weight_stable_until_ready;
+        @(posedge clk_i) disable iff (!rst_ni)
+            ff_inp_weight_valid_i && !ff_inp_weight_ready_o
+            |=> ff_inp_weight_valid_i && $stable(ff_inp_weight_i);
+    endproperty : ff_weight_stable_until_ready
+
+    property ff_bias_stable_until_ready;
+        @(posedge clk_i) disable iff (!rst_ni)
+            ff_inp_bias_valid_i && !ff_inp_bias_ready_o
+            |=> ff_inp_bias_valid_i && $stable(ff_inp_bias_i);
+    endproperty : ff_bias_stable_until_ready
+
+    property ff_output_stable_until_ready;
+        @(posedge clk_i) disable iff (!rst_ni)
+            ff_valid_o && !ff_ready_i
+            |=> ff_valid_o && $stable({
+                ff_oup_o,
+                ff_step_o,
+                ff_tile_id_dbg,
+                ff_inner_id_dbg,
+                ff_beat_id_dbg
+            });
+    endproperty : ff_output_stable_until_ready
+
+    property ff_inp_dbg_stable_until_ready;
+        @(posedge clk_i) disable iff (!rst_ni)
+            ff_inp_valid_i && !ff_inp_ready_o
+            |=> ff_inp_valid_i && $stable({
+                ff_inp_step_dbg,
+                ff_inp_tile_id_dbg,
+                ff_inp_inner_id_dbg,
+                ff_inp_beat_id_dbg,
+                ff_inp_lockstep_dbg
+            });
+    endproperty : ff_inp_dbg_stable_until_ready
+
+    property ff_weight_dbg_stable_until_ready;
+        @(posedge clk_i) disable iff (!rst_ni)
+            ff_inp_weight_valid_i && !ff_inp_weight_ready_o
+            |=> ff_inp_weight_valid_i && $stable({
+                ff_inp_weight_step_dbg,
+                ff_inp_weight_tile_id_dbg,
+                ff_inp_weight_inner_id_dbg,
+                ff_inp_weight_beat_id_dbg,
+                ff_inp_weight_lockstep_dbg
+            });
+    endproperty : ff_weight_dbg_stable_until_ready
+
+    property ff_bias_dbg_stable_until_ready;
+        @(posedge clk_i) disable iff (!rst_ni)
+            ff_inp_bias_valid_i && !ff_inp_bias_ready_o
+            |=> ff_inp_bias_valid_i && $stable({
+                ff_inp_bias_step_dbg,
+                ff_inp_bias_tile_id_dbg,
+                ff_inp_bias_inner_id_dbg,
+                ff_inp_bias_beat_id_dbg,
+                ff_inp_bias_lockstep_dbg
+            });
+    endproperty : ff_bias_dbg_stable_until_ready
+
+    property ff_inp_step_legal_when_valid;
+        @(posedge clk_i) disable iff (!rst_ni)
+            ff_inp_valid_i |-> ff_inp_step_dbg inside {F1, F2};
+    endproperty : ff_inp_step_legal_when_valid
+
+    property ff_weight_step_legal_when_valid;
+        @(posedge clk_i) disable iff (!rst_ni)
+            ff_inp_weight_valid_i |-> ff_inp_weight_step_dbg inside {F1, F2};
+    endproperty : ff_weight_step_legal_when_valid
+
+    property ff_bias_step_legal_when_valid;
+        @(posedge clk_i) disable iff (!rst_ni)
+            ff_inp_bias_valid_i |-> ff_inp_bias_step_dbg inside {F1, F2};
+    endproperty : ff_bias_step_legal_when_valid
+
+    property ff_output_step_legal_when_valid;
+        @(posedge clk_i) disable iff (!rst_ni)
+            ff_valid_o |-> ff_step_o inside {F1, F2};
+    endproperty : ff_output_step_legal_when_valid
+
+    property ff_f1_output_last_inner_legal;
+        @(posedge clk_i) disable iff (!rst_ni)
+            ff_valid_o && ff_step_o == F1
+            |-> (sva_tile_e_q != 0 && ff_inner_id_dbg == sva_tile_e_q - 1);
+    endproperty : ff_f1_output_last_inner_legal
+
+    property ff_f2_output_last_inner_legal;
+        @(posedge clk_i) disable iff (!rst_ni)
+            ff_valid_o && ff_step_o == F2
+            |-> (sva_tile_f_q != 0 && ff_inner_id_dbg == sva_tile_f_q - 1);
+    endproperty : ff_f2_output_last_inner_legal
 
     property ctrl_start_known;
         @(posedge clk_i) disable iff (!rst_ni)
@@ -261,13 +658,101 @@ interface ita_mha8_if
             });
     endproperty : ctrl_known
 
+    property ctrl_requant_known;
+        @(posedge clk_i) disable iff (!rst_ni)
+            ctrl_i.start |-> !$isunknown({
+                ctrl_i.eps_mult,
+                ctrl_i.right_shift,
+                ctrl_i.add,
+                ctrl_i.activation_requant_mult,
+                ctrl_i.activation_requant_shift,
+                ctrl_i.activation_requant_add,
+                sum_eps_mult_i,
+                sum_right_shift_i,
+                sum_add_i
+            });
+    endproperty : ctrl_requant_known
+
+    property ctrl_tile_nonzero;
+        @(posedge clk_i) disable iff (!rst_ni)
+            ctrl_i.start |-> (
+                ctrl_i.tile_s != 0 &&
+                ctrl_i.tile_e != 0 &&
+                ctrl_i.tile_p != 0 &&
+                ctrl_i.tile_f != 0
+            );
+    endproperty : ctrl_tile_nonzero
+
+    property ctrl_layer_legal;
+        @(posedge clk_i) disable iff (!rst_ni)
+            ctrl_i.start |-> ctrl_i.layer inside {Attention, Feedforward, Linear, SingleAttention};
+    endproperty : ctrl_layer_legal
+
+    property ctrl_activation_legal;
+        @(posedge clk_i) disable iff (!rst_ni)
+            ctrl_i.start |-> ctrl_i.activation inside {Identity, Gelu, Relu};
+    endproperty : ctrl_activation_legal
+
     property ctrl_start_pulse;
         @(posedge clk_i) disable iff (!rst_ni)
             ctrl_i.start |=> !ctrl_i.start;
     endproperty : ctrl_start_pulse
 
+    property driver_owned_idle_during_reset;
+        @(posedge clk_i)
+            !rst_ni |-> (
+                inp_valid_i == '0 &&
+                inp_weight_valid_i == '0 &&
+                inp_bias_valid_i == '0 &&
+                ff_inp_valid_i == 1'b0 &&
+                ff_inp_weight_valid_i == 1'b0 &&
+                ff_inp_bias_valid_i == 1'b0 &&
+                !$isunknown({
+                    per_head_ready_i,
+                    sum_ready_i,
+                    ff_ready_i
+                })
+            );
+    endproperty : driver_owned_idle_during_reset
+
+    sum_ctrl_known_a: assert property(sum_ctrl_known);
+    sum_output_known_when_valid_a: assert property(sum_output_known_when_valid);
+    sum_output_stable_until_ready_a: assert property(sum_output_stable_until_ready);
+    sum_output_last_inner_legal_a: assert property(sum_output_last_inner_legal);
+
+    ff_stream_ctrl_known_a: assert property(ff_stream_ctrl_known);
+    ff_inp_ready_known_when_valid_a: assert property(ff_inp_ready_known_when_valid);
+    ff_weight_ready_known_when_valid_a: assert property(ff_weight_ready_known_when_valid);
+    ff_bias_ready_known_when_valid_a: assert property(ff_bias_ready_known_when_valid);
+    ff_valid_known_when_ready_a: assert property(ff_valid_known_when_ready);
+    ff_inp_payload_known_when_valid_a: assert property(ff_inp_payload_known_when_valid);
+    ff_weight_payload_known_when_valid_a: assert property(ff_weight_payload_known_when_valid);
+    ff_bias_payload_known_when_valid_a: assert property(ff_bias_payload_known_when_valid);
+    ff_output_known_when_valid_a: assert property(ff_output_known_when_valid);
+    ff_inp_dbg_known_when_valid_a: assert property(ff_inp_dbg_known_when_valid);
+    ff_weight_dbg_known_when_valid_a: assert property(ff_weight_dbg_known_when_valid);
+    ff_bias_dbg_known_when_valid_a: assert property(ff_bias_dbg_known_when_valid);
+    ff_inp_stable_until_ready_a: assert property(ff_inp_stable_until_ready);
+    ff_weight_stable_until_ready_a: assert property(ff_weight_stable_until_ready);
+    ff_bias_stable_until_ready_a: assert property(ff_bias_stable_until_ready);
+    ff_output_stable_until_ready_a: assert property(ff_output_stable_until_ready);
+    ff_inp_dbg_stable_until_ready_a: assert property(ff_inp_dbg_stable_until_ready);
+    ff_weight_dbg_stable_until_ready_a: assert property(ff_weight_dbg_stable_until_ready);
+    ff_bias_dbg_stable_until_ready_a: assert property(ff_bias_dbg_stable_until_ready);
+    ff_inp_step_legal_when_valid_a: assert property(ff_inp_step_legal_when_valid);
+    ff_weight_step_legal_when_valid_a: assert property(ff_weight_step_legal_when_valid);
+    ff_bias_step_legal_when_valid_a: assert property(ff_bias_step_legal_when_valid);
+    ff_output_step_legal_when_valid_a: assert property(ff_output_step_legal_when_valid);
+    ff_f1_output_last_inner_legal_a: assert property(ff_f1_output_last_inner_legal);
+    ff_f2_output_last_inner_legal_a: assert property(ff_f2_output_last_inner_legal);
+
     ctrl_start_known_a: assert property(ctrl_start_known);
     ctrl_known_a: assert property(ctrl_known);
+    ctrl_requant_known_a: assert property(ctrl_requant_known);
+    ctrl_tile_nonzero_a: assert property(ctrl_tile_nonzero);
+    ctrl_layer_legal_a: assert property(ctrl_layer_legal);
+    ctrl_activation_legal_a: assert property(ctrl_activation_legal);
     ctrl_start_pulse_a: assert property(ctrl_start_pulse);
+    driver_owned_idle_during_reset_a: assert property(driver_owned_idle_during_reset);
 
 endinterface : ita_mha8_if
