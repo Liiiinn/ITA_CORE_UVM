@@ -18,6 +18,8 @@ class ita_mha8_scoreboard extends uvm_component;
 
     int unsigned actual_count;
 
+    ita_mha8_struct_predictor pred;
+
     int unsigned tile_s;
     int unsigned tile_e;
     int unsigned tile_p;
@@ -88,6 +90,9 @@ class ita_mha8_scoreboard extends uvm_component;
         void'(uvm_config_db#(int unsigned)::get(this, "", "tile_e", tile_e));
         void'(uvm_config_db#(int unsigned)::get(this, "", "tile_p", tile_p));
         void'(uvm_config_db#(int unsigned)::get(this, "", "tile_f", tile_f));
+
+        if (pred == null)
+            `uvm_fatal("ITA_SCB_PRED", "ita_mha8_struct_predictor handle was not set")
 
         `uvm_info("ITA_SCB_CFG",
             $sformatf("Scoreboard tile config: tile_s=%0d tile_e=%0d tile_p=%0d tile_f=%0d",
@@ -297,58 +302,11 @@ class ita_mha8_scoreboard extends uvm_component;
     endfunction : record_beat_integrity
 
     function int unsigned expected_source_segments_for_step(step_e step);
-        case (step)
-            Q, K, V:
-                return tile_s * tile_p * tile_e;
-            QK:
-                return tile_s * tile_s * tile_p;
-            AV:
-                return tile_s * tile_p * tile_s;
-            OW:
-                return tile_s * tile_e * tile_p;
-            F1:
-                return tile_s * tile_f * tile_e;
-            F2:
-                return tile_s * tile_e * tile_f;
-            MatMul:
-                return tile_s * tile_p * tile_e;
-            default:
-                return 0;
-        endcase
+        return pred.expected_source_segments(step);
     endfunction : expected_source_segments_for_step
 
     function int unsigned expected_output_segments_for_kind_step(ita_stream_kind_e kind, step_e step);
-        case (kind)
-            ITA_STREAM_HEAD_OUTPUT: begin
-                case (step)
-                    Q, K, V:
-                        return tile_s * tile_p;
-                    OW:
-                        return tile_s * tile_e;
-                    MatMul:
-                        return tile_s * tile_p;
-                    default:
-                        return 0;
-                endcase
-            end
-            ITA_STREAM_SUM_OUTPUT: begin
-                if (step == OW)
-                    return tile_s * tile_e;
-                return 0;
-            end
-            ITA_STREAM_FF_OUTPUT: begin
-                case (step)
-                    F1:
-                        return tile_s * tile_f;
-                    F2:
-                        return tile_s * tile_e;
-                    default:
-                        return 0;
-                endcase
-            end
-            default:
-                return 0;
-        endcase
+        return pred.expected_output_segments_for_kind(step, kind);
     endfunction : expected_output_segments_for_kind_step
 
     function void record_source_transaction(ita_stream_item tr);
@@ -495,30 +453,7 @@ class ita_mha8_scoreboard extends uvm_component;
     endfunction : check_source_bias_rule
 
     function bit is_output_inner_legal(ita_stream_item tr);
-        is_output_inner_legal = 1'b0;
-
-        case (tr.step)
-            Q, K, V:
-                is_output_inner_legal = (tr.inner_tile_id == ((tile_e == 0) ? 0 : tile_e - 1));
-            QK:
-                is_output_inner_legal = (tr.tile_id < tile_s * tile_s &&
-                    tr.inner_tile_id == ((tile_p == 0) ? 0 : tile_p - 1));
-            AV:
-                is_output_inner_legal = (tr.tile_id < tile_s * tile_p &&
-                    tr.inner_tile_id == ((tile_s == 0) ? 0 : tile_s - 1));
-            OW:
-                is_output_inner_legal = (tr.tile_id < tile_s * tile_e &&
-                    tr.inner_tile_id == ((tile_p == 0) ? 0 : tile_p - 1));
-            F1:
-                is_output_inner_legal = (tr.tile_id < tile_s * tile_f &&
-                    tr.inner_tile_id == ((tile_e == 0) ? 0 : tile_e - 1));
-            F2:
-                is_output_inner_legal = (tr.tile_id < tile_s * tile_e &&
-                    tr.inner_tile_id == ((tile_f == 0) ? 0 : tile_f - 1));
-            MatMul:
-                is_output_inner_legal = 1'b1;
-            default: begin end
-        endcase
+        return pred.is_output_metadata_legal(tr.step, tr.kind, tr.tile_id, tr.inner_tile_id);
     endfunction : is_output_inner_legal
 
     function void check_output_metadata_rule(ita_stream_item tr);

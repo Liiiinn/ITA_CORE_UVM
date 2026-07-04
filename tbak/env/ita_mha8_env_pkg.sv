@@ -5,6 +5,7 @@ package ita_mha8_env_pkg;
     import ita_ctrl_agent_pkg::*;
     import ita_stream_agent_pkg::*;
     import ita_mha8_logger_pkg::*;
+    import ita_mha8_pred_pkg::*;
     import ita_mha8_scb_pkg::*;
     import ita_mha8_common_pkg::*;
     import ita_mha8_cov_pkg::*;
