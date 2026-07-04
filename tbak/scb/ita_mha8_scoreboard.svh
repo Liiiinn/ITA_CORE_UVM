@@ -6,9 +6,11 @@ class ita_mha8_scoreboard extends uvm_component;
 
     uvm_analysis_export #(ita_stream_item) source_export;
     uvm_analysis_export #(ita_stream_item) output_export;
+    uvm_analysis_export #(ita_ctrl_item) ctrl_export;
 
     uvm_tlm_analysis_fifo #(ita_stream_item) source_fifo;
     uvm_tlm_analysis_fifo #(ita_stream_item) output_fifo;
+    uvm_tlm_analysis_fifo #(ita_ctrl_item) ctrl_fifo;
 
     int unsigned input_count;
     int unsigned weight_count;
@@ -29,15 +31,30 @@ class ita_mha8_scoreboard extends uvm_component;
     int unsigned weight_count_by_segment[string];
     int unsigned bias_count_by_segment[string];
     int unsigned source_segment_seen[string];
+    int unsigned source_segment_count_by_step_head[string];
+    step_e       source_step_by_step_head[string];
+    int unsigned source_head_by_step_head[string];
+
+    int unsigned output_segment_seen[string];
+    int unsigned output_segment_count_by_kind_step_head[string];
+    ita_stream_kind_e output_kind_by_kind_step_head[string];
+    step_e       output_step_by_kind_step_head[string];
+    int unsigned output_head_by_kind_step_head[string];
+
+    bit          beat_seen[string];
+    int unsigned max_beat_id_by_key[string];
+    int unsigned last_beat_id_by_key[string];
+    bit          has_last_beat_by_key[string];
+
+    int unsigned current_job_id;
+    int unsigned ctrl_count;
+    bit          has_active_ctrl;
+    layer_e      active_layer;
+    activation_e active_activation;
+
     int unsigned rule_error_count;
     int unsigned max_rule_errors;
 
-    // TODO S13_ONLINE_SCB: keep this scoreboard non-numerical; offline manifest compare owns golden value checking.
-    // TODO S13_ONLINE_SCB: add beat_id continuity checks per kind/step/head/tile/inner transaction key.
-    // TODO S13_ONLINE_SCB: add duplicate/missing beat detection using recorded source/output transaction keys.
-    // TODO S13_ONLINE_SCB: add output active-window checks once job/phase active metadata is observable.
-    // TODO S13_ONLINE_SCB: add back-to-back job state-clear checks before accepting the next job's first transaction.
-    // TODO S13_STRUCT_PREDICTOR: compare transaction counts against cfg/manifest-derived structural expected counts only, not numeric payloads.
     // TODO S13_STRUCT_PREDICTOR: avoid full QK/AV global output order checks unless DUT exposes enough softmax-loop debug metadata.
 
     function new(string name = "ita_mha8_scoreboard", uvm_component parent = null);
@@ -47,12 +64,19 @@ class ita_mha8_scoreboard extends uvm_component;
         tile_e = 1;
         tile_p = 1;
         tile_f = 1;
+        current_job_id = 0;
+        ctrl_count = 0;
+        has_active_ctrl = 1'b0;
+        active_layer = Attention;
+        active_activation = Identity;
         rule_error_count = 0;
         max_rule_errors = 128;
 
+        ctrl_export = new("ctrl_export", this);
         source_export = new("source_export", this);
         output_export = new("output_export", this);
 
+        ctrl_fifo = new("ctrl_fifo", this);
         source_fifo = new("source_fifo", this);
         output_fifo = new("output_fifo", this);
     endfunction : new
@@ -73,16 +97,37 @@ class ita_mha8_scoreboard extends uvm_component;
 
     function void connect_phase(uvm_phase phase);
         super.connect_phase(phase);
+        ctrl_export.connect(ctrl_fifo.analysis_export);
         source_export.connect(source_fifo.analysis_export);
         output_export.connect(output_fifo.analysis_export);
     endfunction : connect_phase
 
     task run_phase(uvm_phase phase);
         fork
+            process_ctrl_fifo();
             process_source_fifo();
             process_output_fifo();
         join
     endtask : run_phase
+
+    task process_ctrl_fifo();
+        ita_ctrl_item tr;
+
+        forever begin
+            ctrl_fifo.get(tr);
+            ctrl_count++;
+            current_job_id++;
+            has_active_ctrl = 1'b1;
+            active_layer = tr.ctrl.layer;
+            active_activation = tr.ctrl.activation;
+
+            `uvm_info("ITA_SCB_CTRL",
+                $sformatf("Observed ctrl job=%0d layer=%s activation=%s tile_s/e/p/f=%0d/%0d/%0d/%0d",
+                    current_job_id, active_layer.name(), active_activation.name(),
+                    tr.ctrl.tile_s, tr.ctrl.tile_e, tr.ctrl.tile_p, tr.ctrl.tile_f),
+                UVM_LOW)
+        end
+    endtask : process_ctrl_fifo
 
     task process_source_fifo();
         ita_stream_item tr;
@@ -137,6 +182,10 @@ class ita_mha8_scoreboard extends uvm_component;
         return count_key_from_fields(tr.kind, tr.step, tr.head_id, tr.tile_id, tr.inner_tile_id);
     endfunction : count_key
 
+    function string job_key();
+        return $sformatf("job%0d", current_job_id);
+    endfunction : job_key
+
     function string count_key_from_fields(
         ita_stream_kind_e kind,
         step_e step,
@@ -144,8 +193,8 @@ class ita_mha8_scoreboard extends uvm_component;
         int unsigned tile_id,
         int unsigned inner_tile_id
     );
-        return $sformatf("%s:%s:h%0d:t%0d:i%0d",
-            stream_kind_label(kind), step.name(), head_id, tile_id, inner_tile_id);
+        return $sformatf("%s:%s:%s:h%0d:t%0d:i%0d",
+            job_key(), stream_kind_label(kind), step.name(), head_id, tile_id, inner_tile_id);
     endfunction : count_key_from_fields
 
     function string segment_key(ita_stream_item tr);
@@ -158,21 +207,162 @@ class ita_mha8_scoreboard extends uvm_component;
         int unsigned tile_id,
         int unsigned inner_tile_id
     );
-        return $sformatf("%s:h%0d:t%0d:i%0d", step.name(), head_id, tile_id, inner_tile_id);
+        return $sformatf("%s:%s:h%0d:t%0d:i%0d", job_key(), step.name(), head_id, tile_id, inner_tile_id);
     endfunction : segment_key_from_fields
 
     function string step_key(step_e step);
-        return step.name();
+        return $sformatf("%s:%s", job_key(), step.name());
     endfunction : step_key
+
+    function string step_head_key(step_e step, int unsigned head_id);
+        return $sformatf("%s:%s:h%0d", job_key(), step.name(), head_id);
+    endfunction : step_head_key
+
+    function string kind_step_head_key(ita_stream_kind_e kind, step_e step, int unsigned head_id);
+        return $sformatf("%s:%s:%s:h%0d", job_key(), stream_kind_label(kind), step.name(), head_id);
+    endfunction : kind_step_head_key
+
+    function string beat_key(ita_stream_item tr);
+        return $sformatf("%s:b%0d", count_key(tr), tr.beat_id);
+    endfunction : beat_key
+
+    function bit step_matches_layer(step_e step, layer_e layer);
+        case (layer)
+            Attention:
+                return (step inside {Q, K, V, QK, AV, OW});
+            Feedforward:
+                return (step inside {F1, F2});
+            Linear:
+                return (step == MatMul);
+            default:
+                return 1'b0;
+        endcase
+    endfunction : step_matches_layer
+
+    function void check_active_window_rule(ita_stream_item tr);
+        if (!has_active_ctrl) begin
+            scb_rule_error("ITA_SCB_WINDOW",
+                $sformatf("Transaction observed before ctrl start: kind=%s step=%s head=%0d tile=%0d inner=%0d beat=%0d",
+                    stream_kind_label(tr.kind), tr.step.name(), tr.head_id, tr.tile_id, tr.inner_tile_id, tr.beat_id));
+            return;
+        end
+
+        if (!step_matches_layer(tr.step, active_layer)) begin
+            scb_rule_error("ITA_SCB_WINDOW",
+                $sformatf("Transaction step does not match active layer: job=%0d layer=%s kind=%s step=%s head=%0d tile=%0d inner=%0d beat=%0d",
+                    current_job_id, active_layer.name(), stream_kind_label(tr.kind), tr.step.name(),
+                    tr.head_id, tr.tile_id, tr.inner_tile_id, tr.beat_id));
+        end
+    endfunction : check_active_window_rule
+
+    function bit should_check_beat_integrity(ita_stream_item tr);
+        if (tr.kind == ITA_STREAM_HEAD_OUTPUT && (tr.step inside {QK, AV}))
+            return 1'b0;
+        return 1'b1;
+    endfunction : should_check_beat_integrity
+
+    function void record_beat_integrity(ita_stream_item tr);
+        string cnt_key;
+        string b_key;
+
+        if (!should_check_beat_integrity(tr))
+            return;
+
+        cnt_key = count_key(tr);
+        b_key = beat_key(tr);
+
+        if (beat_seen.exists(b_key)) begin
+            scb_rule_error("ITA_SCB_BEAT_DUP",
+                $sformatf("Duplicate beat observed for %s", b_key));
+            return;
+        end
+        beat_seen[b_key] = 1'b1;
+
+        if (!max_beat_id_by_key.exists(cnt_key) || tr.beat_id > max_beat_id_by_key[cnt_key])
+            max_beat_id_by_key[cnt_key] = tr.beat_id;
+
+        if (has_last_beat_by_key.exists(cnt_key) && has_last_beat_by_key[cnt_key]) begin
+            if (tr.beat_id != last_beat_id_by_key[cnt_key] + 1) begin
+                scb_rule_error("ITA_SCB_BEAT_ORDER",
+                    $sformatf("Beat discontinuity for %s: expected=%0d got=%0d",
+                        cnt_key, last_beat_id_by_key[cnt_key] + 1, tr.beat_id));
+            end
+        end else if (tr.beat_id != 0) begin
+            scb_rule_error("ITA_SCB_BEAT_ORDER",
+                $sformatf("First beat for %s should be 0, got=%0d", cnt_key, tr.beat_id));
+        end
+
+        has_last_beat_by_key[cnt_key] = 1'b1;
+        last_beat_id_by_key[cnt_key] = tr.beat_id;
+    endfunction : record_beat_integrity
+
+    function int unsigned expected_source_segments_for_step(step_e step);
+        case (step)
+            Q, K, V:
+                return tile_s * tile_p * tile_e;
+            QK:
+                return tile_s * tile_s * tile_p;
+            AV:
+                return tile_s * tile_p * tile_s;
+            OW:
+                return tile_s * tile_e * tile_p;
+            F1:
+                return tile_s * tile_f * tile_e;
+            F2:
+                return tile_s * tile_e * tile_f;
+            MatMul:
+                return tile_s * tile_p * tile_e;
+            default:
+                return 0;
+        endcase
+    endfunction : expected_source_segments_for_step
+
+    function int unsigned expected_output_segments_for_kind_step(ita_stream_kind_e kind, step_e step);
+        case (kind)
+            ITA_STREAM_HEAD_OUTPUT: begin
+                case (step)
+                    Q, K, V:
+                        return tile_s * tile_p;
+                    OW:
+                        return tile_s * tile_e;
+                    MatMul:
+                        return tile_s * tile_p;
+                    default:
+                        return 0;
+                endcase
+            end
+            ITA_STREAM_SUM_OUTPUT: begin
+                if (step == OW)
+                    return tile_s * tile_e;
+                return 0;
+            end
+            ITA_STREAM_FF_OUTPUT: begin
+                case (step)
+                    F1:
+                        return tile_s * tile_f;
+                    F2:
+                        return tile_s * tile_e;
+                    default:
+                        return 0;
+                endcase
+            end
+            default:
+                return 0;
+        endcase
+    endfunction : expected_output_segments_for_kind_step
 
     function void record_source_transaction(ita_stream_item tr);
         string seg_key;
         string cnt_key;
         string stp_key;
+        string sh_key;
+        bit is_new_segment;
 
         cnt_key = count_key(tr);
         stp_key = step_key(tr.step);
         seg_key = segment_key(tr);
+        sh_key = step_head_key(tr.step, tr.head_id);
+        is_new_segment = !source_segment_seen.exists(seg_key);
 
         if (!stream_count_by_key.exists(cnt_key))
             stream_count_by_key[cnt_key] = 0;
@@ -183,6 +373,15 @@ class ita_mha8_scoreboard extends uvm_component;
         source_total_by_step[stp_key]++;
 
         source_segment_seen[seg_key] = 1;
+        if (is_new_segment) begin
+            if (!source_segment_count_by_step_head.exists(sh_key))
+                source_segment_count_by_step_head[sh_key] = 0;
+            source_segment_count_by_step_head[sh_key]++;
+            source_step_by_step_head[sh_key] = tr.step;
+            source_head_by_step_head[sh_key] = tr.head_id;
+        end
+
+        record_beat_integrity(tr);
 
         case (tr.kind)
             ITA_STREAM_HEAD_INPUT,
@@ -213,9 +412,15 @@ class ita_mha8_scoreboard extends uvm_component;
     function void record_output_transaction(ita_stream_item tr);
         string cnt_key;
         string stp_key;
+        string out_seg_key;
+        string ksh_key;
+        bit is_new_segment;
 
         cnt_key = count_key(tr);
         stp_key = step_key(tr.step);
+        out_seg_key = cnt_key;
+        ksh_key = kind_step_head_key(tr.kind, tr.step, tr.head_id);
+        is_new_segment = !output_segment_seen.exists(out_seg_key);
 
         if (!output_count_by_key.exists(cnt_key))
             output_count_by_key[cnt_key] = 0;
@@ -224,6 +429,18 @@ class ita_mha8_scoreboard extends uvm_component;
         if (!output_total_by_step.exists(stp_key))
             output_total_by_step[stp_key] = 0;
         output_total_by_step[stp_key]++;
+
+        output_segment_seen[out_seg_key] = 1;
+        if (is_new_segment) begin
+            if (!output_segment_count_by_kind_step_head.exists(ksh_key))
+                output_segment_count_by_kind_step_head[ksh_key] = 0;
+            output_segment_count_by_kind_step_head[ksh_key]++;
+            output_kind_by_kind_step_head[ksh_key] = tr.kind;
+            output_step_by_kind_step_head[ksh_key] = tr.step;
+            output_head_by_kind_step_head[ksh_key] = tr.head_id;
+        end
+
+        record_beat_integrity(tr);
     endfunction : record_output_transaction
 
     function void scb_rule_error(string tag, string message);
@@ -314,6 +531,8 @@ class ita_mha8_scoreboard extends uvm_component;
     endfunction : check_output_metadata_rule
 
     function void sanity_check_source(ita_stream_item tr);
+        check_active_window_rule(tr);
+
         if (!(tr.kind inside {
                 ITA_STREAM_HEAD_INPUT,
                 ITA_STREAM_HEAD_WEIGHT,
@@ -348,6 +567,8 @@ class ita_mha8_scoreboard extends uvm_component;
     endfunction : sanity_check_source
 
     function void sanity_check_actual(ita_stream_item actual);
+        check_active_window_rule(actual);
+
         if (!(actual.kind inside {ITA_STREAM_HEAD_OUTPUT, ITA_STREAM_FF_OUTPUT, ITA_STREAM_SUM_OUTPUT}))
             `uvm_error("ITA_SCB_KIND", $sformatf("Unexpected actual stream kind=%0d", actual.kind)) 
         
@@ -366,12 +587,29 @@ class ita_mha8_scoreboard extends uvm_component;
     function void report_phase(uvm_phase phase);
         super.report_phase(phase);
         report_transaction_summary();
+        check_missing_beat_rules();
         check_source_count_rules();
+        check_segment_count_rules();
         // Offline manifest compare owns full output order/count correctness.
         // The DUT debug metadata currently exposes local controller tile ids,
         // which is enough for online legality checks but not for reconstructing
         // the full QK/AV softmax-loop segment order.
     endfunction : report_phase
+
+    function void check_missing_beat_rules();
+        string cnt_key;
+        string b_key;
+
+        foreach (max_beat_id_by_key[cnt_key]) begin
+            for (int unsigned beat = 0; beat <= max_beat_id_by_key[cnt_key]; beat++) begin
+                b_key = $sformatf("%s:b%0d", cnt_key, beat);
+                if (!beat_seen.exists(b_key)) begin
+                    scb_rule_error("ITA_SCB_BEAT_MISSING",
+                        $sformatf("Missing beat for %s", b_key));
+                end
+            end
+        end
+    endfunction : check_missing_beat_rules
 
     function void check_source_count_rules();
         string key;
@@ -391,6 +629,43 @@ class ita_mha8_scoreboard extends uvm_component;
             end
         end
     endfunction : check_source_count_rules
+
+    function void check_segment_count_rules();
+        string key;
+        step_e step;
+        ita_stream_kind_e kind;
+        int unsigned head_id;
+        int unsigned expected_n;
+        int unsigned actual_n;
+
+        foreach (source_segment_count_by_step_head[key]) begin
+            step = source_step_by_step_head[key];
+            head_id = source_head_by_step_head[key];
+            expected_n = expected_source_segments_for_step(step);
+            actual_n = source_segment_count_by_step_head[key];
+
+            if (expected_n != 0 && actual_n != expected_n) begin
+                scb_rule_error("ITA_SCB_SEGMENT",
+                    $sformatf("Source segment count mismatch for %s head=%0d: expected=%0d actual=%0d tile_s/e/p/f=%0d/%0d/%0d/%0d",
+                        step.name(), head_id, expected_n, actual_n, tile_s, tile_e, tile_p, tile_f));
+            end
+        end
+
+        foreach (output_segment_count_by_kind_step_head[key]) begin
+            kind = output_kind_by_kind_step_head[key];
+            step = output_step_by_kind_step_head[key];
+            head_id = output_head_by_kind_step_head[key];
+            expected_n = expected_output_segments_for_kind_step(kind, step);
+            actual_n = output_segment_count_by_kind_step_head[key];
+
+            if (expected_n != 0 && actual_n != expected_n) begin
+                scb_rule_error("ITA_SCB_SEGMENT",
+                    $sformatf("Output segment count mismatch for kind=%s step=%s head=%0d: expected=%0d actual=%0d tile_s/e/p/f=%0d/%0d/%0d/%0d",
+                        stream_kind_label(kind), step.name(), head_id, expected_n, actual_n,
+                        tile_s, tile_e, tile_p, tile_f));
+            end
+        end
+    endfunction : check_segment_count_rules
 
     function void report_transaction_summary();
         string key;

@@ -5,6 +5,7 @@
 +incdir+../tbak/log
 +incdir+../tbak/common
 +incdir+../tbak/scb
++incdir+../tbak/cov
 +incdir+../tbak/env
 +incdir+../tbak/seq
 +incdir+../tbak/vseq
@@ -49,6 +50,7 @@
 ../tbak/log/ita_mha8_logger_pkg.sv
 ../tbak/common/ita_mha8_common_pkg.sv
 ../tbak/scb/ita_mha8_scb_pkg.sv
+../tbak/cov/ita_mha8_cov_pkg.sv
 ../tbak/env/ita_mha8_env_pkg.sv
 ../tbak/seq/ita_mha8_seq_pkg.sv
 ../tbak/vseq/ita_mha8_vseq_pkg.sv

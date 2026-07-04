@@ -21,10 +21,9 @@ class ita_mha8_env extends uvm_env;
 
     ita_mha8_logger logger;
     ita_mha8_scoreboard scb;
+    ita_mha8_cov cov;
     // Stage 11: create sum and feed-forward agents after full head-path coverage exists.
-    // TODO S13_ONLINE_COV: instantiate/connect future ita_mha8_coverage collector alongside logger and scoreboard.
     // TODO S13_STRUCT_PREDICTOR: instantiate/connect future structural predictor for cfg-derived transaction expectations.
-    // TODO S13_ONLINE_COV: pass tile cfg, activation, layer, projection/test mode, and vector source into coverage/predictor components.
     // TODO S13_ONLINE_COV: add env_config knobs such as enable_online_cov and enable_structural_predictor.
 
     function new(string name = "ita_mha8_env", uvm_component parent = null);
@@ -77,6 +76,13 @@ class ita_mha8_env extends uvm_env;
         uvm_config_db#(int unsigned)::set(this, "scb", "tile_p", cfg.tile_p);
         uvm_config_db#(int unsigned)::set(this, "scb", "tile_f", cfg.tile_f);
         scb = ita_mha8_scoreboard::type_id::create("scb", this);
+
+        uvm_config_db#(int unsigned)::set(this, "cov", "tile_s", cfg.tile_s);
+        uvm_config_db#(int unsigned)::set(this, "cov", "tile_e", cfg.tile_e);
+        uvm_config_db#(int unsigned)::set(this, "cov", "tile_p", cfg.tile_p);
+        uvm_config_db#(int unsigned)::set(this, "cov", "tile_f", cfg.tile_f);
+        cov = ita_mha8_cov::type_id::create("cov", this);
+
         vsqr = ita_mha8_vsequencer::type_id::create("vsqr", this);
     endfunction : build_phase
 
@@ -85,6 +91,8 @@ class ita_mha8_env extends uvm_env;
 
         vsqr.vif = cfg.vif;
         vsqr.ctrl_sqr = ctrl_agt.sqr;
+        ctrl_agt.ap.connect(scb.ctrl_export);
+        ctrl_agt.ap.connect(cov.ctrl_imp);
 
         // Stage 7: connect head_output_agt[0].ap to a passive actual-output logger.
         // Stage 8: connect monitor analysis ports to a smoke scoreboard for count/X/Z/timeout checks.
@@ -103,6 +111,11 @@ class ita_mha8_env extends uvm_env;
             weight_agt[h].ap.connect(scb.source_export);
             bias_agt[h].ap.connect(scb.source_export);
             head_output_agt[h].ap.connect(scb.output_export);
+
+            input_agt[h].ap.connect(cov.stream_imp);
+            weight_agt[h].ap.connect(cov.stream_imp);
+            bias_agt[h].ap.connect(cov.stream_imp);
+            head_output_agt[h].ap.connect(cov.output_imp);
         end
         // Stage 10: logger CSV output feeds parse_actual.py through the manifest-driven smoke flow.
         // Stage 11: fan in sum and feed-forward analysis ports.
@@ -123,6 +136,12 @@ class ita_mha8_env extends uvm_env;
         ff_weight_agt.ap.connect(scb.source_export);
         ff_bias_agt.ap.connect(scb.source_export);
         ff_output_agt.ap.connect(scb.output_export);
+
+        sum_output_agt.ap.connect(cov.output_imp);
+        ff_input_agt.ap.connect(cov.stream_imp);
+        ff_weight_agt.ap.connect(cov.stream_imp);
+        ff_bias_agt.ap.connect(cov.stream_imp);
+        ff_output_agt.ap.connect(cov.output_imp);
     endfunction : connect_phase
 
 endclass : ita_mha8_env
