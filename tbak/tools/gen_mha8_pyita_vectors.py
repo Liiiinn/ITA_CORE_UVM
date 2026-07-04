@@ -475,6 +475,51 @@ def make_ff_requant_row(pyita_dir: Path, step: str) -> dict[str, Any]:
     }
 
 
+def ff_step_files_available(pyita_dir: Path, step: str) -> bool:
+    try:
+        sources = resolve_ff_step_sources(pyita_dir, step)
+    except FileNotFoundError:
+        return False
+    return (
+        sources.input_path.is_file()
+        and sources.weight_path.is_file()
+        and sources.bias_path.is_file()
+        and sources.expected_source_path.is_file()
+    )
+
+
+def make_activation_requant_rows(pyita_dir: Path, activation: str) -> list[dict[str, Any]]:
+    if activation == "Identity":
+        return []
+
+    vector_root = pyita_dir.parent
+    mult = read_values(vector_root / "activation_requant_mult.txt")[0]
+    shift = read_values(vector_root / "activation_requant_shift.txt")[0]
+    add = read_values(vector_root / "activation_requant_add.txt")[0]
+
+    rows = [
+        {
+            "step": "ACTIVATION",
+            "head_id": 0,
+            "mult": mult,
+            "shift": shift,
+            "add": add,
+        }
+    ]
+
+    if activation == "Gelu":
+        gelu_b = read_values(vector_root / "GELU_B.txt")[0]
+        gelu_c = read_values(vector_root / "GELU_C.txt")[0]
+        rows.extend(
+            [
+                {"step": "GELU_B", "head_id": 0, "mult": gelu_b, "shift": 0, "add": 0},
+                {"step": "GELU_C", "head_id": 0, "mult": gelu_c, "shift": 0, "add": 0},
+            ]
+        )
+
+    return rows
+
+
 def main() -> int:
     root = core_root()
     default_out_dir = root / "sim" / "logger"
@@ -589,6 +634,18 @@ def main() -> int:
     if not pyita_dir.is_dir():
         raise FileNotFoundError(f"PyITA standalone directory not found: {pyita_dir}")
 
+    skipped_ff_steps: list[str] = []
+    if ff_projections:
+        available_ff_steps: list[str] = []
+        for step in ff_projections:
+            if ff_step_files_available(pyita_dir, step):
+                available_ff_steps.append(step)
+            else:
+                skipped_ff_steps.append(step)
+        if skipped_ff_steps:
+            projections = [step for step in projections if step not in skipped_ff_steps]
+            ff_projections = available_ff_steps
+
     out_dir = args.out_dir
     stream_path = out_dir / stream_name
     requant_path = out_dir / requant_name
@@ -597,6 +654,7 @@ def main() -> int:
 
     rows: list[dict[str, Any]] = []
     requant_rows: list[dict[str, Any]] = []
+    requant_rows.extend(make_activation_requant_rows(pyita_dir, args.activation))
     per_head: list[dict[str, Any]] = [{"head_id": head, "steps": {}} for head in range(args.heads)] if is_multi_step else []
     tile_aware = is_multi_step
     head_stream_info: dict[tuple[str, int], dict[str, Any]] = {}
@@ -1124,6 +1182,12 @@ def main() -> int:
             "ffn_requant_mult_file": "RQS_FFN_MUL.txt" if ff_projections else None,
             "ffn_requant_shift_file": "RQS_FFN_SHIFT.txt" if ff_projections else None,
             "ffn_requant_add_file": "RQS_FFN_ADD.txt" if ff_projections else None,
+            "activation_requant_mult_file": "activation_requant_mult.txt" if args.activation != "Identity" else None,
+            "activation_requant_shift_file": "activation_requant_shift.txt" if args.activation != "Identity" else None,
+            "activation_requant_add_file": "activation_requant_add.txt" if args.activation != "Identity" else None,
+            "gelu_b_file": "GELU_B.txt" if args.activation == "Gelu" else None,
+            "gelu_c_file": "GELU_C.txt" if args.activation == "Gelu" else None,
+            "skipped_ff_steps": skipped_ff_steps,
         },
         "compare": compare_cfg,
         "stream_path": rel_to_core(stream_path, root),
@@ -1148,10 +1212,14 @@ def main() -> int:
     }
     if is_multi_step:
         manifest["step_order"] = projections
+    if skipped_ff_steps:
+        manifest["skipped_ff_steps"] = skipped_ff_steps
     write_manifest(manifest_path, manifest)
 
     print(f"Wrote {len(rows)} stream rows -> {stream_path}")
     print(f"Wrote {len(requant_rows)} requant rows -> {requant_path}")
+    if skipped_ff_steps:
+        print(f"Skipped missing FF step file bundle(s): {', '.join(skipped_ff_steps)}")
     if is_multi_step:
         print(
             f"Wrote {args.heads * len(head_projections)} PyITA-{projection} per-head expected files "

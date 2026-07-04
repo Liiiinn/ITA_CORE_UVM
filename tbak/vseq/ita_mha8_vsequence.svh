@@ -15,17 +15,16 @@ class ita_mha8_vsequence extends uvm_sequence;
         if (core == null)
             core = ita_mha8_core_item::type_id::create("core");
 
+        fork
+            send_attention_phase();
+            wait_attention_sum_complete();
+        join
+
         if (has_ff_steps()) begin
-            fork
-                send_attention_phase();
-                wait_attention_sum_complete();
-            join
             fork
                 send_feedforward_phase();
                 wait_feedforward_complete();
             join
-        end else begin
-            send_attention_phase();
         end
     endtask : body
 
@@ -33,7 +32,7 @@ class ita_mha8_vsequence extends uvm_sequence;
         ita_ctrl_single_seq ctrl_seq;
 
         ctrl_seq = ita_ctrl_single_seq::type_id::create("ctrl_seq");
-        ctrl_seq.ctrl = make_ctrl_item(core, Attention, first_attention_step());
+        ctrl_seq.ctrl = make_ctrl_item(core, Attention, first_attention_step(), Identity, 1'b1);
         ctrl_seq.start(p_sequencer.ctrl_sqr);
 
         foreach (core.payload_schedule[i]) begin
@@ -50,11 +49,13 @@ class ita_mha8_vsequence extends uvm_sequence;
     endtask
 
     task send_feedforward_phase();
-        ita_ctrl_single_seq ctrl_seq;
+        bit sent_f1_ctrl;
+        bit sent_f2_ctrl_update;
+        bit waited_f1_outputs;
 
-        ctrl_seq = ita_ctrl_single_seq::type_id::create("ff_ctrl_seq");
-        ctrl_seq.ctrl = make_ctrl_item(core, Feedforward, first_ff_step());
-        ctrl_seq.start(p_sequencer.ctrl_sqr);
+        sent_f1_ctrl = 1'b0;
+        sent_f2_ctrl_update = 1'b0;
+        waited_f1_outputs = 1'b0;
 
         foreach (core.payload_schedule[i]) begin
             ita_mha8_step_payload payload;
@@ -64,10 +65,91 @@ class ita_mha8_vsequence extends uvm_sequence;
             if (!is_ff_step(payload.step))
                 continue;
 
+            if (payload.step == F1 && !sent_f1_ctrl) begin
+                send_ctrl_item("ff_f1_ctrl_seq", make_ctrl_item(core, Feedforward, F1, core.activation, 1'b1));
+                sent_f1_ctrl = 1'b1;
+            end
+
+            if (payload.step == F2 && !sent_f2_ctrl_update) begin
+                if (!sent_f1_ctrl)
+                    send_ctrl_item("ff_f1_ctrl_seq", make_ctrl_item(core, Feedforward, F1, core.activation, 1'b1));
+                else if (!waited_f1_outputs) begin
+                    wait_ff_step_output_complete(F1);
+                    waited_f1_outputs = 1'b1;
+                end
+                send_ctrl_item("ff_f2_ctrl_update_seq", make_ctrl_item(core, Feedforward, F2, Identity, 1'b0));
+                sent_f1_ctrl = 1'b1;
+                sent_f2_ctrl_update = 1'b1;
+            end
+
             if (payload.drive_ff_streams)
                 send_ff_payload(payload);
         end
     endtask
+
+    task wait_ff_step_output_complete(step_e step);
+        int unsigned target_tile;
+        int unsigned target_inner;
+        int unsigned target_beat;
+        int unsigned idle_cycles;
+
+        if (p_sequencer.vif == null)
+            `uvm_fatal("VSEQ", "Virtual sequencer vif is not set; cannot wait for FF step output completion")
+
+        case (step)
+            F1: begin
+                if (core.tile_s == 0 || core.tile_f == 0 || core.tile_e == 0)
+                    return;
+                target_tile = core.tile_s * core.tile_f - 1;
+                target_inner = core.tile_e - 1;
+            end
+            F2: begin
+                if (core.tile_s == 0 || core.tile_e == 0 || core.tile_f == 0)
+                    return;
+                target_tile = core.tile_s * core.tile_e - 1;
+                target_inner = core.tile_f - 1;
+            end
+            default:
+                return;
+        endcase
+
+        target_beat = M * M / N - 1;
+        idle_cycles = 0;
+
+        forever begin
+            @(posedge p_sequencer.vif.clk_i);
+
+            if (!p_sequencer.vif.rst_ni) begin
+                idle_cycles = 0;
+                continue;
+            end
+
+            if (p_sequencer.vif.ff_valid_o && p_sequencer.vif.ff_ready_i) begin
+                idle_cycles = 0;
+                if (p_sequencer.vif.ff_step_o == step &&
+                    p_sequencer.vif.ff_tile_id_dbg == target_tile &&
+                    p_sequencer.vif.ff_inner_id_dbg == target_inner &&
+                    p_sequencer.vif.ff_beat_id_dbg == target_beat) begin
+                    return;
+                end
+            end else begin
+                idle_cycles++;
+                if (idle_cycles > 1000000) begin
+                    `uvm_fatal("VSEQ",
+                        $sformatf("Timeout waiting for %s FF output completion: target tile=%0d inner=%0d beat=%0d",
+                            step.name(), target_tile, target_inner, target_beat))
+                end
+            end
+        end
+    endtask : wait_ff_step_output_complete
+
+    task send_ctrl_item(string seq_name, ita_ctrl_item ctrl);
+        ita_ctrl_single_seq ctrl_seq;
+
+        ctrl_seq = ita_ctrl_single_seq::type_id::create(seq_name);
+        ctrl_seq.ctrl = ctrl;
+        ctrl_seq.start(p_sequencer.ctrl_sqr);
+    endtask : send_ctrl_item
 
     function bit is_attention_step(step_e step);
         return step inside {Q, K, V, QK, AV, OW};
@@ -292,19 +374,22 @@ class ita_mha8_vsequence extends uvm_sequence;
     function ita_ctrl_item make_ctrl_item(
         ita_mha8_core_item core,
         layer_e layer_value,
-        step_e ctrl_step
+        step_e ctrl_step,
+        activation_e activation_value,
+        bit start_value
     );
         ita_ctrl_item ctrl;
-        int unsigned activation_requant_idx;
         ctrl = ita_ctrl_item::type_id::create("ctrl");
 
         ctrl.ctrl.layer = layer_value;
-        ctrl.ctrl.activation = core.activation;
+        ctrl.ctrl.activation = activation_value;
         ctrl.ctrl.tile_s = core.tile_s;
         ctrl.ctrl.tile_e = core.tile_e;
         ctrl.ctrl.tile_p = core.tile_p;
         ctrl.ctrl.tile_f = core.tile_f;
-        ctrl.ctrl.start = 1'b1;
+        ctrl.ctrl.start = start_value;
+        ctrl.ctrl.gelu_b = core.gelu_b;
+        ctrl.ctrl.gelu_c = core.gelu_c;
         ctrl.ctrl.activation_requant_mult  = 8'd1;
         ctrl.ctrl.activation_requant_shift = 8'd0;
         ctrl.ctrl.activation_requant_add   = '0;
@@ -322,11 +407,10 @@ class ita_mha8_vsequence extends uvm_sequence;
             ctrl.ff_right_shift  = core.ff_right_shift;
             ctrl.ff_add          = core.ff_add;
 
-            if (layer_value == Feedforward && core.activation != Identity) begin
-                activation_requant_idx = ctrl.requant_index_for_step(F1);
-                ctrl.ctrl.activation_requant_mult  = core.ff_eps_mult[activation_requant_idx];
-                ctrl.ctrl.activation_requant_shift = core.ff_right_shift[activation_requant_idx];
-                ctrl.ctrl.activation_requant_add   = core.ff_add[activation_requant_idx];
+            if (layer_value == Feedforward && activation_value != Identity) begin
+                ctrl.ctrl.activation_requant_mult  = core.activation_requant_mult;
+                ctrl.ctrl.activation_requant_shift = core.activation_requant_shift;
+                ctrl.ctrl.activation_requant_add   = core.activation_requant_add;
             end
         end else begin
             ctrl.set_all_heads_identity_requant_for_step(ctrl_step);

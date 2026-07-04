@@ -24,6 +24,11 @@ class ita_mha8_core_item extends uvm_sequence_item;
     requant_const_array_t ff_eps_mult;
     requant_const_array_t ff_right_shift;
     requant_array_t       ff_add;
+    requant_const_t       activation_requant_mult;
+    requant_const_t       activation_requant_shift;
+    requant_t             activation_requant_add;
+    gelu_const_t          gelu_b;
+    gelu_const_t          gelu_c;
     requant_const_t       sum_eps_mult;
     requant_const_t       sum_right_shift;
     requant_t             sum_add;
@@ -129,6 +134,11 @@ class ita_mha8_core_item extends uvm_sequence_item;
         ff_eps_mult    = '0;
         ff_right_shift = '0;
         ff_add         = '0;
+        activation_requant_mult  = 8'd1;
+        activation_requant_shift = 8'd0;
+        activation_requant_add   = '0;
+        gelu_b = '0;
+        gelu_c = '0;
         sum_eps_mult    = '0;
         sum_right_shift = '0;
         sum_add         = '0;
@@ -161,8 +171,8 @@ class ita_mha8_core_item extends uvm_sequence_item;
         int signed step_idx;
         int signed add_value;
         int unsigned head_id;
-        int unsigned mult_value;
-        int unsigned shift_value;
+        int signed mult_value;
+        int signed shift_value;
         int unsigned char_idx;
         int unsigned loaded_rows;
         bit sum_requant_seen;
@@ -207,12 +217,11 @@ class ita_mha8_core_item extends uvm_sequence_item;
                 continue;
             end
 
-            if (head_id >= NumHeads) begin
-                `uvm_warning("CORE RQCSV", $sformatf("Skipping illegal head row at line %0d: head_id=%0d", line_no, head_id))
-                continue;
-            end
-
             if (step_name == "SUM" || step_name == "OW_SUM") begin
+                if (head_id >= NumHeads) begin
+                    `uvm_warning("CORE RQCSV", $sformatf("Skipping illegal head row at line %0d: head_id=%0d", line_no, head_id))
+                    continue;
+                end
                 if (!sum_requant_seen) begin
                     sum_eps_mult    = requant_const_t'(mult_value);
                     sum_right_shift = requant_const_t'(shift_value);
@@ -226,6 +235,31 @@ class ita_mha8_core_item extends uvm_sequence_item;
                             line_no, mult_value, shift_value, add_value))
                 end
                 loaded_rows++;
+                continue;
+            end
+
+            if (step_name == "ACTIVATION") begin
+                activation_requant_mult  = requant_const_t'(mult_value);
+                activation_requant_shift = requant_const_t'(shift_value);
+                activation_requant_add   = requant_t'(add_value);
+                loaded_rows++;
+                continue;
+            end
+
+            if (step_name == "GELU_B") begin
+                gelu_b = gelu_const_t'(mult_value);
+                loaded_rows++;
+                continue;
+            end
+
+            if (step_name == "GELU_C") begin
+                gelu_c = gelu_const_t'(mult_value);
+                loaded_rows++;
+                continue;
+            end
+
+            if (head_id >= NumHeads) begin
+                `uvm_warning("CORE RQCSV", $sformatf("Skipping illegal head row at line %0d: head_id=%0d", line_no, head_id))
                 continue;
             end
 
