@@ -71,6 +71,8 @@ module ita_mha8_tb_top;
         .phase_mismatch_o     (vif.phase_mismatch_o)
     );
 
+    assign vif.per_head_ready_dbg = dut.head_ready;
+
     initial begin
         clk = 1'b0;
         forever begin

@@ -280,6 +280,7 @@ foreach ($case in $cases) {
     $inputSourceGapMax = Get-JsonInt $future "ITA_INPUT_SOURCE_GAP_MAX" $sourceGapMax
     $weightSourceGapMax = Get-JsonInt $future "ITA_WEIGHT_SOURCE_GAP_MAX" $sourceGapMax
     $biasSourceGapMax = Get-JsonInt $future "ITA_BIAS_SOURCE_GAP_MAX" $sourceGapMax
+    $lockstepIdleGapMax = Get-JsonInt $future "ITA_LOCKSTEP_IDLE_GAP_MAX" 0
     $readyLowMax = Get-JsonInt $future "ITA_READY_LOW_MAX" 0
     $readyHighMax = Get-JsonInt $future "ITA_READY_HIGH_MAX" 1
     $expectFail = [bool](Get-JsonProp $case "expect_fail" $false)
@@ -297,6 +298,7 @@ foreach ($case in $cases) {
     $smokeArgs = Set-ValueArg $smokeArgs "-InputSourceGapMax" ([string]$inputSourceGapMax)
     $smokeArgs = Set-ValueArg $smokeArgs "-WeightSourceGapMax" ([string]$weightSourceGapMax)
     $smokeArgs = Set-ValueArg $smokeArgs "-BiasSourceGapMax" ([string]$biasSourceGapMax)
+    $smokeArgs = Set-ValueArg $smokeArgs "-LockstepIdleGapMax" ([string]$lockstepIdleGapMax)
     $smokeArgs = Set-ValueArg $smokeArgs "-ReadyLowMax" ([string]$readyLowMax)
     $smokeArgs = Set-ValueArg $smokeArgs "-ReadyHighMax" ([string]$readyHighMax)
     $smokeArgs = Set-SwitchArg $smokeArgs "-EnableCoverage" $true
@@ -371,6 +373,8 @@ foreach ($case in $cases) {
 
     $result = [ordered]@{
         name = $caseName
+        category = [string](Get-JsonProp $case "category" "")
+        spec_basis = [string](Get-JsonProp $case "spec_basis" "")
         status = $status
         exit_status = $exitCode
         seed = $seed
@@ -384,6 +388,7 @@ foreach ($case in $cases) {
         input_source_gap_max = $inputSourceGapMax
         weight_source_gap_max = $weightSourceGapMax
         bias_source_gap_max = $biasSourceGapMax
+        lockstep_idle_gap_max = $lockstepIdleGapMax
         ready_low_max = $readyLowMax
         ready_high_max = $readyHighMax
         expect_fail = $expectFail
@@ -416,6 +421,8 @@ if ($stoppedEarly -and ($caseIndex + 1) -lt $cases.Count) {
         $skippedName = [string](Get-JsonProp $skippedCase "name" ("case_$skipIndex"))
         $results.Add([pscustomobject][ordered]@{
             name = $skippedName
+            category = [string](Get-JsonProp $skippedCase "category" "")
+            spec_basis = [string](Get-JsonProp $skippedCase "spec_basis" "")
             status = "SKIPPED"
             exit_status = 0
             seed = Get-JsonInt $skippedCase "seed" 0
@@ -429,6 +436,7 @@ if ($stoppedEarly -and ($caseIndex + 1) -lt $cases.Count) {
             input_source_gap_max = 0
             weight_source_gap_max = 0
             bias_source_gap_max = 0
+            lockstep_idle_gap_max = 0
             ready_low_max = 0
             ready_high_max = 0
             expect_fail = [bool](Get-JsonProp $skippedCase "expect_fail" $false)
@@ -450,10 +458,37 @@ $passCount = @($results | Where-Object { $_.status -eq "PASS" }).Count
 $failCount = @($results | Where-Object { $_.status -eq "FAIL" }).Count
 $skipCount = @($results | Where-Object { $_.status -eq "SKIPPED" }).Count
 $dryRunCount = @($results | Where-Object { $_.status -eq "DRYRUN" }).Count
+$xfailPassCount = @($results | Where-Object { $_.expect_fail -and $_.status -eq "PASS" }).Count
+
+$categorySummary = New-Object System.Collections.Specialized.OrderedDictionary
+foreach ($result in $results) {
+    $category = [string]$result.category
+    if ($category -eq "") {
+        $category = "uncategorized"
+    }
+    if (-not $categorySummary.Contains($category)) {
+        $categorySummary.Add($category, [ordered]@{
+            total = 0
+            pass = 0
+            fail = 0
+            skipped = 0
+            dryrun = 0
+            xfail_pass = 0
+        })
+    }
+    $bucket = $categorySummary[$category]
+    $bucket["total"]++
+    if ($result.status -eq "PASS") { $bucket["pass"]++ }
+    if ($result.status -eq "FAIL") { $bucket["fail"]++ }
+    if ($result.status -eq "SKIPPED") { $bucket["skipped"]++ }
+    if ($result.status -eq "DRYRUN") { $bucket["dryrun"]++ }
+    if ($result.expect_fail -and $result.status -eq "PASS") { $bucket["xfail_pass"]++ }
+}
 
 $coverage = [ordered]@{
     status = if ($DryRun) { "DRYRUN" } else { "SKIPPED" }
     input_count = 0
+    excluded_xfail_ucdb = 0
     merged_ucdb = ""
     report = ""
     text_report = ""
@@ -463,8 +498,10 @@ $coverage = [ordered]@{
 }
 
 if (-not $DryRun) {
-    $passUcdbs = @($results | Where-Object { $_.status -eq "PASS" -and $_.ucdb_exists } | ForEach-Object { $_.ucdb_path })
+    $passUcdbs = @($results | Where-Object { $_.status -eq "PASS" -and -not $_.expect_fail -and $_.ucdb_exists } | ForEach-Object { $_.ucdb_path })
+    $xfailUcdbs = @($results | Where-Object { $_.status -eq "PASS" -and $_.expect_fail -and $_.ucdb_exists } | ForEach-Object { $_.ucdb_path })
     $coverage.input_count = $passUcdbs.Count
+    $coverage.excluded_xfail_ucdb = $xfailUcdbs.Count
     if ($passUcdbs.Count -gt 0) {
         $coverageDir = Join-Path $OutDir "coverage"
         New-Item -ItemType Directory -Path $coverageDir -Force | Out-Null
@@ -524,6 +561,8 @@ $summary.Add("pass", $passCount)
 $summary.Add("fail", $failCount)
 $summary.Add("skipped", $skipCount)
 $summary.Add("dryrun", $dryRunCount)
+$summary.Add("xfail_pass", $xfailPassCount)
+$summary.Add("by_category", $categorySummary)
 $summary.Add("coverage_merge", $coverage)
 $caseResults = $results.ToArray()
 $summary.Add("cases", [object]$caseResults)
@@ -535,18 +574,26 @@ $summaryLines = New-Object System.Collections.Generic.List[string]
 $summaryLines.Add("Random MHA8 Regression Summary")
 $summaryLines.Add("manifest=$CasesManifest")
 $summaryLines.Add("out_dir=$OutDir")
-$summaryLines.Add("total=$($summary["total"]) pass=$passCount fail=$failCount skipped=$skipCount dryrun=$dryRunCount elapsed_s=$($summary["elapsed_seconds"])")
+$summaryLines.Add("total=$($summary["total"]) pass=$passCount fail=$failCount skipped=$skipCount dryrun=$dryRunCount xfail_pass=$xfailPassCount elapsed_s=$($summary["elapsed_seconds"])")
+$summaryLines.Add("by_category=" + (($categorySummary.GetEnumerator() | ForEach-Object {
+    "$($_.Key):total=$($_.Value["total"]),pass=$($_.Value["pass"]),fail=$($_.Value["fail"]),skipped=$($_.Value["skipped"]),dryrun=$($_.Value["dryrun"]),xfail_pass=$($_.Value["xfail_pass"])"
+}) -join "; "))
 $summaryLines.Add("coverage_merge=$($coverage.status) input_ucdb=$($coverage.input_count)")
+$summaryLines.Add("coverage_excluded_xfail_ucdb=$($coverage.excluded_xfail_ucdb)")
 if ($coverage.merged_ucdb -ne "") { $summaryLines.Add("merged_ucdb=$($coverage.merged_ucdb)") }
 if ($coverage.text_report -ne "") { $summaryLines.Add("coverage_text_report=$($coverage.text_report)") }
 if ($coverage.html_report -ne "") { $summaryLines.Add("coverage_html_report=$($coverage.html_report)") }
 if ($coverage.failure_message -ne "") { $summaryLines.Add("coverage_failure=$($coverage.failure_message)") }
 $summaryLines.Add("")
 foreach ($result in $results) {
-    $line = "{0} seed={1} projection={2} activation={3} tiles={4}/{5}/{6}/{7} gap={8} ready_low={9} ready_high={10}" -f `
-        $result.status, $result.seed, $result.projection, $result.activation, `
+    $displayStatus = $result.status
+    if ($result.expect_fail -and $result.status -eq "PASS") {
+        $displayStatus = "XFAIL_PASS"
+    }
+    $line = "{0} category={1} seed={2} projection={3} activation={4} tiles={5}/{6}/{7}/{8} gap={9} lockstep_gap={10} ready_low={11} ready_high={12}" -f `
+        $displayStatus, $result.category, $result.seed, $result.projection, $result.activation, `
         $result.tile_s, $result.tile_e, $result.tile_p, $result.tile_f, `
-        $result.source_gap_max, $result.ready_low_max, $result.ready_high_max
+        $result.source_gap_max, $result.lockstep_idle_gap_max, $result.ready_low_max, $result.ready_high_max
     if ($result.failure_message -ne "") {
         $line += " failure=" + $result.failure_message
     }

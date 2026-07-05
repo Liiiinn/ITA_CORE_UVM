@@ -47,6 +47,7 @@ class ita_mha8_env_config extends uvm_object;
     function void create_default_agent_configs();
         load_tile_plusargs();
         load_protocol_plusargs();
+        validate_tile_plusargs();
 
         // Stage 2: allocate ctrl_cfg and bind cfg.vif to the ctrl agent config.
         ctrl_cfg = ita_ctrl_config::type_id::create("ctrl_cfg");
@@ -59,7 +60,7 @@ class ita_mha8_env_config extends uvm_object;
             input_cfg[h] = create_stream_cfg($sformatf("input_cfg_%0d", h), ITA_STREAM_HEAD_INPUT, h, UVM_ACTIVE);
             weight_cfg[h] = create_stream_cfg($sformatf("weight_cfg_%0d", h), ITA_STREAM_HEAD_WEIGHT, h, UVM_ACTIVE);
             bias_cfg[h] = create_stream_cfg($sformatf("bias_cfg_%0d", h), ITA_STREAM_HEAD_BIAS, h, UVM_ACTIVE);
-            head_output_cfg[h] = create_stream_cfg($sformatf("head_output_cfg_%0d", h), ITA_STREAM_HEAD_OUTPUT, h, UVM_ACTIVE);
+            head_output_cfg[h] = create_stream_cfg($sformatf("head_output_cfg_%0d", h), ITA_STREAM_HEAD_OUTPUT, h, UVM_PASSIVE);
         end
         // Stage 11: expand config creation to heads 1-7, sum, and feed-forward paths.
         sum_output_cfg = create_stream_cfg("sum_output_cfg", ITA_STREAM_SUM_OUTPUT, 0, UVM_ACTIVE);
@@ -144,6 +145,17 @@ class ita_mha8_env_config extends uvm_object;
         void'($value$plusargs("ITA_TILE_P=%d", tile_p));
         void'($value$plusargs("ITA_TILE_F=%d", tile_f));
     endfunction : load_tile_plusargs
+
+    function void validate_tile_plusargs();
+        if (tile_s < 1 || tile_s > 4 ||
+            tile_e < 1 || tile_e > 4 ||
+            tile_p < 1 || tile_p > 4 ||
+            tile_f < 1 || tile_f > 4) begin
+            `uvm_fatal("ITA_CFG_ILLEGAL_TILE",
+                $sformatf("Illegal tile config tile_s/e/p/f=%0d/%0d/%0d/%0d; legal range is 1..4",
+                    tile_s, tile_e, tile_p, tile_f))
+        end
+    endfunction : validate_tile_plusargs
 
     function void load_protocol_plusargs();
         int unsigned tmp;

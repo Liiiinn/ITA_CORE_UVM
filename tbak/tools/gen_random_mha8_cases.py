@@ -430,6 +430,8 @@ def build_case_entry(
 
     return {
         "name": name,
+        "category": "legal_random",
+        "spec_basis": "core_spec_observable",
         "seed": seed,
         "target": "ita_mha8_tb_top",
         "dut": "ita_mha8",
@@ -506,6 +508,8 @@ def main() -> int:
     parser.add_argument("--vector-seed", type=int, default=0, help="Seed passed to testGenerator.py for generated simvectors.")
     parser.add_argument("--no-auto-generate", action="store_true", help="Only sample existing simvectors; do not call testGenerator.py.")
     parser.add_argument("--source-gap-max", type=int, default=0)
+    parser.add_argument("--allow-illegal-source-skew", action="store_true",
+                        help="Allow legacy per-source gap plusargs in random manifests. This is illegal for core_spec legal regression.")
     parser.add_argument("--ready-low-max", type=int, default=0)
     parser.add_argument("--ready-high-max", type=int, default=1)
     parser.add_argument("--dry-run", action="store_true", help="Print manifest JSON instead of writing --out.")
@@ -519,6 +523,8 @@ def main() -> int:
         raise ValueError("--min-tile/--max-tile are invalid")
     if args.source_gap_max < 0 or args.ready_low_max < 0 or args.ready_high_max <= 0:
         raise ValueError("stall/backpressure max values are invalid")
+    if args.source_gap_max != 0 and not args.allow_illegal_source_skew:
+        raise ValueError("--source-gap-max is not legal for core_spec_observable random regression; use output backpressure or --allow-illegal-source-skew")
 
     projections = parse_csv_choices(args.projections or ["ATTNFF"], SUPPORTED_PROJECTIONS, "projection")
     activations = parse_csv_choices(args.activations or ["Identity,Relu,Gelu"], SUPPORTED_ACTIVATIONS, "activation")
@@ -627,6 +633,7 @@ def main() -> int:
             "test_generator": rel_to_workspace(test_generator),
             "vector_seed": args.vector_seed,
             "source_gap_max": args.source_gap_max,
+            "allow_illegal_source_skew": args.allow_illegal_source_skew,
             "ready_low_max": args.ready_low_max,
             "ready_high_max": args.ready_high_max,
         },

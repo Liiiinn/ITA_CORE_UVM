@@ -171,6 +171,13 @@ property ff_bias_step_legal_when_valid;
         ff_inp_bias_valid_i |-> ff_inp_bias_step_dbg inside {F1, F2};
 endproperty : ff_bias_step_legal_when_valid
 
+property ff_legal_source_valid_lockstep_seen;
+    @(posedge clk_i) disable iff (!rst_ni)
+        assert_legal_lockstep_input &&
+        (ff_inp_lockstep_dbg || ff_inp_weight_lockstep_dbg || ff_inp_bias_lockstep_dbg) &&
+        ff_inp_valid_i && ff_inp_weight_valid_i && ff_inp_bias_valid_i;
+endproperty : ff_legal_source_valid_lockstep_seen
+
 property ff_output_step_legal_when_valid;
     @(posedge clk_i) disable iff (!rst_ni)
         ff_valid_o |-> ff_step_o inside {F1, F2};
@@ -290,6 +297,7 @@ ff_bias_dbg_stable_until_ready_a: assert property(ff_bias_dbg_stable_until_ready
 ff_inp_step_legal_when_valid_a: assert property(ff_inp_step_legal_when_valid);
 ff_weight_step_legal_when_valid_a: assert property(ff_weight_step_legal_when_valid);
 ff_bias_step_legal_when_valid_a: assert property(ff_bias_step_legal_when_valid);
+ff_legal_source_valid_lockstep_seen_c: cover property(ff_legal_source_valid_lockstep_seen);
 ff_output_step_legal_when_valid_a: assert property(ff_output_step_legal_when_valid);
 ff_f1_output_last_inner_legal_a: assert property(ff_f1_output_last_inner_legal);
 ff_f2_output_last_inner_legal_a: assert property(ff_f2_output_last_inner_legal);

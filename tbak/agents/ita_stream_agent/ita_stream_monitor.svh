@@ -39,26 +39,84 @@ class ita_stream_monitor extends uvm_monitor;
         // TODO Stage 11: add heads 1-7, sum, and feed-forward handshake checks.
         case(cfg.kind)
             ITA_STREAM_HEAD_INPUT:
-                return cfg.vif.inp_valid_i[cfg.head_id] && cfg.vif.inp_ready_o[cfg.head_id];
+                return is_head_source_handshake();
             ITA_STREAM_HEAD_WEIGHT:
-                return cfg.vif.inp_weight_valid_i[cfg.head_id] && cfg.vif.inp_weight_ready_o[cfg.head_id];
+                return is_head_source_handshake();
             ITA_STREAM_HEAD_BIAS:
-                return cfg.vif.inp_bias_valid_i[cfg.head_id] && cfg.vif.inp_bias_ready_o[cfg.head_id];
+                return is_head_source_handshake();
             ITA_STREAM_HEAD_OUTPUT:
-                return cfg.vif.per_head_valid_o[cfg.head_id] && cfg.vif.per_head_ready_i[cfg.head_id];
+                return is_head_output_handshake();
             ITA_STREAM_SUM_OUTPUT:
                 return cfg.vif.sum_valid_o && cfg.vif.sum_ready_i;
             ITA_STREAM_FF_INPUT:
-                return cfg.vif.ff_inp_valid_i && cfg.vif.ff_inp_ready_o;
+                return is_ff_source_handshake();
             ITA_STREAM_FF_WEIGHT:
-                return cfg.vif.ff_inp_weight_valid_i && cfg.vif.ff_inp_weight_ready_o;
+                return is_ff_source_handshake();
             ITA_STREAM_FF_BIAS:
-                return cfg.vif.ff_inp_bias_valid_i && cfg.vif.ff_inp_bias_ready_o; 
+                return is_ff_source_handshake();
             ITA_STREAM_FF_OUTPUT:
                 return cfg.vif.ff_valid_o && cfg.vif.ff_ready_i;
         endcase
         return 1'b0;
     endfunction : is_handshake
+
+    function bit is_head_source_handshake();
+        if (cfg.vif.inp_lockstep_dbg[cfg.head_id] ||
+            cfg.vif.inp_weight_lockstep_dbg[cfg.head_id] ||
+            cfg.vif.inp_bias_lockstep_dbg[cfg.head_id]) begin
+            return cfg.vif.inp_valid_i[cfg.head_id] &&
+                   cfg.vif.inp_weight_valid_i[cfg.head_id] &&
+                   cfg.vif.inp_bias_valid_i[cfg.head_id] &&
+                   cfg.vif.inp_ready_o[cfg.head_id] &&
+                   cfg.vif.inp_weight_ready_o[cfg.head_id] &&
+                   cfg.vif.inp_bias_ready_o[cfg.head_id];
+        end
+
+        case (cfg.kind)
+            ITA_STREAM_HEAD_INPUT:
+                return cfg.vif.inp_valid_i[cfg.head_id] && cfg.vif.inp_ready_o[cfg.head_id];
+            ITA_STREAM_HEAD_WEIGHT:
+                return cfg.vif.inp_weight_valid_i[cfg.head_id] && cfg.vif.inp_weight_ready_o[cfg.head_id];
+            ITA_STREAM_HEAD_BIAS:
+                return cfg.vif.inp_bias_valid_i[cfg.head_id] && cfg.vif.inp_bias_ready_o[cfg.head_id];
+            default:
+                return 1'b0;
+        endcase
+    endfunction : is_head_source_handshake
+
+    function bit is_ff_source_handshake();
+        if (cfg.vif.ff_inp_lockstep_dbg ||
+            cfg.vif.ff_inp_weight_lockstep_dbg ||
+            cfg.vif.ff_inp_bias_lockstep_dbg) begin
+            return cfg.vif.ff_inp_valid_i &&
+                   cfg.vif.ff_inp_weight_valid_i &&
+                   cfg.vif.ff_inp_bias_valid_i &&
+                   cfg.vif.ff_inp_ready_o &&
+                   cfg.vif.ff_inp_weight_ready_o &&
+                   cfg.vif.ff_inp_bias_ready_o;
+        end
+
+        case (cfg.kind)
+            ITA_STREAM_FF_INPUT:
+                return cfg.vif.ff_inp_valid_i && cfg.vif.ff_inp_ready_o;
+            ITA_STREAM_FF_WEIGHT:
+                return cfg.vif.ff_inp_weight_valid_i && cfg.vif.ff_inp_weight_ready_o;
+            ITA_STREAM_FF_BIAS:
+                return cfg.vif.ff_inp_bias_valid_i && cfg.vif.ff_inp_bias_ready_o;
+            default:
+                return 1'b0;
+        endcase
+    endfunction : is_ff_source_handshake
+
+    function bit is_head_output_handshake();
+        if (!cfg.vif.per_head_valid_o[cfg.head_id])
+            return 1'b0;
+
+        if (cfg.vif.per_head_step_o[cfg.head_id] == OW)
+            return cfg.vif.per_head_ready_dbg[cfg.head_id];
+
+        return cfg.vif.per_head_ready_i[cfg.head_id];
+    endfunction : is_head_output_handshake
 
     function void sample_item();
         ita_stream_item tr;

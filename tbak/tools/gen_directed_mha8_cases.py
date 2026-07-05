@@ -25,7 +25,7 @@ NUMERICAL_PATTERNS = (
     "sparse",
     "zero",
 )
-NEGATIVE_ERROR_RE = r"(UVM_ERROR|UVM_FATAL|CORE CSV|ITA_SCB|timeout|mismatch|illegal|failed|FAIL)"
+NEGATIVE_ERROR_RE = r"(UVM_ERROR|UVM_FATAL|CORE CSV|ITA_SCB|SVA|timeout|mismatch|illegal|failed|FAIL)"
 
 
 @dataclass(frozen=True)
@@ -286,6 +286,8 @@ def case_entry(
         "ITA_INPUT_SOURCE_GAP_MAX": 0,
         "ITA_WEIGHT_SOURCE_GAP_MAX": 0,
         "ITA_BIAS_SOURCE_GAP_MAX": 0,
+        "ITA_LOCKSTEP_IDLE_GAP_MAX": 0,
+        "ITA_ASSERT_LEGAL_LOCKSTEP_INPUT": 1,
         "ITA_READY_LOW_MAX": 0,
         "ITA_READY_HIGH_MAX": 1,
     }
@@ -293,6 +295,7 @@ def case_entry(
     return {
         "name": name,
         "category": category,
+        "spec_basis": "core_spec_observable",
         "intent": intent,
         "seed": default_plusargs["ntb_random_seed"],
         "target": "ita_mha8_tb_top",
@@ -328,9 +331,7 @@ def case_entry(
 
 def add_protocol_cases(cases: list[dict[str, Any]], heads: int, python: str, no_auto_generate: bool, dry_run: bool) -> None:
     specs = [
-        ("protocol_input_source_gap", "input_source_gap", Shape(64, 64, 64, 64), {"ITA_INPUT_SOURCE_GAP_MAX": 6}),
-        ("protocol_weight_source_gap", "weight_source_gap", Shape(64, 64, 64, 64), {"ITA_WEIGHT_SOURCE_GAP_MAX": 6}),
-        ("protocol_bias_source_gap", "bias_source_gap", Shape(64, 64, 64, 64), {"ITA_BIAS_SOURCE_GAP_MAX": 6}),
+        ("protocol_lockstep_idle_gap", "lockstep_idle_gap", Shape(64, 64, 64, 64), {"ITA_LOCKSTEP_IDLE_GAP_MAX": 6}),
         ("protocol_output_backpressure", "output_backpressure", Shape(64, 64, 64, 64), {"ITA_READY_LOW_MAX": 8, "ITA_READY_HIGH_MAX": 3}),
         ("tile_min_s64_e64_p64_f64", "tile_boundary_min", Shape(64, 64, 64, 64), {}),
         ("tile_mixed_s64_e256_p128_f192", "tile_boundary_mixed", Shape(64, 256, 128, 192), {}),
@@ -378,6 +379,28 @@ def add_numerical_cases(cases: list[dict[str, Any]], heads: int, python: str, no
 def add_negative_cases(cases: list[dict[str, Any]], heads: int, python: str, no_auto_generate: bool, dry_run: bool) -> None:
     shape = Shape(64, 64, 64, 64)
     standalone = ensure_vector(shape, heads, ACTIVATION, "random", python, no_auto_generate, dry_run)
+
+    skew_cases = [
+        ("neg_input_source_skew", "input_source_skew", {"ITA_INPUT_SOURCE_GAP_MAX": 6}),
+        ("neg_weight_source_skew", "weight_source_skew", {"ITA_WEIGHT_SOURCE_GAP_MAX": 6}),
+        ("neg_bias_source_skew", "bias_source_skew", {"ITA_BIAS_SOURCE_GAP_MAX": 6}),
+    ]
+    for index, (name, intent, plusargs) in enumerate(skew_cases):
+        cases.append(case_entry(
+            name,
+            "negative",
+            intent,
+            shape,
+            heads,
+            ACTIVATION,
+            standalone,
+            f"{name}_stream.csv",
+            f"{name}_requant.csv",
+            f"{name}_manifest.json",
+            {"ntb_random_seed": 290 + index, **plusargs},
+            expect_fail=True,
+            expected_error_regex=NEGATIVE_ERROR_RE,
+        ))
 
     tile_cases = [
         ("neg_tile_zero", "illegal_tile_zero", ["-TileSOverride", "0"]),

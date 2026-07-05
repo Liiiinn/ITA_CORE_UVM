@@ -6,6 +6,18 @@ class ita_mha8_vsequence extends uvm_sequence;
     `uvm_declare_p_sequencer(ita_mha8_vsequencer)
 
     ita_mha8_core_item core;
+    int unsigned lockstep_idle_gap_min = 0;
+    int unsigned lockstep_idle_gap_max = 0;
+    int unsigned source_gap_max = 0;
+    int unsigned input_source_gap_max = 0;
+    int unsigned weight_source_gap_max = 0;
+    int unsigned bias_source_gap_max = 0;
+    bit sink_bp_enable = 1'b0;
+    int unsigned ready_low_min = 0;
+    int unsigned ready_low_max = 0;
+    int unsigned ready_high_min = 1;
+    int unsigned ready_high_max = 1;
+    bit stop_head_output_ready = 1'b0;
 
     function new(string name = "ita_mha8_vsequence");
         super.new(name);
@@ -15,18 +27,89 @@ class ita_mha8_vsequence extends uvm_sequence;
         if (core == null)
             core = ita_mha8_core_item::type_id::create("core");
 
-        fork
-            send_attention_phase();
-            wait_attention_sum_complete();
-        join
+        void'($value$plusargs("ITA_LOCKSTEP_IDLE_GAP_MIN=%d", lockstep_idle_gap_min));
+        void'($value$plusargs("ITA_LOCKSTEP_IDLE_GAP_MAX=%d", lockstep_idle_gap_max));
+        void'($value$plusargs("ITA_SOURCE_GAP_MAX=%d", source_gap_max));
+        void'($value$plusargs("ITA_INPUT_SOURCE_GAP_MAX=%d", input_source_gap_max));
+        void'($value$plusargs("ITA_WEIGHT_SOURCE_GAP_MAX=%d", weight_source_gap_max));
+        void'($value$plusargs("ITA_BIAS_SOURCE_GAP_MAX=%d", bias_source_gap_max));
+        load_sink_backpressure_plusargs();
+        if (lockstep_idle_gap_max < lockstep_idle_gap_min)
+            lockstep_idle_gap_max = lockstep_idle_gap_min;
 
-        if (has_ff_steps()) begin
-            fork
-                send_feedforward_phase();
-                wait_feedforward_complete();
-            join
-        end
+        fork
+            drive_head_output_ready_bundle();
+            begin
+                fork
+                    send_attention_phase();
+                    wait_attention_sum_complete();
+                join
+
+                if (has_ff_steps()) begin
+                    fork
+                        send_feedforward_phase();
+                        wait_feedforward_complete();
+                    join
+                end
+
+                stop_head_output_ready = 1'b1;
+            end
+        join_any
+        disable fork;
     endtask : body
+
+    function void load_sink_backpressure_plusargs();
+        int unsigned tmp;
+
+        tmp = sink_bp_enable;
+        if ($value$plusargs("ITA_SINK_BP_ENABLE=%d", tmp))
+            sink_bp_enable = (tmp != 0);
+        void'($value$plusargs("ITA_READY_LOW_MIN=%d", ready_low_min));
+        void'($value$plusargs("ITA_READY_LOW_MAX=%d", ready_low_max));
+        void'($value$plusargs("ITA_READY_HIGH_MIN=%d", ready_high_min));
+        void'($value$plusargs("ITA_READY_HIGH_MAX=%d", ready_high_max));
+
+        if (ready_low_max < ready_low_min)
+            ready_low_max = ready_low_min;
+        if (ready_high_min == 0)
+            ready_high_min = 1;
+        if (ready_high_max < ready_high_min)
+            ready_high_max = ready_high_min;
+    endfunction : load_sink_backpressure_plusargs
+
+    function int unsigned ready_random_range(int unsigned min_value, int unsigned max_value);
+        if (max_value <= min_value)
+            return min_value;
+        return $urandom_range(max_value, min_value);
+    endfunction : ready_random_range
+
+    task drive_head_output_ready_bundle();
+        int unsigned high_cycles;
+        int unsigned low_cycles;
+
+        p_sequencer.vif.per_head_ready_i <= '0;
+        wait (p_sequencer.vif.rst_ni === 1'b1);
+
+        while (!stop_head_output_ready) begin
+            high_cycles = sink_bp_enable ? ready_random_range(ready_high_min, ready_high_max) : 1;
+            repeat (high_cycles) begin
+                @(posedge p_sequencer.vif.clk_i);
+                if (stop_head_output_ready)
+                    break;
+                p_sequencer.vif.per_head_ready_i <= '1;
+            end
+
+            low_cycles = (sink_bp_enable && ready_low_max != 0) ? ready_random_range(ready_low_min, ready_low_max) : 0;
+            repeat (low_cycles) begin
+                @(posedge p_sequencer.vif.clk_i);
+                if (stop_head_output_ready)
+                    break;
+                p_sequencer.vif.per_head_ready_i <= '0;
+            end
+        end
+
+        p_sequencer.vif.per_head_ready_i <= '0;
+    endtask : drive_head_output_ready_bundle
 
     task send_attention_phase();
         ita_ctrl_single_seq ctrl_seq;
@@ -82,8 +165,12 @@ class ita_mha8_vsequence extends uvm_sequence;
                 sent_f2_ctrl_update = 1'b1;
             end
 
-            if (payload.drive_ff_streams)
-                send_ff_payload(payload);
+            if (payload.drive_ff_streams) begin
+                if (source_skew_enabled())
+                    send_ff_payload(payload);
+                else
+                    send_ff_payload_reference_model(payload);
+            end
         end
     endtask
 
@@ -303,39 +390,152 @@ class ita_mha8_vsequence extends uvm_sequence;
     endtask : wait_feedforward_complete
 
     task send_head_streams(ita_mha8_step_payload payload, int unsigned head_id);
-        fork
-            send_weight_stream(payload, head_id);
-            send_input_stream(payload, head_id);
-            send_bias_stream(payload, head_id);
-        join
+        int unsigned beats;
+
+        beats = payload.input_payload_by_head[head_id].size();
+        if (payload.weight_payload_by_head[head_id].size() != beats ||
+            payload.bias_payload_by_head[head_id].size() != beats) begin
+            `uvm_fatal("VSEQ",
+                $sformatf("Lockstep source size mismatch for %s head%0d: input=%0d weight=%0d bias=%0d",
+                    payload.step.name(),
+                    head_id,
+                    payload.input_payload_by_head[head_id].size(),
+                    payload.weight_payload_by_head[head_id].size(),
+                    payload.bias_payload_by_head[head_id].size()))
+        end
+
+        for (int unsigned beat = 0; beat < beats; beat++) begin
+            wait_lockstep_idle_gap();
+            if (source_skew_enabled()) begin
+                fork
+                    send_head_stream_beat(payload, head_id, ITA_STREAM_HEAD_WEIGHT, beat);
+                    send_head_stream_beat(payload, head_id, ITA_STREAM_HEAD_INPUT, beat);
+                    send_head_stream_beat(payload, head_id, ITA_STREAM_HEAD_BIAS, beat);
+                join
+            end else begin
+                drive_head_lockstep_beat(payload, head_id, beat);
+            end
+        end
     endtask : send_head_streams
 
-    task send_weight_stream(ita_mha8_step_payload payload, int unsigned head_id);
+    function bit source_skew_enabled();
+        return (source_gap_max != 0 ||
+                input_source_gap_max != 0 ||
+                weight_source_gap_max != 0 ||
+                bias_source_gap_max != 0);
+    endfunction : source_skew_enabled
+
+    task wait_lockstep_idle_gap();
+        int unsigned gap_cycles;
+
+        if (lockstep_idle_gap_max == 0)
+            return;
+
+        gap_cycles = $urandom_range(lockstep_idle_gap_max, lockstep_idle_gap_min);
+        repeat (gap_cycles) begin
+            @(posedge p_sequencer.vif.clk_i);
+        end
+    endtask : wait_lockstep_idle_gap
+
+    task send_head_stream_beat(
+        ita_mha8_step_payload payload,
+        int unsigned head_id,
+        ita_stream_kind_e kind,
+        int unsigned beat,
+        bit is_lockstep = 1'b1
+    );
+        ita_stream_single_seq stream_seq;
+
+        stream_seq = ita_stream_single_seq::type_id::create($sformatf("%s_seq_%s_h%0d_b%0d", kind.name(), payload.step.name(), head_id, beat));
+        stream_seq.stream = make_stream_item(payload, kind, head_id, 0, beat, is_lockstep);
+
+        case (kind)
+            ITA_STREAM_HEAD_INPUT:  stream_seq.start(p_sequencer.inp_sqr[head_id]);
+            ITA_STREAM_HEAD_WEIGHT: stream_seq.start(p_sequencer.weight_sqr[head_id]);
+            ITA_STREAM_HEAD_BIAS:   stream_seq.start(p_sequencer.bias_sqr[head_id]);
+            default:
+                `uvm_fatal("VSEQ", $sformatf("Unsupported head source kind %s", kind.name()))
+        endcase
+    endtask : send_head_stream_beat
+
+    task drive_head_lockstep_beat(
+        ita_mha8_step_payload payload,
+        int unsigned head_id,
+        int unsigned beat
+    );
+        ita_stream_item inp_tr;
+        ita_stream_item weight_tr;
+        ita_stream_item bias_tr;
+        int unsigned wait_cycles;
+
+        inp_tr = make_stream_item(payload, ITA_STREAM_HEAD_INPUT, head_id, 0, beat, 1'b1);
+        weight_tr = make_stream_item(payload, ITA_STREAM_HEAD_WEIGHT, head_id, 0, beat, 1'b1);
+        bias_tr = make_stream_item(payload, ITA_STREAM_HEAD_BIAS, head_id, 0, beat, 1'b1);
+
+        @(posedge p_sequencer.vif.clk_i);
+        p_sequencer.vif.inp_i[head_id] <= inp_tr.inp;
+        p_sequencer.vif.inp_weight_i[head_id] <= weight_tr.weight;
+        p_sequencer.vif.inp_bias_i[head_id] <= bias_tr.bias;
+        p_sequencer.vif.inp_valid_i[head_id] <= 1'b1;
+        p_sequencer.vif.inp_weight_valid_i[head_id] <= 1'b1;
+        p_sequencer.vif.inp_bias_valid_i[head_id] <= 1'b1;
+        p_sequencer.vif.inp_step_dbg[head_id] <= payload.step;
+        p_sequencer.vif.inp_weight_step_dbg[head_id] <= payload.step;
+        p_sequencer.vif.inp_bias_step_dbg[head_id] <= payload.step;
+        p_sequencer.vif.inp_tile_id_dbg[head_id] <= payload.tile_id;
+        p_sequencer.vif.inp_weight_tile_id_dbg[head_id] <= payload.tile_id;
+        p_sequencer.vif.inp_bias_tile_id_dbg[head_id] <= payload.tile_id;
+        p_sequencer.vif.inp_inner_id_dbg[head_id] <= payload.inner_tile_id;
+        p_sequencer.vif.inp_weight_inner_id_dbg[head_id] <= payload.inner_tile_id;
+        p_sequencer.vif.inp_bias_inner_id_dbg[head_id] <= payload.inner_tile_id;
+        p_sequencer.vif.inp_beat_id_dbg[head_id] <= beat;
+        p_sequencer.vif.inp_weight_beat_id_dbg[head_id] <= beat;
+        p_sequencer.vif.inp_bias_beat_id_dbg[head_id] <= beat;
+        p_sequencer.vif.inp_lockstep_dbg[head_id] <= 1'b1;
+        p_sequencer.vif.inp_weight_lockstep_dbg[head_id] <= 1'b1;
+        p_sequencer.vif.inp_bias_lockstep_dbg[head_id] <= 1'b1;
+
+        wait_cycles = 0;
+        do begin
+            @(posedge p_sequencer.vif.clk_i);
+            wait_cycles++;
+            if (wait_cycles > 10000)
+                `uvm_fatal("VSEQ", $sformatf("Timeout waiting for head%0d lockstep source ready", head_id))
+        end while (!(p_sequencer.vif.inp_ready_o[head_id] &&
+                     p_sequencer.vif.inp_weight_ready_o[head_id] &&
+                     p_sequencer.vif.inp_bias_ready_o[head_id]));
+
+        p_sequencer.vif.inp_valid_i[head_id] <= 1'b0;
+        p_sequencer.vif.inp_weight_valid_i[head_id] <= 1'b0;
+        p_sequencer.vif.inp_bias_valid_i[head_id] <= 1'b0;
+    endtask : drive_head_lockstep_beat
+
+    task send_weight_stream(ita_mha8_step_payload payload, int unsigned head_id, bit is_lockstep = 1'b1);
         ita_stream_single_seq weight_seq;
 
         for (int unsigned beat = 0; beat < payload.weight_payload_by_head[head_id].size(); beat++) begin
             weight_seq = ita_stream_single_seq::type_id::create($sformatf("weight_seq_%s_h%0d_b%0d", payload.step.name(), head_id, beat));
-            weight_seq.stream = make_stream_item(payload, ITA_STREAM_HEAD_WEIGHT, head_id, 0, beat, 1'b1);
+            weight_seq.stream = make_stream_item(payload, ITA_STREAM_HEAD_WEIGHT, head_id, 0, beat, is_lockstep);
             weight_seq.start(p_sequencer.weight_sqr[head_id]);
         end
     endtask : send_weight_stream
 
-    task send_input_stream(ita_mha8_step_payload payload, int unsigned head_id);
+    task send_input_stream(ita_mha8_step_payload payload, int unsigned head_id, bit is_lockstep = 1'b1);
         ita_stream_single_seq inp_seq;
 
         for (int unsigned beat = 0; beat < payload.input_payload_by_head[head_id].size(); beat++) begin
             inp_seq = ita_stream_single_seq::type_id::create($sformatf("input_seq_%s_h%0d_b%0d", payload.step.name(), head_id, beat));
-            inp_seq.stream = make_stream_item(payload, ITA_STREAM_HEAD_INPUT, head_id, 0, beat, 1'b1);
+            inp_seq.stream = make_stream_item(payload, ITA_STREAM_HEAD_INPUT, head_id, 0, beat, is_lockstep);
             inp_seq.start(p_sequencer.inp_sqr[head_id]);
         end
     endtask : send_input_stream
 
-    task send_bias_stream(ita_mha8_step_payload payload, int unsigned head_id);
+    task send_bias_stream(ita_mha8_step_payload payload, int unsigned head_id, bit is_lockstep = 1'b1);
         ita_stream_single_seq bias_seq;
 
         for (int unsigned beat = 0; beat < payload.bias_payload_by_head[head_id].size(); beat++) begin
             bias_seq = ita_stream_single_seq::type_id::create($sformatf("bias_seq_%s_h%0d_b%0d", payload.step.name(), head_id, beat));
-            bias_seq.stream = make_stream_item(payload, ITA_STREAM_HEAD_BIAS, head_id, 0, beat, 1'b1);
+            bias_seq.stream = make_stream_item(payload, ITA_STREAM_HEAD_BIAS, head_id, 0, beat, is_lockstep);
             bias_seq.start(p_sequencer.bias_sqr[head_id]);
         end
     endtask : send_bias_stream
@@ -351,12 +551,12 @@ class ita_mha8_vsequence extends uvm_sequence;
         end
     endtask : send_ff_input_stream
 
-    task send_ff_weight_stream(ita_mha8_step_payload payload);
+    task send_ff_weight_stream(ita_mha8_step_payload payload, bit is_lockstep = 1'b1);
         ita_stream_single_seq weight_seq;
 
         for (int unsigned beat = 0; beat < payload.ff_weight_payload.size(); beat ++) begin
             weight_seq = ita_stream_single_seq::type_id::create($sformatf("ff_weight_seq_%s_b%0d", payload.step.name(), beat));
-            weight_seq.stream = make_stream_item(payload, ITA_STREAM_FF_WEIGHT, 0, 0, beat, 1'b1);
+            weight_seq.stream = make_stream_item(payload, ITA_STREAM_FF_WEIGHT, 0, 0, beat, is_lockstep);
             weight_seq.start(p_sequencer.ff_weight_sqr);
         end
     endtask : send_ff_weight_stream
@@ -485,6 +685,11 @@ class ita_mha8_vsequence extends uvm_sequence;
     endfunction : make_stream_item
 
     task send_step_payload(ita_mha8_step_payload payload);
+        if (!source_skew_enabled()) begin
+            send_step_payload_reference_model(payload);
+            return;
+        end
+
         for (int unsigned h = 0; h < 8; h++) begin
             automatic int unsigned head_id = h;
             fork
@@ -494,13 +699,193 @@ class ita_mha8_vsequence extends uvm_sequence;
         wait fork;
     endtask
 
+    task send_step_payload_reference_model(ita_mha8_step_payload payload);
+        for (int unsigned h = 0; h < 8; h++) begin
+            automatic int unsigned head_id = h;
+            fork
+                send_head_input_bias_streams(payload, head_id);
+                send_weight_stream(payload, head_id, 1'b0);
+            join_none
+        end
+        wait fork;
+    endtask : send_step_payload_reference_model
+
+    task send_head_input_bias_streams(ita_mha8_step_payload payload, int unsigned head_id);
+        int unsigned beats;
+
+        beats = payload.input_payload_by_head[head_id].size();
+        if (payload.bias_payload_by_head[head_id].size() != beats) begin
+            `uvm_fatal("VSEQ",
+                $sformatf("Head input/bias size mismatch for %s head%0d: input=%0d bias=%0d",
+                    payload.step.name(),
+                    head_id,
+                    payload.input_payload_by_head[head_id].size(),
+                    payload.bias_payload_by_head[head_id].size()))
+        end
+
+        for (int unsigned beat = 0; beat < beats; beat++) begin
+            wait_lockstep_idle_gap();
+            fork
+                send_head_stream_beat(payload, head_id, ITA_STREAM_HEAD_INPUT, beat, 1'b0);
+                send_head_stream_beat(payload, head_id, ITA_STREAM_HEAD_BIAS, beat, 1'b0);
+            join
+        end
+    endtask : send_head_input_bias_streams
+
+    task send_step_payload_head_bundle(ita_mha8_step_payload payload);
+        int unsigned beats;
+
+        beats = payload.input_payload_by_head[0].size();
+        for (int unsigned h = 0; h < 8; h++) begin
+            if (payload.input_payload_by_head[h].size() != beats ||
+                payload.weight_payload_by_head[h].size() != beats ||
+                payload.bias_payload_by_head[h].size() != beats) begin
+                `uvm_fatal("VSEQ",
+                    $sformatf("Head bundle source size mismatch for %s head%0d: input=%0d weight=%0d bias=%0d expected=%0d",
+                        payload.step.name(),
+                        h,
+                        payload.input_payload_by_head[h].size(),
+                        payload.weight_payload_by_head[h].size(),
+                        payload.bias_payload_by_head[h].size(),
+                        beats))
+            end
+        end
+
+        for (int unsigned beat = 0; beat < beats; beat++) begin
+            wait_lockstep_idle_gap();
+            for (int unsigned h = 0; h < 8; h++) begin
+                automatic int unsigned head_id = h;
+                fork
+                    drive_head_lockstep_beat(payload, head_id, beat);
+                join_none
+            end
+            wait fork;
+        end
+    endtask : send_step_payload_head_bundle
+
     task send_ff_payload(ita_mha8_step_payload payload);
-        fork
-            send_ff_input_stream(payload);
-            send_ff_weight_stream(payload);
-            send_ff_bias_stream(payload);
-        join
+        int unsigned beats;
+
+        beats = payload.ff_input_payload.size();
+        if (payload.ff_weight_payload.size() != beats ||
+            payload.ff_bias_payload.size() != beats) begin
+            `uvm_fatal("VSEQ",
+                $sformatf("Lockstep FF source size mismatch for %s: input=%0d weight=%0d bias=%0d",
+                    payload.step.name(),
+                    payload.ff_input_payload.size(),
+                    payload.ff_weight_payload.size(),
+                    payload.ff_bias_payload.size()))
+        end
+
+        for (int unsigned beat = 0; beat < beats; beat++) begin
+            wait_lockstep_idle_gap();
+            if (source_skew_enabled()) begin
+                fork
+                    send_ff_stream_beat(payload, ITA_STREAM_FF_INPUT, beat);
+                    send_ff_stream_beat(payload, ITA_STREAM_FF_WEIGHT, beat);
+                    send_ff_stream_beat(payload, ITA_STREAM_FF_BIAS, beat);
+                join
+            end else begin
+                `uvm_fatal("VSEQ", "Internal error: send_ff_payload reference path should not enter beat lockstep drive")
+            end
+        end
     endtask : send_ff_payload
+
+    task send_ff_payload_reference_model(ita_mha8_step_payload payload);
+        fork
+            send_ff_input_bias_streams(payload);
+            send_ff_weight_stream(payload, 1'b0);
+        join
+    endtask : send_ff_payload_reference_model
+
+    task send_ff_input_bias_streams(ita_mha8_step_payload payload);
+        int unsigned beats;
+
+        beats = payload.ff_input_payload.size();
+        if (payload.ff_bias_payload.size() != beats) begin
+            `uvm_fatal("VSEQ",
+                $sformatf("FF input/bias size mismatch for %s: input=%0d bias=%0d",
+                    payload.step.name(),
+                    payload.ff_input_payload.size(),
+                    payload.ff_bias_payload.size()))
+        end
+
+        for (int unsigned beat = 0; beat < beats; beat++) begin
+            wait_lockstep_idle_gap();
+            fork
+                send_ff_stream_beat(payload, ITA_STREAM_FF_INPUT, beat, 1'b0);
+                send_ff_stream_beat(payload, ITA_STREAM_FF_BIAS, beat, 1'b0);
+            join
+        end
+    endtask : send_ff_input_bias_streams
+
+    task send_ff_stream_beat(
+        ita_mha8_step_payload payload,
+        ita_stream_kind_e kind,
+        int unsigned beat,
+        bit is_lockstep = 1'b1
+    );
+        ita_stream_single_seq stream_seq;
+
+        stream_seq = ita_stream_single_seq::type_id::create($sformatf("%s_seq_%s_b%0d", kind.name(), payload.step.name(), beat));
+        stream_seq.stream = make_stream_item(payload, kind, 0, 0, beat, is_lockstep);
+
+        case (kind)
+            ITA_STREAM_FF_INPUT:  stream_seq.start(p_sequencer.ff_inp_sqr);
+            ITA_STREAM_FF_WEIGHT: stream_seq.start(p_sequencer.ff_weight_sqr);
+            ITA_STREAM_FF_BIAS:   stream_seq.start(p_sequencer.ff_bias_sqr);
+            default:
+                `uvm_fatal("VSEQ", $sformatf("Unsupported FF source kind %s", kind.name()))
+        endcase
+    endtask : send_ff_stream_beat
+
+    task drive_ff_lockstep_beat(ita_mha8_step_payload payload, int unsigned beat);
+        ita_stream_item inp_tr;
+        ita_stream_item weight_tr;
+        ita_stream_item bias_tr;
+        int unsigned wait_cycles;
+
+        inp_tr = make_stream_item(payload, ITA_STREAM_FF_INPUT, 0, 0, beat, 1'b1);
+        weight_tr = make_stream_item(payload, ITA_STREAM_FF_WEIGHT, 0, 0, beat, 1'b1);
+        bias_tr = make_stream_item(payload, ITA_STREAM_FF_BIAS, 0, 0, beat, 1'b1);
+
+        @(posedge p_sequencer.vif.clk_i);
+        p_sequencer.vif.ff_inp_i <= inp_tr.inp;
+        p_sequencer.vif.ff_inp_weight_i <= weight_tr.weight;
+        p_sequencer.vif.ff_inp_bias_i <= bias_tr.bias;
+        p_sequencer.vif.ff_inp_valid_i <= 1'b1;
+        p_sequencer.vif.ff_inp_weight_valid_i <= 1'b1;
+        p_sequencer.vif.ff_inp_bias_valid_i <= 1'b1;
+        p_sequencer.vif.ff_inp_step_dbg <= payload.step;
+        p_sequencer.vif.ff_inp_weight_step_dbg <= payload.step;
+        p_sequencer.vif.ff_inp_bias_step_dbg <= payload.step;
+        p_sequencer.vif.ff_inp_tile_id_dbg <= payload.tile_id;
+        p_sequencer.vif.ff_inp_weight_tile_id_dbg <= payload.tile_id;
+        p_sequencer.vif.ff_inp_bias_tile_id_dbg <= payload.tile_id;
+        p_sequencer.vif.ff_inp_inner_id_dbg <= payload.inner_tile_id;
+        p_sequencer.vif.ff_inp_weight_inner_id_dbg <= payload.inner_tile_id;
+        p_sequencer.vif.ff_inp_bias_inner_id_dbg <= payload.inner_tile_id;
+        p_sequencer.vif.ff_inp_beat_id_dbg <= beat;
+        p_sequencer.vif.ff_inp_weight_beat_id_dbg <= beat;
+        p_sequencer.vif.ff_inp_bias_beat_id_dbg <= beat;
+        p_sequencer.vif.ff_inp_lockstep_dbg <= 1'b1;
+        p_sequencer.vif.ff_inp_weight_lockstep_dbg <= 1'b1;
+        p_sequencer.vif.ff_inp_bias_lockstep_dbg <= 1'b1;
+
+        wait_cycles = 0;
+        do begin
+            @(posedge p_sequencer.vif.clk_i);
+            wait_cycles++;
+            if (wait_cycles > 10000)
+                `uvm_fatal("VSEQ", "Timeout waiting for FF lockstep source ready")
+        end while (!(p_sequencer.vif.ff_inp_ready_o &&
+                     p_sequencer.vif.ff_inp_weight_ready_o &&
+                     p_sequencer.vif.ff_inp_bias_ready_o));
+
+        p_sequencer.vif.ff_inp_valid_i <= 1'b0;
+        p_sequencer.vif.ff_inp_weight_valid_i <= 1'b0;
+        p_sequencer.vif.ff_inp_bias_valid_i <= 1'b0;
+    endtask : drive_ff_lockstep_beat
 
 endclass : ita_mha8_vsequence
 `endif // ITA_MHA8_VSEQUENCE_SVH

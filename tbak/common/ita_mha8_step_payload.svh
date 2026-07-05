@@ -72,8 +72,17 @@ class ita_mha8_step_payload extends uvm_object;
         if (drive_head_streams) begin
             for (int unsigned h = 0; h < 8; h++) begin
                 if (has_any_payload(h) && !has_complete_payload(h)) begin
-                    `uvm_error("STEP PAYLOAD",
+                    `uvm_fatal("STEP PAYLOAD",
                         $sformatf("Incomplete head payload for step=%s head%0d: input=%0d weight=%0d bias=%0d",
+                            step.name(), h,
+                            input_payload_by_head[h].size(),
+                            weight_payload_by_head[h].size(),
+                            bias_payload_by_head[h].size()))
+                end else if (has_complete_payload(h) &&
+                    (input_payload_by_head[h].size() != weight_payload_by_head[h].size() ||
+                     input_payload_by_head[h].size() != bias_payload_by_head[h].size())) begin
+                    `uvm_fatal("STEP PAYLOAD",
+                        $sformatf("Head payload beat count mismatch for step=%s head%0d: input=%0d weight=%0d bias=%0d",
                             step.name(), h,
                             input_payload_by_head[h].size(),
                             weight_payload_by_head[h].size(),
@@ -86,8 +95,16 @@ class ita_mha8_step_payload extends uvm_object;
             if (ff_input_payload.size() == 0 ||
                 ff_weight_payload.size() == 0 ||
                 ff_bias_payload.size() == 0) begin
-                `uvm_error("STEP PAYLOAD",
+                `uvm_fatal("STEP PAYLOAD",
                     $sformatf("Incomplete FF payload for step=%s: input=%0d weight=%0d bias=%0d",
+                        step.name(),
+                        ff_input_payload.size(),
+                        ff_weight_payload.size(),
+                        ff_bias_payload.size()))
+            end else if (ff_input_payload.size() != ff_weight_payload.size() ||
+                         ff_input_payload.size() != ff_bias_payload.size()) begin
+                `uvm_fatal("STEP PAYLOAD",
+                    $sformatf("FF payload beat count mismatch for step=%s: input=%0d weight=%0d bias=%0d",
                         step.name(),
                         ff_input_payload.size(),
                         ff_weight_payload.size(),

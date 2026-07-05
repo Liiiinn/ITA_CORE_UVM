@@ -19,6 +19,7 @@ param(
     [int]$InputSourceGapMax = -1,
     [int]$WeightSourceGapMax = -1,
     [int]$BiasSourceGapMax = -1,
+    [int]$LockstepIdleGapMax = 0,
     [int]$ReadyLowMax = 0,
     [int]$ReadyHighMax = 0,
     [int]$UvmSeed = 1,
@@ -170,6 +171,9 @@ $VsimTileE = 1
 $VsimTileP = 1
 $VsimTileF = 1
 $ResolvedActivation = "Identity"
+if ($Activation -ne "Auto") {
+    $ResolvedActivation = $Activation
+}
 if ([System.IO.Path]::GetFullPath($VectorOutDir) -eq [System.IO.Path]::GetFullPath($LoggerDir)) {
     $StreamPlusArg = "logger/$StreamName"
     if ($RequantName -ne "") {
@@ -287,6 +291,9 @@ $vsimArgs = @(
     "+ITA_WEIGHT_SOURCE_GAP_MAX=$WeightSourceGapMax",
     "+ITA_BIAS_SOURCE_GAP_MIN=0",
     "+ITA_BIAS_SOURCE_GAP_MAX=$BiasSourceGapMax",
+    "+ITA_LOCKSTEP_IDLE_GAP_MIN=0",
+    "+ITA_LOCKSTEP_IDLE_GAP_MAX=$LockstepIdleGapMax",
+    "+ITA_ASSERT_LEGAL_LOCKSTEP_INPUT=1",
     "+ITA_SINK_BP_ENABLE=1",
     "+ITA_READY_LOW_MIN=0",
     "+ITA_READY_LOW_MAX=$ReadyLowMax",
@@ -329,6 +336,13 @@ try {
 }
 finally {
     Pop-Location
+}
+
+if (-not $DryRun -and (Test-Path $Transcript)) {
+    $uvmFailure = Select-String -Path $Transcript -Pattern "UVM_(ERROR|FATAL)\s*:\s*[1-9][0-9]*" | Select-Object -First 1
+    if ($null -ne $uvmFailure) {
+        throw "Simulation reported UVM error/fatal; see $Transcript"
+    }
 }
 
 if ($RunCompareLinear) {

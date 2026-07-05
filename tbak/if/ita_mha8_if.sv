@@ -50,6 +50,7 @@ interface ita_mha8_if
 
     logic [NumHeads-1:0]     per_head_valid_o;
     logic [NumHeads-1:0]     per_head_ready_i;
+    logic [NumHeads-1:0]     per_head_ready_dbg;
     logic [NumHeads-1:0]     per_head_busy_o;
     requant_oup_t            per_head_oup_o  [NumHeads];
     step_e                   per_head_step_o [NumHeads];
@@ -102,6 +103,7 @@ interface ita_mha8_if
     logic                    phase_mismatch_o;
     // Stage 11: add feed-forward stream assertions after the FF path is added to active tests.
 
+    bit                      assert_legal_lockstep_input;
     tile_t                   sva_tile_s_q;
     tile_t                   sva_tile_e_q;
     tile_t                   sva_tile_p_q;
@@ -117,6 +119,8 @@ interface ita_mha8_if
     // TODO ·: initialize or tie off driver-owned pins needed for an idle smoke shell.
     initial begin
         rst_ni = 0;
+        assert_legal_lockstep_input = 1'b1;
+        void'($value$plusargs("ITA_ASSERT_LEGAL_LOCKSTEP_INPUT=%d", assert_legal_lockstep_input));
         ctrl_i = '0;
         sum_eps_mult_i = '0;
         sum_right_shift_i = '0;
