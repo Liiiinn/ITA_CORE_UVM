@@ -35,7 +35,6 @@ class ita_mha8_cov extends uvm_component;
             bins s128 = {2};
             bins s192 = {3};
             bins s256 = {4};
-            bins larger = {[5:$]};
             illegal_bins zero = {0};
         }
 
@@ -44,7 +43,6 @@ class ita_mha8_cov extends uvm_component;
             bins e128 = {2};
             bins e192 = {3};
             bins e256 = {4};
-            bins larger = {[5:$]};
             illegal_bins zero = {0};
         }
 
@@ -53,7 +51,6 @@ class ita_mha8_cov extends uvm_component;
             bins p128 = {2};
             bins p192 = {3};
             bins p256 = {4};
-            bins larger = {[5:$]};
             illegal_bins zero = {0};
         }
 
@@ -62,7 +59,6 @@ class ita_mha8_cov extends uvm_component;
             bins f128 = {2};
             bins f192 = {3};
             bins f256 = {4};
-            bins larger = {[5:$]};
             illegal_bins zero = {0};
         }
 
@@ -82,7 +78,7 @@ class ita_mha8_cov extends uvm_component;
 
         cp_layer: coverpoint layer_value {
             bins attention   = {Attention};
-            bins linear      = {Linear};
+            // bins linear      = {Linear};
             bins feedforward = {Feedforward};
         }
 
@@ -97,7 +93,6 @@ class ita_mha8_cov extends uvm_component;
             bins s128 = {2};
             bins s192 = {3};
             bins s256 = {4};
-            bins larger = {[5:$]};
             illegal_bins zero = {0};
         }
 
@@ -106,7 +101,6 @@ class ita_mha8_cov extends uvm_component;
             bins e128 = {2};
             bins e192 = {3};
             bins e256 = {4};
-            bins larger = {[5:$]};
             illegal_bins zero = {0};
         }
 
@@ -115,7 +109,6 @@ class ita_mha8_cov extends uvm_component;
             bins p128 = {2};
             bins p192 = {3};
             bins p256 = {4};
-            bins larger = {[5:$]};
             illegal_bins zero = {0};
         }
 
@@ -124,7 +117,6 @@ class ita_mha8_cov extends uvm_component;
             bins f128 = {2};
             bins f192 = {3};
             bins f256 = {4};
-            bins larger = {[5:$]};
             illegal_bins zero = {0};
         }
 
@@ -133,7 +125,6 @@ class ita_mha8_cov extends uvm_component;
             illegal_bins idle = {0};
         }
 
-        cross_layer_activation: cross cp_layer, cp_activation;
         cross_layer_tile_cfg: cross cp_layer, cp_tile_s, cp_tile_e, cp_tile_p, cp_tile_f;
         cross_activation_tile_cfg: cross cp_activation, cp_tile_s, cp_tile_e, cp_tile_p, cp_tile_f;
     endgroup : ctrl_item_cg
@@ -145,7 +136,6 @@ class ita_mha8_cov extends uvm_component;
         int unsigned tile_id_value,
         int unsigned inner_tile_id_value,
         int unsigned beat_bucket_value,
-        bit is_lockstep_value
     );
         option.per_instance = 1;
 
@@ -167,7 +157,6 @@ class ita_mha8_cov extends uvm_component;
             bins ow     = {OW};
             bins f1     = {F1};
             bins f2     = {F2};
-            bins matmul = {MatMul};
             illegal_bins idle = {Idle};
         }
 
@@ -184,19 +173,15 @@ class ita_mha8_cov extends uvm_component;
 
         cp_inner_tile_id: coverpoint inner_tile_id_value {
             bins first = {0};
-            bins low[] = {[1:3]};
-            bins high = {[4:$]};
+            bins mid[] = {[1:2]};
+            bins last_possible = {3};
+            illegal_bins illegal_high = {[4:$]};
         }
 
         cp_beat_bucket: coverpoint beat_bucket_value {
             bins first    = {BEAT_BUCKET_FIRST};
             bins nonfirst = {BEAT_BUCKET_NONFIRST};
-            bins high     = {BEAT_BUCKET_HIGH};
-        }
-
-        cp_lockstep: coverpoint is_lockstep_value {
-            bins unlocked = {0};
-            bins locked   = {1};
+            illegal_bins illegal_high = {BEAT_BUCKET_HIGH};
         }
 
         cross_kind_step: cross cp_kind, cp_step;
@@ -229,7 +214,6 @@ class ita_mha8_cov extends uvm_component;
             bins ow     = {OW};
             bins f1     = {F1};
             bins f2     = {F2};
-            bins matmul = {MatMul};
             illegal_bins idle = {Idle};
         }
 
@@ -246,14 +230,15 @@ class ita_mha8_cov extends uvm_component;
 
         cp_inner_tile_id: coverpoint inner_tile_id_value {
             bins first = {0};
-            bins low[] = {[1:3]};
-            bins high = {[4:$]};
+            bins mid[] = {[1:2]};
+            bins last_possible = {3};
+            illegal_bins illegal_high = {[4:$]};
         }
 
         cp_beat_bucket: coverpoint beat_bucket_value {
             bins first    = {BEAT_BUCKET_FIRST};
             bins nonfirst = {BEAT_BUCKET_NONFIRST};
-            bins high     = {BEAT_BUCKET_HIGH};
+            illegal_bins illegal_high = {BEAT_BUCKET_HIGH};
         }
 
         cross_kind_step: cross cp_kind, cp_step;
