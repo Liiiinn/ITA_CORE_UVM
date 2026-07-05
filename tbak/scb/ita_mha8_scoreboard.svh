@@ -18,7 +18,7 @@ class ita_mha8_scoreboard extends uvm_component;
 
     int unsigned actual_count;
 
-    ita_mha8_struct_predictor pred;
+    ita_mha8_predictor pred;
 
     int unsigned tile_s;
     int unsigned tile_e;
@@ -92,7 +92,7 @@ class ita_mha8_scoreboard extends uvm_component;
         void'(uvm_config_db#(int unsigned)::get(this, "", "tile_f", tile_f));
 
         if (pred == null)
-            `uvm_fatal("ITA_SCB_PRED", "ita_mha8_struct_predictor handle was not set")
+            `uvm_fatal("ITA_SCB_PRED", "ita_mha8_predictor handle was not set")
 
         `uvm_info("ITA_SCB_CFG",
             $sformatf("Scoreboard tile config: tile_s=%0d tile_e=%0d tile_p=%0d tile_f=%0d",

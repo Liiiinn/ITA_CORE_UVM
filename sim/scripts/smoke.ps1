@@ -15,6 +15,12 @@ param(
     [string]$StreamName = "",
     [string]$ManifestName = "",
     [string]$RequantName = "",
+    [int]$SourceGapMax = 0,
+    [int]$ReadyLowMax = 0,
+    [int]$ReadyHighMax = 0,
+    [int]$UvmSeed = 1,
+    [switch]$EnableCoverage,
+    [string]$CoverageUcdb = "",
     [switch]$GenerateVectors,
     [switch]$CompareLinear,
     [switch]$NoCompare,
@@ -226,12 +232,26 @@ if ($RunGenerateVectors) {
 & (Join-Path $ScriptDir "compile.ps1") -QuestaBin $QuestaBin -UvmHome $UvmHome -DryRun:$DryRun
 
 $vsim = Resolve-Tool "vsim.exe"
+$CoverageEnabled = ($EnableCoverage -or $CoverageUcdb -ne "")
 $vsimArgs = @(
     "-c",
     "-lib", "work",
     "ita_mha8_tb_top",
-    "+UVM_TESTNAME=$TestName"
+    "+UVM_TESTNAME=$TestName",
+    "+ntb_random_seed=$UvmSeed",
+    "+ITA_SOURCE_GAP_ENABLE=1",
+    "+ITA_SOURCE_GAP_MIN=0",
+    "+ITA_SOURCE_GAP_MAX=$SourceGapMax",
+    "+ITA_SINK_BP_ENABLE=1",
+    "+ITA_READY_LOW_MIN=0",
+    "+ITA_READY_LOW_MAX=$ReadyLowMax",
+    "+ITA_READY_HIGH_MIN=1",
+    "+ITA_READY_HIGH_MAX=$ReadyHighMax"
 )
+
+if ($CoverageEnabled) {
+    $vsimArgs += "-coverage"
+}
 
 if (($IsLinearDirected -or $IsQDirected -or $IsQkvDirected -or $IsAttnDirected) -and -not $NoAutoVectorFlow) {
     $vsimArgs += "+ITA_STREAM_CSV=$StreamPlusArg"
@@ -247,9 +267,14 @@ if (($IsLinearDirected -or $IsQDirected -or $IsQkvDirected -or $IsAttnDirected) 
         $vsimArgs += "+ITA_ACTIVATION=$ResolvedActivation"
     }
 }
+$DoCommand = "run -all; quit -f"
+if ($CoverageUcdb -ne "") {
+    $CoverageTclPath = $CoverageUcdb.Replace("\", "/")
+    $DoCommand = "coverage save -onexit `"$CoverageTclPath`"; run -all; quit -f"
+}
 
 $vsimArgs += @(
-    "-do", "run -all; quit -f",
+    "-do", $DoCommand,
     "-l", $Transcript
 )
 

@@ -11,6 +11,16 @@ class ita_mha8_env_config extends uvm_object;
     int unsigned tile_p = 1;
     int unsigned tile_f = 1;
 
+    bit source_gap_enable = 1'b0;
+    int unsigned source_gap_min = 0;
+    int unsigned source_gap_max = 0;
+
+    bit sink_bp_enable = 1'b0;
+    int unsigned ready_low_min = 0;
+    int unsigned ready_low_max = 0;
+    int unsigned ready_high_min = 1;
+    int unsigned ready_high_max = 1;
+
     ita_ctrl_config ctrl_cfg;
     ita_stream_config input_cfg       [8];
     ita_stream_config weight_cfg      [8];
@@ -30,6 +40,7 @@ class ita_mha8_env_config extends uvm_object;
 
     function void create_default_agent_configs();
         load_tile_plusargs();
+        load_protocol_plusargs();
 
         // Stage 2: allocate ctrl_cfg and bind cfg.vif to the ctrl agent config.
         ctrl_cfg = ita_ctrl_config::type_id::create("ctrl_cfg");
@@ -65,8 +76,29 @@ class ita_mha8_env_config extends uvm_object;
         cfg.kind = kind;
         cfg.head_id = head_id;
         cfg.is_active = is_active;
+        apply_protocol_cfg(cfg);
         return cfg;
     endfunction : create_stream_cfg
+
+    function void apply_protocol_cfg(ita_stream_config cfg);
+        if (cfg.is_source()) begin
+            cfg.enable_source_gap = source_gap_enable;
+            cfg.source_gap_min = source_gap_min;
+            cfg.source_gap_max = source_gap_max;
+
+            cfg.enable_random_stall = source_gap_enable;
+            cfg.min_stall_cycles = source_gap_min;
+            cfg.max_stall_cycles = source_gap_max;
+        end
+
+        if (cfg.is_sink()) begin
+            cfg.enable_sink_backpressure = sink_bp_enable;
+            cfg.ready_low_min = ready_low_min;
+            cfg.ready_low_max = ready_low_max;
+            cfg.ready_high_min = ready_high_min;
+            cfg.ready_high_max = ready_high_max;
+        end
+    endfunction : apply_protocol_cfg
 
     function void load_tile_plusargs();
         void'($value$plusargs("ITA_TILE_S=%d", tile_s));
@@ -74,6 +106,33 @@ class ita_mha8_env_config extends uvm_object;
         void'($value$plusargs("ITA_TILE_P=%d", tile_p));
         void'($value$plusargs("ITA_TILE_F=%d", tile_f));
     endfunction : load_tile_plusargs
+
+    function void load_protocol_plusargs();
+        int unsigned tmp;
+
+        tmp = source_gap_enable;
+        if ($value$plusargs("ITA_SOURCE_GAP_ENABLE=%d", tmp))
+            source_gap_enable = (tmp != 0);
+        void'($value$plusargs("ITA_SOURCE_GAP_MIN=%d", source_gap_min));
+        void'($value$plusargs("ITA_SOURCE_GAP_MAX=%d", source_gap_max));
+
+        tmp = sink_bp_enable;
+        if ($value$plusargs("ITA_SINK_BP_ENABLE=%d", tmp))
+            sink_bp_enable = (tmp != 0);
+        void'($value$plusargs("ITA_READY_LOW_MIN=%d", ready_low_min));
+        void'($value$plusargs("ITA_READY_LOW_MAX=%d", ready_low_max));
+        void'($value$plusargs("ITA_READY_HIGH_MIN=%d", ready_high_min));
+        void'($value$plusargs("ITA_READY_HIGH_MAX=%d", ready_high_max));
+
+        if (source_gap_max < source_gap_min)
+            source_gap_max = source_gap_min;
+        if (ready_low_max < ready_low_min)
+            ready_low_max = ready_low_min;
+        if (ready_high_min == 0)
+            ready_high_min = 1;
+        if (ready_high_max < ready_high_min)
+            ready_high_max = ready_high_min;
+    endfunction : load_protocol_plusargs
 
 endclass : ita_mha8_env_config
 

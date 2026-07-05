@@ -20,7 +20,7 @@ class ita_mha8_env extends uvm_env;
     ita_stream_agent ff_output_agt;
 
     ita_mha8_logger logger;
-    ita_mha8_struct_predictor pred;
+    ita_mha8_predictor pred;
     ita_mha8_scoreboard scb;
     ita_mha8_cov cov;
     // Stage 11: create sum and feed-forward agents after full head-path coverage exists.
@@ -71,7 +71,7 @@ class ita_mha8_env extends uvm_env;
         ff_output_agt = ita_stream_agent::type_id::create("ff_output_agt", this);
 
         logger = ita_mha8_logger::type_id::create("logger", this);
-        pred = ita_mha8_struct_predictor::type_id::create("pred", this);
+        pred = ita_mha8_predictor::type_id::create("pred", this);
         uvm_config_db#(int unsigned)::set(this, "scb", "tile_s", cfg.tile_s);
         uvm_config_db#(int unsigned)::set(this, "scb", "tile_e", cfg.tile_e);
         uvm_config_db#(int unsigned)::set(this, "scb", "tile_p", cfg.tile_p);
