@@ -16,12 +16,20 @@ param(
     [string]$ManifestName = "",
     [string]$RequantName = "",
     [int]$SourceGapMax = 0,
+    [int]$InputSourceGapMax = -1,
+    [int]$WeightSourceGapMax = -1,
+    [int]$BiasSourceGapMax = -1,
     [int]$ReadyLowMax = 0,
     [int]$ReadyHighMax = 0,
     [int]$UvmSeed = 1,
+    [string]$TileSOverride = "",
+    [string]$TileEOverride = "",
+    [string]$TilePOverride = "",
+    [string]$TileFOverride = "",
     [switch]$EnableCoverage,
     [string]$CoverageUcdb = "",
     [switch]$GenerateVectors,
+    [switch]$NoGenerateVectors,
     [switch]$CompareLinear,
     [switch]$NoCompare,
     [switch]$NoAutoVectorFlow,
@@ -94,11 +102,21 @@ $IsQDirected = ($TestName -eq "ita_mha8_q_directed_test")
 $IsQkvDirected = ($TestName -eq "ita_mha8_qkv_directed_test")
 $IsAttnDirected = ($TestName -eq "ita_mha8_attn_directed_test")
 $AutoVectorFlow = (($IsLinearDirected -or $IsQDirected -or $IsQkvDirected -or $IsAttnDirected) -and -not $NoAutoVectorFlow)
-$RunGenerateVectors = ($GenerateVectors -or $AutoVectorFlow)
+$RunGenerateVectors = (($GenerateVectors -or $AutoVectorFlow) -and -not $NoGenerateVectors)
 $RunCompareLinear = (($CompareLinear -or $AutoVectorFlow) -and -not $NoCompare)
 
 if ($Heads -le 0 -or $Heads -gt 8) {
     throw "-Heads must be in the range 1..8"
+}
+
+if ($InputSourceGapMax -lt 0) {
+    $InputSourceGapMax = $SourceGapMax
+}
+if ($WeightSourceGapMax -lt 0) {
+    $WeightSourceGapMax = $SourceGapMax
+}
+if ($BiasSourceGapMax -lt 0) {
+    $BiasSourceGapMax = $SourceGapMax
 }
 
 if ($StreamName -eq "") {
@@ -147,6 +165,10 @@ $TileS = 1
 $TileE = 1
 $TileP = 1
 $TileF = 1
+$VsimTileS = 1
+$VsimTileE = 1
+$VsimTileP = 1
+$VsimTileF = 1
 $ResolvedActivation = "Identity"
 if ([System.IO.Path]::GetFullPath($VectorOutDir) -eq [System.IO.Path]::GetFullPath($LoggerDir)) {
     $StreamPlusArg = "logger/$StreamName"
@@ -231,6 +253,23 @@ if ($RunGenerateVectors) {
 
 & (Join-Path $ScriptDir "compile.ps1") -QuestaBin $QuestaBin -UvmHome $UvmHome -DryRun:$DryRun
 
+$VsimTileS = $TileS
+$VsimTileE = $TileE
+$VsimTileP = $TileP
+$VsimTileF = $TileF
+if ($TileSOverride -ne "") {
+    $VsimTileS = [int]$TileSOverride
+}
+if ($TileEOverride -ne "") {
+    $VsimTileE = [int]$TileEOverride
+}
+if ($TilePOverride -ne "") {
+    $VsimTileP = [int]$TilePOverride
+}
+if ($TileFOverride -ne "") {
+    $VsimTileF = [int]$TileFOverride
+}
+
 $vsim = Resolve-Tool "vsim.exe"
 $CoverageEnabled = ($EnableCoverage -or $CoverageUcdb -ne "")
 $vsimArgs = @(
@@ -242,6 +281,12 @@ $vsimArgs = @(
     "+ITA_SOURCE_GAP_ENABLE=1",
     "+ITA_SOURCE_GAP_MIN=0",
     "+ITA_SOURCE_GAP_MAX=$SourceGapMax",
+    "+ITA_INPUT_SOURCE_GAP_MIN=0",
+    "+ITA_INPUT_SOURCE_GAP_MAX=$InputSourceGapMax",
+    "+ITA_WEIGHT_SOURCE_GAP_MIN=0",
+    "+ITA_WEIGHT_SOURCE_GAP_MAX=$WeightSourceGapMax",
+    "+ITA_BIAS_SOURCE_GAP_MIN=0",
+    "+ITA_BIAS_SOURCE_GAP_MAX=$BiasSourceGapMax",
     "+ITA_SINK_BP_ENABLE=1",
     "+ITA_READY_LOW_MIN=0",
     "+ITA_READY_LOW_MAX=$ReadyLowMax",
@@ -260,10 +305,10 @@ if (($IsLinearDirected -or $IsQDirected -or $IsQkvDirected -or $IsAttnDirected) 
             $vsimArgs += "+ITA_DIRECTED_STEP=$Projection"
         }
         $vsimArgs += "+ITA_REQUANT_CSV=$RequantPlusArg"
-        $vsimArgs += "+ITA_TILE_S=$TileS"
-        $vsimArgs += "+ITA_TILE_E=$TileE"
-        $vsimArgs += "+ITA_TILE_P=$TileP"
-        $vsimArgs += "+ITA_TILE_F=$TileF"
+        $vsimArgs += "+ITA_TILE_S=$VsimTileS"
+        $vsimArgs += "+ITA_TILE_E=$VsimTileE"
+        $vsimArgs += "+ITA_TILE_P=$VsimTileP"
+        $vsimArgs += "+ITA_TILE_F=$VsimTileF"
         $vsimArgs += "+ITA_ACTIVATION=$ResolvedActivation"
     }
 }

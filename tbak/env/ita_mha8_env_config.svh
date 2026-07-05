@@ -14,6 +14,12 @@ class ita_mha8_env_config extends uvm_object;
     bit source_gap_enable = 1'b0;
     int unsigned source_gap_min = 0;
     int unsigned source_gap_max = 0;
+    int unsigned input_source_gap_min = 0;
+    int unsigned input_source_gap_max = 0;
+    int unsigned weight_source_gap_min = 0;
+    int unsigned weight_source_gap_max = 0;
+    int unsigned bias_source_gap_min = 0;
+    int unsigned bias_source_gap_max = 0;
 
     bit sink_bp_enable = 1'b0;
     int unsigned ready_low_min = 0;
@@ -82,13 +88,13 @@ class ita_mha8_env_config extends uvm_object;
 
     function void apply_protocol_cfg(ita_stream_config cfg);
         if (cfg.is_source()) begin
-            cfg.enable_source_gap = source_gap_enable;
-            cfg.source_gap_min = source_gap_min;
-            cfg.source_gap_max = source_gap_max;
+            cfg.source_gap_min = source_gap_min_for_kind(cfg.kind);
+            cfg.source_gap_max = source_gap_max_for_kind(cfg.kind);
+            cfg.enable_source_gap = source_gap_enable || (cfg.source_gap_max != 0);
 
-            cfg.enable_random_stall = source_gap_enable;
-            cfg.min_stall_cycles = source_gap_min;
-            cfg.max_stall_cycles = source_gap_max;
+            cfg.enable_random_stall = cfg.enable_source_gap;
+            cfg.min_stall_cycles = cfg.source_gap_min;
+            cfg.max_stall_cycles = cfg.source_gap_max;
         end
 
         if (cfg.is_sink()) begin
@@ -99,6 +105,38 @@ class ita_mha8_env_config extends uvm_object;
             cfg.ready_high_max = ready_high_max;
         end
     endfunction : apply_protocol_cfg
+
+    function int unsigned source_gap_min_for_kind(ita_stream_kind_e kind);
+        case (kind)
+            ITA_STREAM_HEAD_INPUT,
+            ITA_STREAM_FF_INPUT:
+                return input_source_gap_min;
+            ITA_STREAM_HEAD_WEIGHT,
+            ITA_STREAM_FF_WEIGHT:
+                return weight_source_gap_min;
+            ITA_STREAM_HEAD_BIAS,
+            ITA_STREAM_FF_BIAS:
+                return bias_source_gap_min;
+            default:
+                return source_gap_min;
+        endcase
+    endfunction : source_gap_min_for_kind
+
+    function int unsigned source_gap_max_for_kind(ita_stream_kind_e kind);
+        case (kind)
+            ITA_STREAM_HEAD_INPUT,
+            ITA_STREAM_FF_INPUT:
+                return input_source_gap_max;
+            ITA_STREAM_HEAD_WEIGHT,
+            ITA_STREAM_FF_WEIGHT:
+                return weight_source_gap_max;
+            ITA_STREAM_HEAD_BIAS,
+            ITA_STREAM_FF_BIAS:
+                return bias_source_gap_max;
+            default:
+                return source_gap_max;
+        endcase
+    endfunction : source_gap_max_for_kind
 
     function void load_tile_plusargs();
         void'($value$plusargs("ITA_TILE_S=%d", tile_s));
@@ -115,6 +153,18 @@ class ita_mha8_env_config extends uvm_object;
             source_gap_enable = (tmp != 0);
         void'($value$plusargs("ITA_SOURCE_GAP_MIN=%d", source_gap_min));
         void'($value$plusargs("ITA_SOURCE_GAP_MAX=%d", source_gap_max));
+        input_source_gap_min = source_gap_min;
+        input_source_gap_max = source_gap_max;
+        weight_source_gap_min = source_gap_min;
+        weight_source_gap_max = source_gap_max;
+        bias_source_gap_min = source_gap_min;
+        bias_source_gap_max = source_gap_max;
+        void'($value$plusargs("ITA_INPUT_SOURCE_GAP_MIN=%d", input_source_gap_min));
+        void'($value$plusargs("ITA_INPUT_SOURCE_GAP_MAX=%d", input_source_gap_max));
+        void'($value$plusargs("ITA_WEIGHT_SOURCE_GAP_MIN=%d", weight_source_gap_min));
+        void'($value$plusargs("ITA_WEIGHT_SOURCE_GAP_MAX=%d", weight_source_gap_max));
+        void'($value$plusargs("ITA_BIAS_SOURCE_GAP_MIN=%d", bias_source_gap_min));
+        void'($value$plusargs("ITA_BIAS_SOURCE_GAP_MAX=%d", bias_source_gap_max));
 
         tmp = sink_bp_enable;
         if ($value$plusargs("ITA_SINK_BP_ENABLE=%d", tmp))
@@ -126,6 +176,12 @@ class ita_mha8_env_config extends uvm_object;
 
         if (source_gap_max < source_gap_min)
             source_gap_max = source_gap_min;
+        if (input_source_gap_max < input_source_gap_min)
+            input_source_gap_max = input_source_gap_min;
+        if (weight_source_gap_max < weight_source_gap_min)
+            weight_source_gap_max = weight_source_gap_min;
+        if (bias_source_gap_max < bias_source_gap_min)
+            bias_source_gap_max = bias_source_gap_min;
         if (ready_low_max < ready_low_min)
             ready_low_max = ready_low_min;
         if (ready_high_min == 0)

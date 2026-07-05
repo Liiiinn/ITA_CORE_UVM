@@ -135,7 +135,7 @@ class ita_mha8_cov extends uvm_component;
         int unsigned head_id_value,
         int unsigned tile_id_value,
         int unsigned inner_tile_id_value,
-        int unsigned beat_bucket_value,
+        int unsigned beat_bucket_value
     );
         option.per_instance = 1;
 
@@ -310,8 +310,7 @@ class ita_mha8_cov extends uvm_component;
             tr.head_id,
             tr.tile_id,
             tr.inner_tile_id,
-            beat_bucket(tr),
-            tr.is_lockstep
+            beat_bucket(tr)
         );
     endfunction : write_cov_stream
 

@@ -277,8 +277,13 @@ foreach ($case in $cases) {
     $future = Get-JsonProp $smoke "future_plusargs" $null
     $seed = Get-JsonInt $future "ntb_random_seed" (Get-JsonInt $case "seed" 1)
     $sourceGapMax = Get-JsonInt $future "ITA_SOURCE_GAP_MAX" 0
+    $inputSourceGapMax = Get-JsonInt $future "ITA_INPUT_SOURCE_GAP_MAX" $sourceGapMax
+    $weightSourceGapMax = Get-JsonInt $future "ITA_WEIGHT_SOURCE_GAP_MAX" $sourceGapMax
+    $biasSourceGapMax = Get-JsonInt $future "ITA_BIAS_SOURCE_GAP_MAX" $sourceGapMax
     $readyLowMax = Get-JsonInt $future "ITA_READY_LOW_MAX" 0
     $readyHighMax = Get-JsonInt $future "ITA_READY_HIGH_MAX" 1
+    $expectFail = [bool](Get-JsonProp $case "expect_fail" $false)
+    $expectedErrorRegex = [string](Get-JsonProp $case "expected_error_regex" "")
 
     if ($QuestaBin -ne "") {
         $smokeArgs = Set-ValueArg $smokeArgs "-QuestaBin" $QuestaBin
@@ -289,6 +294,9 @@ foreach ($case in $cases) {
     $smokeArgs = Set-ValueArg $smokeArgs "-Python" $Python
     $smokeArgs = Set-ValueArg $smokeArgs "-UvmSeed" ([string]$seed)
     $smokeArgs = Set-ValueArg $smokeArgs "-SourceGapMax" ([string]$sourceGapMax)
+    $smokeArgs = Set-ValueArg $smokeArgs "-InputSourceGapMax" ([string]$inputSourceGapMax)
+    $smokeArgs = Set-ValueArg $smokeArgs "-WeightSourceGapMax" ([string]$weightSourceGapMax)
+    $smokeArgs = Set-ValueArg $smokeArgs "-BiasSourceGapMax" ([string]$biasSourceGapMax)
     $smokeArgs = Set-ValueArg $smokeArgs "-ReadyLowMax" ([string]$readyLowMax)
     $smokeArgs = Set-ValueArg $smokeArgs "-ReadyHighMax" ([string]$readyHighMax)
     $smokeArgs = Set-SwitchArg $smokeArgs "-EnableCoverage" $true
@@ -301,6 +309,7 @@ foreach ($case in $cases) {
     $status = "PASS"
     $exitCode = 0
     $failureMessage = ""
+    $matchedExpectedError = $false
 
     Write-Host ("[{0}/{1}] {2}" -f ($caseIndex + 1), $cases.Count, $caseName)
 
@@ -335,6 +344,25 @@ foreach ($case in $cases) {
         if (Test-Path -LiteralPath $sourceVsimLog -PathType Leaf) {
             Copy-Item -LiteralPath $sourceVsimLog -Destination $caseVsimLog -Force
         }
+
+        if ($expectFail) {
+            if ($exitCode -eq 0) {
+                $status = "FAIL"
+                $failureMessage = "Expected failure but smoke.ps1 exited 0"
+            } else {
+                $logText = ""
+                if (Test-Path -LiteralPath $caseLog -PathType Leaf) {
+                    $logText = Get-Content -LiteralPath $caseLog -Raw
+                }
+                if ($expectedErrorRegex -eq "" -or [regex]::IsMatch($logText, $expectedErrorRegex, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase -bor [System.Text.RegularExpressions.RegexOptions]::Singleline)) {
+                    $matchedExpectedError = $true
+                    $status = "PASS"
+                } else {
+                    $status = "FAIL"
+                    $failureMessage = "Expected failure did not match regex: $expectedErrorRegex"
+                }
+            }
+        }
     }
 
     $paths = Get-JsonProp $case "paths" $null
@@ -353,8 +381,14 @@ foreach ($case in $cases) {
         tile_p = Get-JsonInt $case "tile_p" 0
         tile_f = Get-JsonInt $case "tile_f" 0
         source_gap_max = $sourceGapMax
+        input_source_gap_max = $inputSourceGapMax
+        weight_source_gap_max = $weightSourceGapMax
+        bias_source_gap_max = $biasSourceGapMax
         ready_low_max = $readyLowMax
         ready_high_max = $readyHighMax
+        expect_fail = $expectFail
+        expected_error_regex = $expectedErrorRegex
+        matched_expected_error = $matchedExpectedError
         log_path = $caseLog
         vsim_log_path = $caseVsimLog
         manifest_path = $manifestPath
@@ -392,8 +426,14 @@ if ($stoppedEarly -and ($caseIndex + 1) -lt $cases.Count) {
             tile_p = Get-JsonInt $skippedCase "tile_p" 0
             tile_f = Get-JsonInt $skippedCase "tile_f" 0
             source_gap_max = 0
+            input_source_gap_max = 0
+            weight_source_gap_max = 0
+            bias_source_gap_max = 0
             ready_low_max = 0
             ready_high_max = 0
+            expect_fail = [bool](Get-JsonProp $skippedCase "expect_fail" $false)
+            expected_error_regex = [string](Get-JsonProp $skippedCase "expected_error_regex" "")
+            matched_expected_error = $false
             log_path = ""
             vsim_log_path = ""
             manifest_path = ""
