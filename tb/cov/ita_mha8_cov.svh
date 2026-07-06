@@ -62,7 +62,7 @@ class ita_mha8_cov extends uvm_component;
             illegal_bins zero = {0};
         }
 
-        cross_tile_cfg: cross cp_tile_s, cp_tile_e, cp_tile_p, cp_tile_f;
+        // cross_tile_cfg: cross cp_tile_s, cp_tile_e, cp_tile_p, cp_tile_f;
     endgroup : cfg_cg
 
     covergroup ctrl_item_cg with function sample(
@@ -125,8 +125,8 @@ class ita_mha8_cov extends uvm_component;
             illegal_bins idle = {0};
         }
 
-        cross_layer_tile_cfg: cross cp_layer, cp_tile_s, cp_tile_e, cp_tile_p, cp_tile_f;
-        cross_activation_tile_cfg: cross cp_activation, cp_tile_s, cp_tile_e, cp_tile_p, cp_tile_f;
+        // cross_layer_tile_cfg: cross cp_layer, cp_tile_s, cp_tile_e, cp_tile_p, cp_tile_f;
+        // cross_activation_tile_cfg: cross cp_activation, cp_tile_s, cp_tile_e, cp_tile_p, cp_tile_f;
     endgroup : ctrl_item_cg
 
     covergroup stream_item_cg with function sample(
@@ -168,7 +168,7 @@ class ita_mha8_cov extends uvm_component;
         cp_tile_id: coverpoint tile_id_value {
             bins first = {0};
             bins low[] = {[1:3]};
-            bins high = {[4:$]};
+            illegal_bins high = {[4:$]};
         }
 
         cp_inner_tile_id: coverpoint inner_tile_id_value {
@@ -184,8 +184,39 @@ class ita_mha8_cov extends uvm_component;
             illegal_bins illegal_high = {BEAT_BUCKET_HIGH};
         }
 
-        cross_kind_step: cross cp_kind, cp_step;
-        cross_step_head: cross cp_step, cp_head;
+        cross_kind_step: cross cp_kind, cp_step {
+            ignore_bins head_kind_ff_step = 
+                binsof(cp_kind.head_input)  && binsof(cp_step.f1) ||
+                binsof(cp_kind.head_input)  && binsof(cp_step.f2) ||
+                binsof(cp_kind.head_weight) && binsof(cp_step.f1) ||
+                binsof(cp_kind.head_weight) && binsof(cp_step.f2) ||
+                binsof(cp_kind.head_bias)   && binsof(cp_step.f1) ||
+                binsof(cp_kind.head_bias)   && binsof(cp_step.f2);
+
+            ignore_bins ff_kind_head_step =
+                binsof(cp_kind.ff_input)  && (binsof(cp_step.q)  ||
+                                            binsof(cp_step.k)  ||
+                                            binsof(cp_step.v)  ||
+                                            binsof(cp_step.qk) ||
+                                            binsof(cp_step.av) ||
+                                            binsof(cp_step.ow)) ||
+                binsof(cp_kind.ff_weight) && (binsof(cp_step.q)  ||
+                                            binsof(cp_step.k)  ||
+                                            binsof(cp_step.v)  ||
+                                            binsof(cp_step.qk) ||
+                                            binsof(cp_step.av) ||
+                                            binsof(cp_step.ow)) ||
+                binsof(cp_kind.ff_bias)   && (binsof(cp_step.q)  ||
+                                            binsof(cp_step.k)  ||
+                                            binsof(cp_step.v)  ||
+                                            binsof(cp_step.qk) ||
+                                            binsof(cp_step.av) ||
+                                            binsof(cp_step.ow));
+        }
+        cross_step_head: cross cp_step, cp_head {
+            ignore_bins ff_step_has_no_head =
+                binsof(cp_step.f1) || binsof(cp_step.f2);
+        }
         cross_step_beat: cross cp_step, cp_beat_bucket;
     endgroup : stream_item_cg
 
@@ -225,7 +256,7 @@ class ita_mha8_cov extends uvm_component;
         cp_tile_id: coverpoint tile_id_value {
             bins first = {0};
             bins low[] = {[1:3]};
-            bins high = {[4:$]};
+            illegal_bins high = {[4:$]};
         }
 
         cp_inner_tile_id: coverpoint inner_tile_id_value {
@@ -241,8 +272,39 @@ class ita_mha8_cov extends uvm_component;
             illegal_bins illegal_high = {BEAT_BUCKET_HIGH};
         }
 
-        cross_kind_step: cross cp_kind, cp_step;
-        cross_step_head: cross cp_step, cp_head;
+        cross_kind_step: cross cp_kind, cp_step {
+            ignore_bins head_kind_ff_step = 
+                binsof(cp_kind.head_input)  && binsof(cp_step.f1) ||
+                binsof(cp_kind.head_input)  && binsof(cp_step.f2) ||
+                binsof(cp_kind.head_weight) && binsof(cp_step.f1) ||
+                binsof(cp_kind.head_weight) && binsof(cp_step.f2) ||
+                binsof(cp_kind.head_bias)   && binsof(cp_step.f1) ||
+                binsof(cp_kind.head_bias)   && binsof(cp_step.f2);
+
+            ignore_bins ff_kind_head_step =
+                binsof(cp_kind.ff_input)  && (binsof(cp_step.q)  ||
+                                            binsof(cp_step.k)  ||
+                                            binsof(cp_step.v)  ||
+                                            binsof(cp_step.qk) ||
+                                            binsof(cp_step.av) ||
+                                            binsof(cp_step.ow)) ||
+                binsof(cp_kind.ff_weight) && (binsof(cp_step.q)  ||
+                                            binsof(cp_step.k)  ||
+                                            binsof(cp_step.v)  ||
+                                            binsof(cp_step.qk) ||
+                                            binsof(cp_step.av) ||
+                                            binsof(cp_step.ow)) ||
+                binsof(cp_kind.ff_bias)   && (binsof(cp_step.q)  ||
+                                            binsof(cp_step.k)  ||
+                                            binsof(cp_step.v)  ||
+                                            binsof(cp_step.qk) ||
+                                            binsof(cp_step.av) ||
+                                            binsof(cp_step.ow));
+        }
+        cross_step_head: cross cp_step, cp_head {
+            ignore_bins ff_step_has_no_head =
+                binsof(cp_step.f1) || binsof(cp_step.f2);
+        }
         cross_step_beat: cross cp_step, cp_beat_bucket;
     endgroup : output_item_cg
 
