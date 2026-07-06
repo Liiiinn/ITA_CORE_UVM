@@ -273,28 +273,24 @@ class ita_mha8_cov extends uvm_component;
         }
 
         cross_kind_step: cross cp_kind, cp_step {
+            ignore_bins sum_kind_ff_step = 
+                binsof(cp_kind.sum_output) && binsof(cp_step.f1) ||
+                binsof(cp_kind.sum_output) && binsof(cp_step.f2);
+
             ignore_bins head_kind_ff_step = 
-                binsof(cp_kind.head_input)  && binsof(cp_step.f1) ||
-                binsof(cp_kind.head_input)  && binsof(cp_step.f2) ||
-                binsof(cp_kind.head_weight) && binsof(cp_step.f1) ||
-                binsof(cp_kind.head_weight) && binsof(cp_step.f2) ||
-                binsof(cp_kind.head_bias)   && binsof(cp_step.f1) ||
-                binsof(cp_kind.head_bias)   && binsof(cp_step.f2);
+                binsof(cp_kind.head_output)  && binsof(cp_step.f1) ||
+                binsof(cp_kind.head_output)  && binsof(cp_step.f2);
+
+            ignore_bins sum_kind_head_step =
+                binsof(cp_kind.sum_output) && (binsof(cp_step.q)  ||
+                                            binsof(cp_step.k)  ||
+                                            binsof(cp_step.v)  ||
+                                            binsof(cp_step.qk) ||
+                                            binsof(cp_step.av) ||
+                                            binsof(cp_step.ow));
 
             ignore_bins ff_kind_head_step =
-                binsof(cp_kind.ff_input)  && (binsof(cp_step.q)  ||
-                                            binsof(cp_step.k)  ||
-                                            binsof(cp_step.v)  ||
-                                            binsof(cp_step.qk) ||
-                                            binsof(cp_step.av) ||
-                                            binsof(cp_step.ow)) ||
-                binsof(cp_kind.ff_weight) && (binsof(cp_step.q)  ||
-                                            binsof(cp_step.k)  ||
-                                            binsof(cp_step.v)  ||
-                                            binsof(cp_step.qk) ||
-                                            binsof(cp_step.av) ||
-                                            binsof(cp_step.ow)) ||
-                binsof(cp_kind.ff_bias)   && (binsof(cp_step.q)  ||
+                binsof(cp_kind.ff_output)  && (binsof(cp_step.q)  ||
                                             binsof(cp_step.k)  ||
                                             binsof(cp_step.v)  ||
                                             binsof(cp_step.qk) ||
