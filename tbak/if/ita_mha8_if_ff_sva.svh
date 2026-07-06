@@ -178,6 +178,30 @@ property ff_legal_source_valid_lockstep_seen;
         ff_inp_valid_i && ff_inp_weight_valid_i && ff_inp_bias_valid_i;
 endproperty : ff_legal_source_valid_lockstep_seen
 
+property ff_lockstep_source_no_skew;
+    @(posedge clk_i) disable iff (!rst_ni)
+        assert_legal_lockstep_input &&
+        ((ff_inp_valid_i && ff_inp_lockstep_dbg) ||
+         (ff_inp_weight_valid_i && ff_inp_weight_lockstep_dbg) ||
+         (ff_inp_bias_valid_i && ff_inp_bias_lockstep_dbg))
+        |-> (
+            ff_inp_valid_i &&
+            ff_inp_weight_valid_i &&
+            ff_inp_bias_valid_i &&
+            ff_inp_lockstep_dbg &&
+            ff_inp_weight_lockstep_dbg &&
+            ff_inp_bias_lockstep_dbg &&
+            ff_inp_step_dbg == ff_inp_weight_step_dbg &&
+            ff_inp_step_dbg == ff_inp_bias_step_dbg &&
+            ff_inp_tile_id_dbg == ff_inp_weight_tile_id_dbg &&
+            ff_inp_tile_id_dbg == ff_inp_bias_tile_id_dbg &&
+            ff_inp_inner_id_dbg == ff_inp_weight_inner_id_dbg &&
+            ff_inp_inner_id_dbg == ff_inp_bias_inner_id_dbg &&
+            ff_inp_beat_id_dbg == ff_inp_weight_beat_id_dbg &&
+            ff_inp_beat_id_dbg == ff_inp_bias_beat_id_dbg
+        );
+endproperty : ff_lockstep_source_no_skew
+
 property ff_output_step_legal_when_valid;
     @(posedge clk_i) disable iff (!rst_ni)
         ff_valid_o |-> ff_step_o inside {F1, F2};
@@ -297,6 +321,23 @@ ff_bias_dbg_stable_until_ready_a: assert property(ff_bias_dbg_stable_until_ready
 ff_inp_step_legal_when_valid_a: assert property(ff_inp_step_legal_when_valid);
 ff_weight_step_legal_when_valid_a: assert property(ff_weight_step_legal_when_valid);
 ff_bias_step_legal_when_valid_a: assert property(ff_bias_step_legal_when_valid);
+ff_lockstep_source_no_skew_a: assert property(ff_lockstep_source_no_skew)
+    else $error("[ITA_SOURCE_SKEW] FF lockstep source valid/metadata skew: valid=%0b weight_valid=%0b bias_valid=%0b step=%s/%s/%s tile=%0d/%0d/%0d inner=%0d/%0d/%0d beat=%0d/%0d/%0d",
+        ff_inp_valid_i,
+        ff_inp_weight_valid_i,
+        ff_inp_bias_valid_i,
+        ff_inp_step_dbg.name(),
+        ff_inp_weight_step_dbg.name(),
+        ff_inp_bias_step_dbg.name(),
+        ff_inp_tile_id_dbg,
+        ff_inp_weight_tile_id_dbg,
+        ff_inp_bias_tile_id_dbg,
+        ff_inp_inner_id_dbg,
+        ff_inp_weight_inner_id_dbg,
+        ff_inp_bias_inner_id_dbg,
+        ff_inp_beat_id_dbg,
+        ff_inp_weight_beat_id_dbg,
+        ff_inp_bias_beat_id_dbg);
 ff_legal_source_valid_lockstep_seen_c: cover property(ff_legal_source_valid_lockstep_seen);
 ff_output_step_legal_when_valid_a: assert property(ff_output_step_legal_when_valid);
 ff_f1_output_last_inner_legal_a: assert property(ff_f1_output_last_inner_legal);
