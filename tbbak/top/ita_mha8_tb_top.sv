@@ -3,8 +3,9 @@ module ita_mha8_tb_top;
     import ita_package::*;
     import ita_ctrl_agent_pkg::*;
     import ita_stream_agent_pkg::*;
-    import ita_mha8_common_pkg::*;
+    import ita_mha8_scb_pkg::*;
     import ita_mha8_env_pkg::*;
+    import ita_mha8_seq_pkg::*;
     import ita_mha8_test_pkg::*;
     `include "uvm_macros.svh"
 
@@ -25,9 +26,6 @@ module ita_mha8_tb_top;
         .head_eps_mult_i      (vif.head_eps_mult_i),
         .head_right_shift_i   (vif.head_right_shift_i),
         .head_add_i           (vif.head_add_i),
-        .sum_eps_mult_i       (vif.sum_eps_mult_i),
-        .sum_right_shift_i    (vif.sum_right_shift_i),
-        .sum_add_i            (vif.sum_add_i),
         .inp_valid_i          (vif.inp_valid_i),
         .inp_ready_o          (vif.inp_ready_o),
         .inp_weight_valid_i   (vif.inp_weight_valid_i),
@@ -42,15 +40,9 @@ module ita_mha8_tb_top;
         .per_head_busy_o      (vif.per_head_busy_o),
         .per_head_oup_o       (vif.per_head_oup_o),
         .per_head_step_o      (vif.per_head_step_o),
-        .per_head_tile_id_dbg_o(vif.per_head_tile_id_dbg),
-        .per_head_inner_id_dbg_o(vif.per_head_inner_id_dbg),
-        .per_head_beat_id_dbg_o(vif.per_head_beat_id_dbg),
         .sum_valid_o          (vif.sum_valid_o),
         .sum_ready_i          (vif.sum_ready_i),
         .sum_oup_o            (vif.sum_oup_o),
-        .sum_tile_id_dbg_o    (vif.sum_tile_id_dbg),
-        .sum_inner_id_dbg_o   (vif.sum_inner_id_dbg),
-        .sum_beat_id_dbg_o    (vif.sum_beat_id_dbg),
         .ff_inp_valid_i       (vif.ff_inp_valid_i),
         .ff_inp_ready_o       (vif.ff_inp_ready_o),
         .ff_inp_weight_valid_i(vif.ff_inp_weight_valid_i),
@@ -65,13 +57,8 @@ module ita_mha8_tb_top;
         .ff_busy_o            (vif.ff_busy_o),
         .ff_oup_o             (vif.ff_oup_o),
         .ff_step_o            (vif.ff_step_o),
-        .ff_tile_id_dbg_o     (vif.ff_tile_id_dbg),
-        .ff_inner_id_dbg_o    (vif.ff_inner_id_dbg),
-        .ff_beat_id_dbg_o     (vif.ff_beat_id_dbg),
         .phase_mismatch_o     (vif.phase_mismatch_o)
     );
-
-    assign vif.per_head_ready_dbg = dut.head_ready;
 
     initial begin
         clk = 1'b0;

@@ -4,17 +4,11 @@ package ita_mha8_test_pkg;
     import ita_package::*;
     import ita_ctrl_agent_pkg::*;
     import ita_stream_agent_pkg::*;
-    import ita_mha8_common_pkg::*;
+    import ita_mha8_scb_pkg::*;
     import ita_mha8_env_pkg::*;
     import ita_mha8_seq_pkg::*;
-    import ita_mha8_vseq_pkg::*;
     `include "uvm_macros.svh"
 
     `include "ita_mha8_base_test.svh"
-    `include "ita_mha8_smoke_test.svh"
-    `include "ita_mha8_linear_directed_test.svh"
-    `include "ita_mha8_q_directed_test.svh"
-    `include "ita_mha8_qkv_directed_test.svh"
-    `include "ita_mha8_attn_directed_test.svh"
 
 endpackage : ita_mha8_test_pkg

@@ -11,7 +11,6 @@ class ita_stream_monitor extends uvm_monitor;
     function new(string name = "ita_stream_monitor", uvm_component parent = null);
         super.new(name, parent);
         ap = new("ap", this);
-        sample_count = 0;
     endfunction : new
 
     function void build_phase(uvm_phase phase);
@@ -25,53 +24,13 @@ class ita_stream_monitor extends uvm_monitor;
     task run_phase(uvm_phase phase);
         forever begin
             @(posedge cfg.vif.clk_i);
-            if (!cfg.vif.rst_ni)
-                sample_count = 0;
-            else if (is_handshake())
+            if (cfg.vif.rst_ni && is_handshake()) begin
                 sample_item();
+            end
         end
     endtask : run_phase
 
     function bit is_handshake();
-        // Stage 3: return input valid/ready for head0 input stream.
-        // Stage 4: add weight and bias valid/ready checks.
-        // Stage 5: add head0 output valid/ready check.
-        // TODO Stage 11: add heads 1-7, sum, and feed-forward handshake checks.
-        case(cfg.kind)
-            ITA_STREAM_HEAD_INPUT:
-                return is_head_source_handshake();
-            ITA_STREAM_HEAD_WEIGHT:
-                return is_head_source_handshake();
-            ITA_STREAM_HEAD_BIAS:
-                return is_head_source_handshake();
-            ITA_STREAM_HEAD_OUTPUT:
-                return is_head_output_handshake();
-            ITA_STREAM_SUM_OUTPUT:
-                return cfg.vif.sum_valid_o && cfg.vif.sum_ready_i;
-            ITA_STREAM_FF_INPUT:
-                return is_ff_source_handshake();
-            ITA_STREAM_FF_WEIGHT:
-                return is_ff_source_handshake();
-            ITA_STREAM_FF_BIAS:
-                return is_ff_source_handshake();
-            ITA_STREAM_FF_OUTPUT:
-                return cfg.vif.ff_valid_o && cfg.vif.ff_ready_i;
-        endcase
-        return 1'b0;
-    endfunction : is_handshake
-
-    function bit is_head_source_handshake();
-        if (cfg.vif.inp_lockstep_dbg[cfg.head_id] ||
-            cfg.vif.inp_weight_lockstep_dbg[cfg.head_id] ||
-            cfg.vif.inp_bias_lockstep_dbg[cfg.head_id]) begin
-            return cfg.vif.inp_valid_i[cfg.head_id] &&
-                   cfg.vif.inp_weight_valid_i[cfg.head_id] &&
-                   cfg.vif.inp_bias_valid_i[cfg.head_id] &&
-                   cfg.vif.inp_ready_o[cfg.head_id] &&
-                   cfg.vif.inp_weight_ready_o[cfg.head_id] &&
-                   cfg.vif.inp_bias_ready_o[cfg.head_id];
-        end
-
         case (cfg.kind)
             ITA_STREAM_HEAD_INPUT:
                 return cfg.vif.inp_valid_i[cfg.head_id] && cfg.vif.inp_ready_o[cfg.head_id];
@@ -79,44 +38,22 @@ class ita_stream_monitor extends uvm_monitor;
                 return cfg.vif.inp_weight_valid_i[cfg.head_id] && cfg.vif.inp_weight_ready_o[cfg.head_id];
             ITA_STREAM_HEAD_BIAS:
                 return cfg.vif.inp_bias_valid_i[cfg.head_id] && cfg.vif.inp_bias_ready_o[cfg.head_id];
-            default:
-                return 1'b0;
-        endcase
-    endfunction : is_head_source_handshake
-
-    function bit is_ff_source_handshake();
-        if (cfg.vif.ff_inp_lockstep_dbg ||
-            cfg.vif.ff_inp_weight_lockstep_dbg ||
-            cfg.vif.ff_inp_bias_lockstep_dbg) begin
-            return cfg.vif.ff_inp_valid_i &&
-                   cfg.vif.ff_inp_weight_valid_i &&
-                   cfg.vif.ff_inp_bias_valid_i &&
-                   cfg.vif.ff_inp_ready_o &&
-                   cfg.vif.ff_inp_weight_ready_o &&
-                   cfg.vif.ff_inp_bias_ready_o;
-        end
-
-        case (cfg.kind)
+            ITA_STREAM_HEAD_OUTPUT:
+                return cfg.vif.per_head_valid_o[cfg.head_id] && cfg.vif.per_head_ready_i[cfg.head_id];
+            ITA_STREAM_SUM_OUTPUT:
+                return cfg.vif.sum_valid_o && cfg.vif.sum_ready_i;
             ITA_STREAM_FF_INPUT:
                 return cfg.vif.ff_inp_valid_i && cfg.vif.ff_inp_ready_o;
             ITA_STREAM_FF_WEIGHT:
                 return cfg.vif.ff_inp_weight_valid_i && cfg.vif.ff_inp_weight_ready_o;
             ITA_STREAM_FF_BIAS:
                 return cfg.vif.ff_inp_bias_valid_i && cfg.vif.ff_inp_bias_ready_o;
+            ITA_STREAM_FF_OUTPUT:
+                return cfg.vif.ff_valid_o && cfg.vif.ff_ready_i;
             default:
                 return 1'b0;
         endcase
-    endfunction : is_ff_source_handshake
-
-    function bit is_head_output_handshake();
-        if (!cfg.vif.per_head_valid_o[cfg.head_id])
-            return 1'b0;
-
-        if (cfg.vif.per_head_step_o[cfg.head_id] == OW)
-            return cfg.vif.per_head_ready_dbg[cfg.head_id];
-
-        return cfg.vif.per_head_ready_i[cfg.head_id];
-    endfunction : is_head_output_handshake
+    endfunction : is_handshake
 
     function void sample_item();
         ita_stream_item tr;
@@ -124,8 +61,7 @@ class ita_stream_monitor extends uvm_monitor;
         tr = ita_stream_item::type_id::create("tr");
         tr.kind = cfg.kind;
         tr.head_id = cfg.head_id;
-        tr.beat_id = sample_count;
-        // Stage 3-5: sample the payload selected by cfg.kind and cfg.head_id.
+
         case (cfg.kind)
             ITA_STREAM_HEAD_INPUT: begin
                 tr.inp = cfg.vif.inp_i[cfg.head_id];
@@ -154,16 +90,12 @@ class ita_stream_monitor extends uvm_monitor;
             ITA_STREAM_HEAD_OUTPUT: begin
                 tr.oup = cfg.vif.per_head_oup_o[cfg.head_id];
                 tr.step = cfg.vif.per_head_step_o[cfg.head_id];
-                tr.tile_id = cfg.vif.per_head_tile_id_dbg[cfg.head_id];
-                tr.inner_tile_id = cfg.vif.per_head_inner_id_dbg[cfg.head_id];
-                tr.beat_id = cfg.vif.per_head_beat_id_dbg[cfg.head_id];
+                tr.beat_id = sample_count;
             end
             ITA_STREAM_SUM_OUTPUT: begin
                 tr.oup = cfg.vif.sum_oup_o;
                 tr.step = OW;
-                tr.tile_id = cfg.vif.sum_tile_id_dbg;
-                tr.inner_tile_id = cfg.vif.sum_inner_id_dbg;
-                tr.beat_id = cfg.vif.sum_beat_id_dbg;
+                tr.beat_id = sample_count;
             end
             ITA_STREAM_FF_INPUT: begin
                 tr.inp = cfg.vif.ff_inp_i;
@@ -192,17 +124,11 @@ class ita_stream_monitor extends uvm_monitor;
             ITA_STREAM_FF_OUTPUT: begin
                 tr.oup = cfg.vif.ff_oup_o;
                 tr.step = cfg.vif.ff_step_o;
-                tr.tile_id = cfg.vif.ff_tile_id_dbg;
-                tr.inner_tile_id = cfg.vif.ff_inner_id_dbg;
-                tr.beat_id = cfg.vif.ff_beat_id_dbg;
+                tr.beat_id = sample_count;
             end
+            default: ;
         endcase
-        // Stage 7: write sampled output transactions to logger through ap.
-        // Stage 8: send sampled transactions to the smoke scoreboard.
-        // TODO S13_ONLINE_COV: keep this post-handshake sample point as the canonical coverage transaction source.
-        // TODO S13_ONLINE_COV: classify first/middle/last beat buckets from tr.beat_id and structural expected counts.
-        // TODO S13_ONLINE_COV: cover valid-ready stall categories after monitor captures pre-handshake valid/ready history.
-        // TODO S13_STRUCT_PREDICTOR: preserve sampled step/head/tile/inner/beat metadata for predictor and scoreboard diagnostics.
+
         ap.write(tr);
         sample_count++;
     endfunction : sample_item

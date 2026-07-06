@@ -26,20 +26,15 @@ class ita_ctrl_monitor extends uvm_monitor;
         forever begin
             @(posedge cfg.vif.clk_i);
             if (cfg.vif.rst_ni && cfg.vif.ctrl_i.start) begin
-                // Stage 2: sample cfg.vif.ctrl_i when start is observed and publish it on ap.
                 tr = ita_ctrl_item::type_id::create("tr");
                 tr.ctrl = cfg.vif.ctrl_i;
-                tr.sum_eps_mult = cfg.vif.sum_eps_mult_i;
-                tr.sum_right_shift = cfg.vif.sum_right_shift_i;
-                tr.sum_add = cfg.vif.sum_add_i;
                 for (int unsigned h = 0; h < 8; h++) begin
-                    tr.head_eps_mult[h] = cfg.vif.head_eps_mult_i[h];
+                    tr.head_eps_mult[h]    = cfg.vif.head_eps_mult_i[h];
                     tr.head_right_shift[h] = cfg.vif.head_right_shift_i[h];
-                    tr.head_add[h] = cfg.vif.head_add_i[h];
+                    tr.head_add[h]         = cfg.vif.head_add_i[h];
                 end
                 ap.write(tr);
             end
-            // TODO Stage 7-8: connect this analysis port to logger/scoreboard once those components exist.
         end
     endtask : run_phase
 

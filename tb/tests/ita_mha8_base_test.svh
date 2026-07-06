@@ -22,57 +22,28 @@ class ita_mha8_base_test extends uvm_test;
         cfg = ita_mha8_env_config::type_id::create("cfg");
         cfg.vif = vif;
         cfg.create_default_agent_configs();
+        // Stage 2-5: override cfg from derived tests before env is created.
+        // TODO S13_REGRESSION: add future plusargs to enable SVA, online coverage, and structural predictor modes.
+        // TODO S13_REGRESSION: define directed coverage targets for S64/S128/S256 and Identity/Relu/Gelu cases.
 
         uvm_config_db#(ita_mha8_env_config)::set(this, "env", "cfg", cfg);
         env = ita_mha8_env::type_id::create("env", this);
     endfunction : build_phase
 
     task run_phase(uvm_phase phase);
-        ita_mha8_base_seq seq;
-        ita_mha8_stream_smoke_seq input_seq;
-        ita_mha8_stream_smoke_seq weight_seq;
-        ita_mha8_stream_smoke_seq bias_seq;
-
-        phase.raise_objection(this);
-        seq = ita_mha8_base_seq::type_id::create("seq");
-        seq.start(env.ctrl_agt.sqr);
-
-        input_seq = ita_mha8_stream_smoke_seq::type_id::create("input_seq");
-        input_seq.kind = ITA_STREAM_HEAD_INPUT;
-        input_seq.head_id = 0;
-        input_seq.step = Q;
-        input_seq.tile_id = 0;
-        input_seq.inner_tile_id = 0;
-        input_seq.beat_id = 0;
-
-        weight_seq = ita_mha8_stream_smoke_seq::type_id::create("weight_seq");
-        weight_seq.kind = ITA_STREAM_HEAD_WEIGHT;
-        weight_seq.head_id = 0;
-        weight_seq.step = Q;
-        weight_seq.tile_id = 0;
-        weight_seq.inner_tile_id = 0;
-        weight_seq.beat_id = 0;
-
-        bias_seq = ita_mha8_stream_smoke_seq::type_id::create("bias_seq");
-        bias_seq.kind = ITA_STREAM_HEAD_BIAS;
-        bias_seq.head_id = 0;
-        bias_seq.step = Q;
-        bias_seq.tile_id = 0;
-        bias_seq.inner_tile_id = 0;
-        bias_seq.beat_id = 0;
-
-        fork
-            input_seq.start(env.input_agt[0].sqr);
-            weight_seq.start(env.weight_agt[0].sqr);
-            bias_seq.start(env.bias_agt[0].sqr);
-        join_none
-
-        repeat (20) begin
-            @(posedge vif.clk_i);
-        end
-        phase.drop_objection(this);
+        // TODO Stage 1: keep this base test build-only; do not start ctrl or stream sequences here.
+        // TODO S13_REGRESSION: document pass criteria as UVM_ERROR=0, SVA violation=0, SCB errors=0, timeout=0, offline compare PASS, and coverage goal met.
     endtask : run_phase
 
 endclass : ita_mha8_base_test
+
+class ita_base_test extends ita_mha8_base_test;
+    `uvm_component_utils(ita_base_test)
+
+    function new(string name = "ita_base_test", uvm_component parent = null);
+        super.new(name, parent);
+    endfunction : new
+
+endclass : ita_base_test
 
 `endif // ITA_MHA8_BASE_TEST_SVH

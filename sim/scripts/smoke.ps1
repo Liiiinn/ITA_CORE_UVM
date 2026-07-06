@@ -47,7 +47,7 @@ $WorkspaceDir = Split-Path -Parent $CoreDir
 $OutputDir = Join-Path $SimDir "output"
 $LogDir = Join-Path $OutputDir "logs"
 $LoggerDir = Join-Path $SimDir "logger"
-$ToolsDir = Join-Path $CoreDir "tbak\tools"
+$ToolsDir = Join-Path $CoreDir "tb\tools"
 $Transcript = Join-Path $LogDir "$TestName.log"
 
 function Resolve-Tool {

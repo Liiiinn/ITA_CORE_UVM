@@ -35,7 +35,6 @@ class ita_ctrl_agent extends uvm_agent;
     function void connect_phase(uvm_phase phase);
         super.connect_phase(phase);
 
-        // Stage 2: connect mon.ap to this agent ap after ctrl_monitor publishes sampled ctrl items.
         mon.ap.connect(ap);
 
         if (cfg.is_active == UVM_ACTIVE) begin
