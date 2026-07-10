@@ -23,6 +23,14 @@ param(
     [int]$ReadyLowMax = 0,
     [int]$ReadyHighMax = 0,
     [int]$UvmSeed = 1,
+    [int]$ProtocolNumJobs = 0,
+    [int]$ProtocolTileMin = 1,
+    [int]$ProtocolTileMax = 2,
+    [int]$ProtocolStartGapMax = 0,
+    [ValidateSet("ATTN", "FF", "ATTNFF", "RANDOM")]
+    [string]$ProtocolProjection = "ATTNFF",
+    [switch]$ProtocolNegativeSkew,
+    [int]$ResetCycles = 8,
     [string]$TileSOverride = "",
     [string]$TileEOverride = "",
     [string]$TilePOverride = "",
@@ -102,12 +110,23 @@ $IsLinearDirected = ($TestName -eq "ita_mha8_linear_directed_test")
 $IsQDirected = ($TestName -eq "ita_mha8_q_directed_test")
 $IsQkvDirected = ($TestName -eq "ita_mha8_qkv_directed_test")
 $IsAttnDirected = ($TestName -eq "ita_mha8_attn_directed_test")
+$IsProtocolRandom = ($TestName -eq "ita_mha8_protocol_random_test")
 $AutoVectorFlow = (($IsLinearDirected -or $IsQDirected -or $IsQkvDirected -or $IsAttnDirected) -and -not $NoAutoVectorFlow)
 $RunGenerateVectors = (($GenerateVectors -or $AutoVectorFlow) -and -not $NoGenerateVectors)
 $RunCompareLinear = (($CompareLinear -or $AutoVectorFlow) -and -not $NoCompare)
 
 if ($Heads -le 0 -or $Heads -gt 8) {
     throw "-Heads must be in the range 1..8"
+}
+if ($ProtocolNumJobs -lt 0) {
+    throw "-ProtocolNumJobs must be non-negative"
+}
+if ($ProtocolTileMin -lt 1 -or $ProtocolTileMin -gt 4 -or
+    $ProtocolTileMax -lt $ProtocolTileMin -or $ProtocolTileMax -gt 4) {
+    throw "-ProtocolTileMin/-ProtocolTileMax must describe a legal tile range within 1..4"
+}
+if ($ProtocolStartGapMax -lt 0 -or $ResetCycles -lt 1) {
+    throw "-ProtocolStartGapMax must be non-negative and -ResetCycles must be positive"
 }
 
 if ($InputSourceGapMax -lt 0) {
@@ -303,6 +322,25 @@ $vsimArgs = @(
 
 if ($CoverageEnabled) {
     $vsimArgs += "-coverage"
+}
+
+if ($IsProtocolRandom) {
+    $ProtocolNegativeSkewValue = if ($ProtocolNegativeSkew) { 1 } else { 0 }
+
+    if ($ProtocolNumJobs -eq 0) {
+        $ProtocolNumJobs = 8
+    }
+
+    $vsimArgs += @(
+        "+ITA_NUM_JOBS=$ProtocolNumJobs",
+        "+ITA_PROTOCOL_TILE_MIN=$ProtocolTileMin",
+        "+ITA_PROTOCOL_TILE_MAX=$ProtocolTileMax",
+        "+ITA_PROTOCOL_START_GAP_MAX=$ProtocolStartGapMax",
+        "+ITA_PROTOCOL_PROJECTION=$ProtocolProjection",
+        "+ITA_RESET_CYCLES=$ResetCycles",
+        "+ITA_PROTOCOL_NEGATIVE_SKEW=$ProtocolNegativeSkewValue",
+        "+ITA_SOURCE_SKEW_LOCKSTEP=$ProtocolNegativeSkewValue"
+    )
 }
 
 if (($IsLinearDirected -or $IsQDirected -or $IsQkvDirected -or $IsAttnDirected) -and -not $NoAutoVectorFlow) {

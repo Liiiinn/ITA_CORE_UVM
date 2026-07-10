@@ -16,5 +16,6 @@ package ita_mha8_test_pkg;
     `include "ita_mha8_q_directed_test.svh"
     `include "ita_mha8_qkv_directed_test.svh"
     `include "ita_mha8_attn_directed_test.svh"
+    `include "ita_mha8_protocol_random_test.svh"
 
 endpackage : ita_mha8_test_pkg

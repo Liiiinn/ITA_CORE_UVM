@@ -36,12 +36,15 @@ class ita_mha8_scoreboard extends uvm_component;
     int unsigned source_segment_count_by_step_head[string];
     step_e       source_step_by_step_head[string];
     int unsigned source_head_by_step_head[string];
+    int unsigned expected_source_segments_by_step_head[string];
 
     int unsigned output_segment_seen[string];
     int unsigned output_segment_count_by_kind_step_head[string];
     ita_stream_kind_e output_kind_by_kind_step_head[string];
     step_e       output_step_by_kind_step_head[string];
     int unsigned output_head_by_kind_step_head[string];
+    int unsigned expected_output_segments_by_kind_step_head[string];
+    string       tile_cfg_by_job[string];
 
     bit          beat_seen[string];
     int unsigned max_beat_id_by_key[string];
@@ -125,6 +128,11 @@ class ita_mha8_scoreboard extends uvm_component;
             has_active_ctrl = 1'b1;
             active_layer = tr.ctrl.layer;
             active_activation = tr.ctrl.activation;
+            tile_s = tr.ctrl.tile_s;
+            tile_e = tr.ctrl.tile_e;
+            tile_p = tr.ctrl.tile_p;
+            tile_f = tr.ctrl.tile_f;
+            snapshot_ctrl_expectations(tr);
 
             `uvm_info("ITA_SCB_CTRL",
                 $sformatf("Observed ctrl job=%0d layer=%s activation=%s tile_s/e/p/f=%0d/%0d/%0d/%0d",
@@ -227,9 +235,106 @@ class ita_mha8_scoreboard extends uvm_component;
         return $sformatf("%s:%s:%s:h%0d", job_key(), stream_kind_label(kind), step.name(), head_id);
     endfunction : kind_step_head_key
 
+    function string job_key_from_group_key(string group_key);
+        for (int unsigned index = 0; index < group_key.len(); index++) begin
+            if (group_key.getc(index) == 8'h3a) begin
+                if (index == 0)
+                    return group_key;
+                return group_key.substr(0, index - 1);
+            end
+        end
+        return group_key;
+    endfunction : job_key_from_group_key
+
     function string beat_key(ita_stream_item tr);
         return $sformatf("%s:b%0d", count_key(tr), tr.beat_id);
     endfunction : beat_key
+
+    function int unsigned expected_source_segments_from_cfg(step_e step, ita_ctrl_item ctrl);
+        case (step)
+            Q, K, V: return ctrl.ctrl.tile_s * ctrl.ctrl.tile_p * ctrl.ctrl.tile_e;
+            QK:      return ctrl.ctrl.tile_s * ctrl.ctrl.tile_s * ctrl.ctrl.tile_p;
+            AV:      return ctrl.ctrl.tile_s * ctrl.ctrl.tile_p * ctrl.ctrl.tile_s;
+            OW:      return ctrl.ctrl.tile_s * ctrl.ctrl.tile_e * ctrl.ctrl.tile_p;
+            F1:      return ctrl.ctrl.tile_s * ctrl.ctrl.tile_f * ctrl.ctrl.tile_e;
+            F2:      return ctrl.ctrl.tile_s * ctrl.ctrl.tile_e * ctrl.ctrl.tile_f;
+            MatMul:  return ctrl.ctrl.tile_s * ctrl.ctrl.tile_p * ctrl.ctrl.tile_e;
+            default: return 0;
+        endcase
+    endfunction : expected_source_segments_from_cfg
+
+    function int unsigned expected_output_segments_from_cfg(
+        ita_stream_kind_e kind,
+        step_e step,
+        ita_ctrl_item ctrl
+    );
+        case (kind)
+            ITA_STREAM_HEAD_OUTPUT: begin
+                case (step)
+                    Q, K, V: return ctrl.ctrl.tile_s * ctrl.ctrl.tile_p;
+                    QK:      return ctrl.ctrl.tile_s * ctrl.ctrl.tile_s;
+                    AV:      return ctrl.ctrl.tile_s * ctrl.ctrl.tile_p;
+                    OW:      return ctrl.ctrl.tile_s * ctrl.ctrl.tile_e;
+                    MatMul:  return ctrl.ctrl.tile_s * ctrl.ctrl.tile_p;
+                    default: return 0;
+                endcase
+            end
+            ITA_STREAM_SUM_OUTPUT:
+                return (step == OW) ? ctrl.ctrl.tile_s * ctrl.ctrl.tile_e : 0;
+            ITA_STREAM_FF_OUTPUT: begin
+                case (step)
+                    F1: return ctrl.ctrl.tile_s * ctrl.ctrl.tile_f;
+                    F2: return ctrl.ctrl.tile_s * ctrl.ctrl.tile_e;
+                    default: return 0;
+                endcase
+            end
+            default: return 0;
+        endcase
+    endfunction : expected_output_segments_from_cfg
+
+    function void snapshot_ctrl_expectations(ita_ctrl_item ctrl);
+        step_e steps[$];
+
+        case (ctrl.ctrl.layer)
+            Attention: begin
+                steps.push_back(Q);
+                steps.push_back(K);
+                steps.push_back(V);
+                steps.push_back(QK);
+                steps.push_back(AV);
+                steps.push_back(OW);
+            end
+            Feedforward: begin
+                steps.push_back(F1);
+                steps.push_back(F2);
+            end
+            Linear: steps.push_back(MatMul);
+            default: begin end
+        endcase
+
+        tile_cfg_by_job[job_key()] = $sformatf("%0d/%0d/%0d/%0d",
+            ctrl.ctrl.tile_s, ctrl.ctrl.tile_e, ctrl.ctrl.tile_p, ctrl.ctrl.tile_f);
+
+        foreach (steps[i]) begin
+            step_e step;
+
+            step = steps[i];
+            for (int unsigned head_id = 0; head_id < 8; head_id++) begin
+                expected_source_segments_by_step_head[step_head_key(step, head_id)] =
+                    expected_source_segments_from_cfg(step, ctrl);
+                expected_output_segments_by_kind_step_head[
+                    kind_step_head_key(ITA_STREAM_HEAD_OUTPUT, step, head_id)] =
+                    expected_output_segments_from_cfg(ITA_STREAM_HEAD_OUTPUT, step, ctrl);
+            end
+
+            expected_output_segments_by_kind_step_head[
+                kind_step_head_key(ITA_STREAM_SUM_OUTPUT, step, 0)] =
+                expected_output_segments_from_cfg(ITA_STREAM_SUM_OUTPUT, step, ctrl);
+            expected_output_segments_by_kind_step_head[
+                kind_step_head_key(ITA_STREAM_FF_OUTPUT, step, 0)] =
+                expected_output_segments_from_cfg(ITA_STREAM_FF_OUTPUT, step, ctrl);
+        end
+    endfunction : snapshot_ctrl_expectations
 
     function bit step_matches_layer(step_e step, layer_e layer);
         case (layer)
@@ -265,6 +370,15 @@ class ita_mha8_scoreboard extends uvm_component;
             return 1'b0;
         return 1'b1;
     endfunction : should_check_beat_integrity
+
+    function bit should_check_output_segment_count(ita_stream_kind_e kind, step_e step);
+        // QK/AV debug metadata identifies the local softmax-loop position, not
+        // a globally unique output segment. Keep their structural source and
+        // output legality checks, but do not infer a global segment count.
+        if (kind == ITA_STREAM_HEAD_OUTPUT && (step inside {QK, AV}))
+            return 1'b0;
+        return 1'b1;
+    endfunction : should_check_output_segment_count
 
     function void record_beat_integrity(ita_stream_item tr);
         string cnt_key;
@@ -576,13 +690,19 @@ class ita_mha8_scoreboard extends uvm_component;
         foreach (source_segment_count_by_step_head[key]) begin
             step = source_step_by_step_head[key];
             head_id = source_head_by_step_head[key];
-            expected_n = expected_source_segments_for_step(step);
+            expected_n = expected_source_segments_by_step_head.exists(key) ?
+                expected_source_segments_by_step_head[key] : 0;
             actual_n = source_segment_count_by_step_head[key];
 
-            if (expected_n != 0 && actual_n != expected_n) begin
+            if (!expected_source_segments_by_step_head.exists(key)) begin
                 scb_rule_error("ITA_SCB_SEGMENT",
-                    $sformatf("Source segment count mismatch for %s head=%0d: expected=%0d actual=%0d tile_s/e/p/f=%0d/%0d/%0d/%0d",
-                        step.name(), head_id, expected_n, actual_n, tile_s, tile_e, tile_p, tile_f));
+                    $sformatf("Missing ctrl expectation snapshot for source %s", key));
+            end else if (actual_n != expected_n) begin
+                scb_rule_error("ITA_SCB_SEGMENT",
+                    $sformatf("Source segment count mismatch for %s head=%0d: expected=%0d actual=%0d job_tile_s/e/p/f=%s",
+                        step.name(), head_id, expected_n, actual_n,
+                        tile_cfg_by_job.exists(job_key_from_group_key(key)) ?
+                        tile_cfg_by_job[job_key_from_group_key(key)] : "unknown"));
             end
         end
 
@@ -590,14 +710,21 @@ class ita_mha8_scoreboard extends uvm_component;
             kind = output_kind_by_kind_step_head[key];
             step = output_step_by_kind_step_head[key];
             head_id = output_head_by_kind_step_head[key];
-            expected_n = expected_output_segments_for_kind_step(kind, step);
+
+            if (!should_check_output_segment_count(kind, step))
+                continue;
+
+            expected_n = expected_output_segments_by_kind_step_head.exists(key) ?
+                expected_output_segments_by_kind_step_head[key] : 0;
             actual_n = output_segment_count_by_kind_step_head[key];
 
-            if (expected_n != 0 && actual_n != expected_n) begin
+            if (!expected_output_segments_by_kind_step_head.exists(key)) begin
                 scb_rule_error("ITA_SCB_SEGMENT",
-                    $sformatf("Output segment count mismatch for kind=%s step=%s head=%0d: expected=%0d actual=%0d tile_s/e/p/f=%0d/%0d/%0d/%0d",
-                        stream_kind_label(kind), step.name(), head_id, expected_n, actual_n,
-                        tile_s, tile_e, tile_p, tile_f));
+                    $sformatf("Missing ctrl expectation snapshot for output %s", key));
+            end else if (actual_n != expected_n) begin
+                scb_rule_error("ITA_SCB_SEGMENT",
+                    $sformatf("Output segment count mismatch for kind=%s step=%s head=%0d: expected=%0d actual=%0d",
+                        stream_kind_label(kind), step.name(), head_id, expected_n, actual_n));
             end
         end
     endfunction : check_segment_count_rules

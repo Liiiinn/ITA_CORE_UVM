@@ -12,6 +12,7 @@ class ita_mha8_vsequence extends uvm_sequence;
     int unsigned input_source_gap_max = 0;
     int unsigned weight_source_gap_max = 0;
     int unsigned bias_source_gap_max = 0;
+    bit source_skew_lockstep = 1'b1;
     bit sink_bp_enable = 1'b0;
     int unsigned ready_low_min = 0;
     int unsigned ready_low_max = 0;
@@ -33,6 +34,7 @@ class ita_mha8_vsequence extends uvm_sequence;
         void'($value$plusargs("ITA_INPUT_SOURCE_GAP_MAX=%d", input_source_gap_max));
         void'($value$plusargs("ITA_WEIGHT_SOURCE_GAP_MAX=%d", weight_source_gap_max));
         void'($value$plusargs("ITA_BIAS_SOURCE_GAP_MAX=%d", bias_source_gap_max));
+        void'($value$plusargs("ITA_SOURCE_SKEW_LOCKSTEP=%d", source_skew_lockstep));
         load_sink_backpressure_plusargs();
         if (lockstep_idle_gap_max < lockstep_idle_gap_min)
             lockstep_idle_gap_max = lockstep_idle_gap_min;
@@ -273,18 +275,22 @@ class ita_mha8_vsequence extends uvm_sequence;
     endfunction : first_ff_step
 
     function int unsigned expected_sum_output_beats();
-        foreach (core.step_order[i]) begin
+        int unsigned beats;
+        int unsigned output_beats_per_segment;
+
+        beats = 0;
+        output_beats_per_segment = M * M / N;
+        foreach (core.payload_schedule[i]) begin
             ita_mha8_step_payload payload;
 
-            payload = core.get_payload(core.step_order[i]);
-            if (payload.expect_sum_output) begin
-                if (core.tile_p == 0)
-                    return payload.input_payload_by_head[0].size();
-                return payload.input_payload_by_head[0].size() / core.tile_p;
+            payload = core.payload_schedule[i];
+            if (payload.expect_sum_output && core.tile_p != 0 &&
+                payload.inner_tile_id == core.tile_p - 1) begin
+                beats += output_beats_per_segment;
             end
         end
 
-        return 0;
+        return beats;
     endfunction : expected_sum_output_beats
 
     task wait_attention_sum_complete();
@@ -408,9 +414,9 @@ class ita_mha8_vsequence extends uvm_sequence;
             wait_lockstep_idle_gap();
             if (source_skew_enabled()) begin
                 fork
-                    send_head_stream_beat(payload, head_id, ITA_STREAM_HEAD_WEIGHT, beat);
-                    send_head_stream_beat(payload, head_id, ITA_STREAM_HEAD_INPUT, beat);
-                    send_head_stream_beat(payload, head_id, ITA_STREAM_HEAD_BIAS, beat);
+                    send_head_stream_beat(payload, head_id, ITA_STREAM_HEAD_WEIGHT, beat, source_skew_lockstep);
+                    send_head_stream_beat(payload, head_id, ITA_STREAM_HEAD_INPUT, beat, source_skew_lockstep);
+                    send_head_stream_beat(payload, head_id, ITA_STREAM_HEAD_BIAS, beat, source_skew_lockstep);
                 join
             end else begin
                 drive_head_lockstep_beat(payload, head_id, beat);
@@ -781,9 +787,9 @@ class ita_mha8_vsequence extends uvm_sequence;
             wait_lockstep_idle_gap();
             if (source_skew_enabled()) begin
                 fork
-                    send_ff_stream_beat(payload, ITA_STREAM_FF_INPUT, beat);
-                    send_ff_stream_beat(payload, ITA_STREAM_FF_WEIGHT, beat);
-                    send_ff_stream_beat(payload, ITA_STREAM_FF_BIAS, beat);
+                    send_ff_stream_beat(payload, ITA_STREAM_FF_INPUT, beat, source_skew_lockstep);
+                    send_ff_stream_beat(payload, ITA_STREAM_FF_WEIGHT, beat, source_skew_lockstep);
+                    send_ff_stream_beat(payload, ITA_STREAM_FF_BIAS, beat, source_skew_lockstep);
                 join
             end else begin
                 `uvm_fatal("VSEQ", "Internal error: send_ff_payload reference path should not enter beat lockstep drive")

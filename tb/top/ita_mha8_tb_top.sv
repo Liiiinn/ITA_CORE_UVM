@@ -81,8 +81,12 @@ module ita_mha8_tb_top;
     end
 
     initial begin
+        int unsigned reset_cycles;
+
+        reset_cycles = 8;
+        void'($value$plusargs("ITA_RESET_CYCLES=%d", reset_cycles));
         vif.rst_ni = 1'b0;
-        repeat (8) begin
+        repeat (reset_cycles) begin
             @(posedge clk);
         end
         vif.rst_ni = 1'b1;

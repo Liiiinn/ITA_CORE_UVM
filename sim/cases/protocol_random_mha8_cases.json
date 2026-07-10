@@ -1,0 +1,278 @@
+{
+  "cases": [
+    {
+      "activation": "random",
+      "category": "protocol_random",
+      "dut": "ita_mha8",
+      "flow": {
+        "compare": false,
+        "generate_vectors": false,
+        "lockstep_idle_gap_max": 7,
+        "num_jobs": 10,
+        "sink_backpressure": false,
+        "source_arrival_skew": false,
+        "test_name": "ita_mha8_protocol_random_test",
+        "tile_max": 2,
+        "tile_min": 1,
+        "vector_source": "sv_deterministic_protocol"
+      },
+      "name": "pr_000_jobs10_tile1to2_seed695425565",
+      "projection": "RANDOM",
+      "seed": 695425565,
+      "smoke_ps1": {
+        "args": [
+          "-TestName",
+          "ita_mha8_protocol_random_test",
+          "-NoGenerateVectors",
+          "-NoCompare",
+          "-ProtocolNumJobs",
+          "10",
+          "-ProtocolTileMin",
+          "1",
+          "-ProtocolTileMax",
+          "2",
+          "-ProtocolProjection",
+          "RANDOM",
+          "-ProtocolStartGapMax",
+          "8",
+          "-ResetCycles",
+          "9"
+        ],
+        "future_plusargs": {
+          "ITA_BIAS_SOURCE_GAP_MAX": 0,
+          "ITA_INPUT_SOURCE_GAP_MAX": 0,
+          "ITA_LOCKSTEP_IDLE_GAP_MAX": 7,
+          "ITA_READY_HIGH_MAX": 1,
+          "ITA_READY_LOW_MAX": 0,
+          "ITA_WEIGHT_SOURCE_GAP_MAX": 0,
+          "ntb_random_seed": 695425565
+        }
+      },
+      "spec_basis": "core_spec_observable",
+      "target": "ita_mha8_tb_top",
+      "tile_e": 0,
+      "tile_f": 0,
+      "tile_p": 0,
+      "tile_s": 0
+    },
+    {
+      "activation": "random",
+      "category": "protocol_random",
+      "dut": "ita_mha8",
+      "flow": {
+        "compare": false,
+        "generate_vectors": false,
+        "lockstep_idle_gap_max": 4,
+        "num_jobs": 8,
+        "sink_backpressure": false,
+        "source_arrival_skew": false,
+        "test_name": "ita_mha8_protocol_random_test",
+        "tile_max": 2,
+        "tile_min": 1,
+        "vector_source": "sv_deterministic_protocol"
+      },
+      "name": "pr_001_jobs8_tile1to2_seed785310973",
+      "projection": "RANDOM",
+      "seed": 785310973,
+      "smoke_ps1": {
+        "args": [
+          "-TestName",
+          "ita_mha8_protocol_random_test",
+          "-NoGenerateVectors",
+          "-NoCompare",
+          "-ProtocolNumJobs",
+          "8",
+          "-ProtocolTileMin",
+          "1",
+          "-ProtocolTileMax",
+          "2",
+          "-ProtocolProjection",
+          "RANDOM",
+          "-ProtocolStartGapMax",
+          "6",
+          "-ResetCycles",
+          "14"
+        ],
+        "future_plusargs": {
+          "ITA_BIAS_SOURCE_GAP_MAX": 0,
+          "ITA_INPUT_SOURCE_GAP_MAX": 0,
+          "ITA_LOCKSTEP_IDLE_GAP_MAX": 4,
+          "ITA_READY_HIGH_MAX": 1,
+          "ITA_READY_LOW_MAX": 0,
+          "ITA_WEIGHT_SOURCE_GAP_MAX": 0,
+          "ntb_random_seed": 785310973
+        }
+      },
+      "spec_basis": "core_spec_observable",
+      "target": "ita_mha8_tb_top",
+      "tile_e": 0,
+      "tile_f": 0,
+      "tile_p": 0,
+      "tile_s": 0
+    },
+    {
+      "activation": "random",
+      "category": "protocol_random",
+      "dut": "ita_mha8",
+      "flow": {
+        "compare": false,
+        "generate_vectors": false,
+        "lockstep_idle_gap_max": 2,
+        "num_jobs": 11,
+        "sink_backpressure": true,
+        "source_arrival_skew": false,
+        "test_name": "ita_mha8_protocol_random_test",
+        "tile_max": 2,
+        "tile_min": 1,
+        "vector_source": "sv_deterministic_protocol"
+      },
+      "name": "pr_002_jobs11_tile1to2_seed150013384",
+      "projection": "RANDOM",
+      "seed": 150013384,
+      "smoke_ps1": {
+        "args": [
+          "-TestName",
+          "ita_mha8_protocol_random_test",
+          "-NoGenerateVectors",
+          "-NoCompare",
+          "-ProtocolNumJobs",
+          "11",
+          "-ProtocolTileMin",
+          "1",
+          "-ProtocolTileMax",
+          "2",
+          "-ProtocolProjection",
+          "RANDOM",
+          "-ProtocolStartGapMax",
+          "0",
+          "-ResetCycles",
+          "9"
+        ],
+        "future_plusargs": {
+          "ITA_BIAS_SOURCE_GAP_MAX": 0,
+          "ITA_INPUT_SOURCE_GAP_MAX": 0,
+          "ITA_LOCKSTEP_IDLE_GAP_MAX": 2,
+          "ITA_READY_HIGH_MAX": 4,
+          "ITA_READY_LOW_MAX": 8,
+          "ITA_WEIGHT_SOURCE_GAP_MAX": 0,
+          "ntb_random_seed": 150013384
+        }
+      },
+      "spec_basis": "core_spec_observable",
+      "target": "ita_mha8_tb_top",
+      "tile_e": 0,
+      "tile_f": 0,
+      "tile_p": 0,
+      "tile_s": 0
+    },
+    {
+      "activation": "random",
+      "category": "protocol_random",
+      "dut": "ita_mha8",
+      "flow": {
+        "compare": false,
+        "generate_vectors": false,
+        "lockstep_idle_gap_max": 1,
+        "num_jobs": 11,
+        "sink_backpressure": true,
+        "source_arrival_skew": false,
+        "test_name": "ita_mha8_protocol_random_test",
+        "tile_max": 2,
+        "tile_min": 1,
+        "vector_source": "sv_deterministic_protocol"
+      },
+      "name": "pr_003_jobs11_tile1to2_seed2034632751",
+      "projection": "RANDOM",
+      "seed": 2034632751,
+      "smoke_ps1": {
+        "args": [
+          "-TestName",
+          "ita_mha8_protocol_random_test",
+          "-NoGenerateVectors",
+          "-NoCompare",
+          "-ProtocolNumJobs",
+          "11",
+          "-ProtocolTileMin",
+          "1",
+          "-ProtocolTileMax",
+          "2",
+          "-ProtocolProjection",
+          "RANDOM",
+          "-ProtocolStartGapMax",
+          "3",
+          "-ResetCycles",
+          "8"
+        ],
+        "future_plusargs": {
+          "ITA_BIAS_SOURCE_GAP_MAX": 0,
+          "ITA_INPUT_SOURCE_GAP_MAX": 0,
+          "ITA_LOCKSTEP_IDLE_GAP_MAX": 1,
+          "ITA_READY_HIGH_MAX": 1,
+          "ITA_READY_LOW_MAX": 6,
+          "ITA_WEIGHT_SOURCE_GAP_MAX": 0,
+          "ntb_random_seed": 2034632751
+        }
+      },
+      "spec_basis": "core_spec_observable",
+      "target": "ita_mha8_tb_top",
+      "tile_e": 0,
+      "tile_f": 0,
+      "tile_p": 0,
+      "tile_s": 0
+    },
+    {
+      "activation": "identity",
+      "category": "protocol_negative_skew",
+      "dut": "ita_mha8",
+      "expect_fail": true,
+      "expected_error_regex": "(ITA_SOURCE_SKEW|UVM_ERROR|UVM_FATAL|timeout)",
+      "flow": {
+        "compare": false,
+        "generate_vectors": false,
+        "negative_lockstep_skew": true,
+        "num_jobs": 8,
+        "test_name": "ita_mha8_protocol_random_test",
+        "tile_max": 2,
+        "tile_min": 1,
+        "vector_source": "sv_deterministic_protocol"
+      },
+      "name": "pr_neg_lockstep_skew_jobs8_tile1to2_seed1195428768",
+      "projection": "ATTN",
+      "seed": 1195428768,
+      "smoke_ps1": {
+        "args": [
+          "-TestName",
+          "ita_mha8_protocol_random_test",
+          "-NoGenerateVectors",
+          "-NoCompare",
+          "-ProtocolNumJobs",
+          "8",
+          "-ProtocolTileMin",
+          "1",
+          "-ProtocolTileMax",
+          "2",
+          "-ProtocolProjection",
+          "ATTN",
+          "-ProtocolNegativeSkew"
+        ],
+        "future_plusargs": {
+          "ITA_BIAS_SOURCE_GAP_MAX": 1,
+          "ITA_INPUT_SOURCE_GAP_MAX": 3,
+          "ITA_READY_HIGH_MAX": 1,
+          "ITA_READY_LOW_MAX": 0,
+          "ITA_WEIGHT_SOURCE_GAP_MAX": 0,
+          "ntb_random_seed": 1195428768
+        }
+      },
+      "spec_basis": "core_spec_observable",
+      "target": "ita_mha8_tb_top",
+      "tile_e": 0,
+      "tile_f": 0,
+      "tile_p": 0,
+      "tile_s": 0
+    }
+  ],
+  "description": "Deterministic-payload UVM protocol random jobs; no PyITA numerical compare.",
+  "seed": 7,
+  "suite": "protocol_random"
+}
