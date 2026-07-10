@@ -168,7 +168,7 @@ class ita_mha8_cov extends uvm_component;
         cp_tile_id: coverpoint tile_id_value {
             bins first = {0};
             bins low[] = {[1:3]};
-            illegal_bins high = {[4:$]};
+            bins high = {[4:$]};
         }
 
         cp_inner_tile_id: coverpoint inner_tile_id_value {
@@ -256,7 +256,7 @@ class ita_mha8_cov extends uvm_component;
         cp_tile_id: coverpoint tile_id_value {
             bins first = {0};
             bins low[] = {[1:3]};
-            illegal_bins high = {[4:$]};
+            bins high = {[4:$]};
         }
 
         cp_inner_tile_id: coverpoint inner_tile_id_value {
