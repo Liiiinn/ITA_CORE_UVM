@@ -19,7 +19,8 @@ param(
     [int]$InputSourceGapMax = -1,
     [int]$WeightSourceGapMax = -1,
     [int]$BiasSourceGapMax = -1,
-    [int]$LockstepIdleGapMax = 0,
+    [int]$GroupIdleGapMax = 0,
+    [int]$ReadyLowMin = 0,
     [int]$ReadyLowMax = 0,
     [int]$ReadyHighMax = 0,
     [int]$UvmSeed = 1,
@@ -29,7 +30,11 @@ param(
     [int]$ProtocolStartGapMax = 0,
     [ValidateSet("ATTN", "FF", "ATTNFF", "RANDOM")]
     [string]$ProtocolProjection = "ATTNFF",
-    [switch]$ProtocolNegativeSkew,
+    [string]$NativeVrFaultKind = "",
+    [string]$NativeVrFaultMode = "",
+    [int]$NativeVrFaultHead = 0,
+    [switch]$OutputBpTimeoutTest,
+    [int]$OutputWaitTimeoutCycles = 0,
     [int]$ResetCycles = 8,
     [string]$TileSOverride = "",
     [string]$TileEOverride = "",
@@ -111,6 +116,7 @@ $IsQDirected = ($TestName -eq "ita_mha8_q_directed_test")
 $IsQkvDirected = ($TestName -eq "ita_mha8_qkv_directed_test")
 $IsAttnDirected = ($TestName -eq "ita_mha8_attn_directed_test")
 $IsProtocolRandom = ($TestName -eq "ita_mha8_protocol_random_test")
+$IsNativeVrNegative = ($TestName -eq "ita_mha8_native_vr_negative_test")
 $AutoVectorFlow = (($IsLinearDirected -or $IsQDirected -or $IsQkvDirected -or $IsAttnDirected) -and -not $NoAutoVectorFlow)
 $RunGenerateVectors = (($GenerateVectors -or $AutoVectorFlow) -and -not $NoGenerateVectors)
 $RunCompareLinear = (($CompareLinear -or $AutoVectorFlow) -and -not $NoCompare)
@@ -310,11 +316,10 @@ $vsimArgs = @(
     "+ITA_WEIGHT_SOURCE_GAP_MAX=$WeightSourceGapMax",
     "+ITA_BIAS_SOURCE_GAP_MIN=0",
     "+ITA_BIAS_SOURCE_GAP_MAX=$BiasSourceGapMax",
-    "+ITA_LOCKSTEP_IDLE_GAP_MIN=0",
-    "+ITA_LOCKSTEP_IDLE_GAP_MAX=$LockstepIdleGapMax",
-    "+ITA_ASSERT_LEGAL_LOCKSTEP_INPUT=1",
+    "+ITA_GROUP_IDLE_GAP_MIN=0",
+    "+ITA_GROUP_IDLE_GAP_MAX=$GroupIdleGapMax",
     "+ITA_SINK_BP_ENABLE=1",
-    "+ITA_READY_LOW_MIN=0",
+    "+ITA_READY_LOW_MIN=$ReadyLowMin",
     "+ITA_READY_LOW_MAX=$ReadyLowMax",
     "+ITA_READY_HIGH_MIN=1",
     "+ITA_READY_HIGH_MAX=$ReadyHighMax"
@@ -324,11 +329,9 @@ if ($CoverageEnabled) {
     $vsimArgs += "-coverage"
 }
 
-if ($IsProtocolRandom) {
-    $ProtocolNegativeSkewValue = if ($ProtocolNegativeSkew) { 1 } else { 0 }
-
+if ($IsProtocolRandom -or $IsNativeVrNegative) {
     if ($ProtocolNumJobs -eq 0) {
-        $ProtocolNumJobs = 8
+        $ProtocolNumJobs = if ($IsNativeVrNegative) { 1 } else { 8 }
     }
 
     $vsimArgs += @(
@@ -337,9 +340,28 @@ if ($IsProtocolRandom) {
         "+ITA_PROTOCOL_TILE_MAX=$ProtocolTileMax",
         "+ITA_PROTOCOL_START_GAP_MAX=$ProtocolStartGapMax",
         "+ITA_PROTOCOL_PROJECTION=$ProtocolProjection",
-        "+ITA_RESET_CYCLES=$ResetCycles",
-        "+ITA_PROTOCOL_NEGATIVE_SKEW=$ProtocolNegativeSkewValue",
-        "+ITA_SOURCE_SKEW_LOCKSTEP=$ProtocolNegativeSkewValue"
+        "+ITA_RESET_CYCLES=$ResetCycles"
+    )
+
+    if ($IsNativeVrNegative) {
+        if ($NativeVrFaultKind -eq "" -or $NativeVrFaultMode -eq "") {
+            throw "ita_mha8_native_vr_negative_test requires -NativeVrFaultKind and -NativeVrFaultMode"
+        }
+        $vsimArgs += @(
+            "+ITA_NATIVE_VR_FAULT_KIND=$NativeVrFaultKind",
+            "+ITA_NATIVE_VR_FAULT_MODE=$NativeVrFaultMode",
+            "+ITA_NATIVE_VR_FAULT_HEAD=$NativeVrFaultHead"
+        )
+    }
+}
+
+if ($OutputBpTimeoutTest) {
+    if ($OutputWaitTimeoutCycles -le 0) {
+        throw "-OutputBpTimeoutTest requires -OutputWaitTimeoutCycles greater than zero"
+    }
+    $vsimArgs += @(
+        "+ITA_OUTPUT_BP_TIMEOUT_TEST=1",
+        "+ITA_OUTPUT_WAIT_TIMEOUT_CYCLES=$OutputWaitTimeoutCycles"
     )
 }
 

@@ -280,7 +280,7 @@ foreach ($case in $cases) {
     $inputSourceGapMax = Get-JsonInt $future "ITA_INPUT_SOURCE_GAP_MAX" $sourceGapMax
     $weightSourceGapMax = Get-JsonInt $future "ITA_WEIGHT_SOURCE_GAP_MAX" $sourceGapMax
     $biasSourceGapMax = Get-JsonInt $future "ITA_BIAS_SOURCE_GAP_MAX" $sourceGapMax
-    $lockstepIdleGapMax = Get-JsonInt $future "ITA_LOCKSTEP_IDLE_GAP_MAX" 0
+    $groupIdleGapMax = Get-JsonInt $future "ITA_GROUP_IDLE_GAP_MAX" 0
     $readyLowMax = Get-JsonInt $future "ITA_READY_LOW_MAX" 0
     $readyHighMax = Get-JsonInt $future "ITA_READY_HIGH_MAX" 1
     $expectFail = [bool](Get-JsonProp $case "expect_fail" $false)
@@ -298,7 +298,7 @@ foreach ($case in $cases) {
     $smokeArgs = Set-ValueArg $smokeArgs "-InputSourceGapMax" ([string]$inputSourceGapMax)
     $smokeArgs = Set-ValueArg $smokeArgs "-WeightSourceGapMax" ([string]$weightSourceGapMax)
     $smokeArgs = Set-ValueArg $smokeArgs "-BiasSourceGapMax" ([string]$biasSourceGapMax)
-    $smokeArgs = Set-ValueArg $smokeArgs "-LockstepIdleGapMax" ([string]$lockstepIdleGapMax)
+    $smokeArgs = Set-ValueArg $smokeArgs "-GroupIdleGapMax" ([string]$groupIdleGapMax)
     $smokeArgs = Set-ValueArg $smokeArgs "-ReadyLowMax" ([string]$readyLowMax)
     $smokeArgs = Set-ValueArg $smokeArgs "-ReadyHighMax" ([string]$readyHighMax)
     $smokeArgs = Set-SwitchArg $smokeArgs "-EnableCoverage" $true
@@ -388,7 +388,7 @@ foreach ($case in $cases) {
         input_source_gap_max = $inputSourceGapMax
         weight_source_gap_max = $weightSourceGapMax
         bias_source_gap_max = $biasSourceGapMax
-        lockstep_idle_gap_max = $lockstepIdleGapMax
+        group_idle_gap_max = $groupIdleGapMax
         ready_low_max = $readyLowMax
         ready_high_max = $readyHighMax
         expect_fail = $expectFail
@@ -436,7 +436,7 @@ if ($stoppedEarly -and ($caseIndex + 1) -lt $cases.Count) {
             input_source_gap_max = 0
             weight_source_gap_max = 0
             bias_source_gap_max = 0
-            lockstep_idle_gap_max = 0
+            group_idle_gap_max = 0
             ready_low_max = 0
             ready_high_max = 0
             expect_fail = [bool](Get-JsonProp $skippedCase "expect_fail" $false)
@@ -590,10 +590,10 @@ foreach ($result in $results) {
     if ($result.expect_fail -and $result.status -eq "PASS") {
         $displayStatus = "XFAIL_PASS"
     }
-    $line = "{0} category={1} seed={2} projection={3} activation={4} tiles={5}/{6}/{7}/{8} gap={9} lockstep_gap={10} ready_low={11} ready_high={12}" -f `
+    $line = "{0} category={1} seed={2} projection={3} activation={4} tiles={5}/{6}/{7}/{8} gap={9} group_gap={10} ready_low={11} ready_high={12}" -f `
         $displayStatus, $result.category, $result.seed, $result.projection, $result.activation, `
         $result.tile_s, $result.tile_e, $result.tile_p, $result.tile_f, `
-        $result.source_gap_max, $result.lockstep_idle_gap_max, $result.ready_low_max, $result.ready_high_max
+        $result.source_gap_max, $result.group_idle_gap_max, $result.ready_low_max, $result.ready_high_max
     if ($result.failure_message -ne "") {
         $line += " failure=" + $result.failure_message
     }
