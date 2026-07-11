@@ -46,10 +46,9 @@
           "-GenerateVectors"
         ],
         "future_plusargs": {
-          "ITA_ASSERT_LEGAL_LOCKSTEP_INPUT": 1,
           "ITA_BIAS_SOURCE_GAP_MAX": 0,
           "ITA_INPUT_SOURCE_GAP_MAX": 0,
-          "ITA_LOCKSTEP_IDLE_GAP_MAX": 0,
+          "ITA_GROUP_IDLE_GAP_MAX": 0,
           "ITA_READY_HIGH_MAX": 1,
           "ITA_READY_LOW_MAX": 0,
           "ITA_SOURCE_GAP_MAX": 0,
@@ -111,10 +110,9 @@
           "-GenerateVectors"
         ],
         "future_plusargs": {
-          "ITA_ASSERT_LEGAL_LOCKSTEP_INPUT": 1,
           "ITA_BIAS_SOURCE_GAP_MAX": 0,
           "ITA_INPUT_SOURCE_GAP_MAX": 0,
-          "ITA_LOCKSTEP_IDLE_GAP_MAX": 0,
+          "ITA_GROUP_IDLE_GAP_MAX": 0,
           "ITA_READY_HIGH_MAX": 1,
           "ITA_READY_LOW_MAX": 0,
           "ITA_SOURCE_GAP_MAX": 0,
@@ -176,10 +174,9 @@
           "-GenerateVectors"
         ],
         "future_plusargs": {
-          "ITA_ASSERT_LEGAL_LOCKSTEP_INPUT": 1,
           "ITA_BIAS_SOURCE_GAP_MAX": 0,
           "ITA_INPUT_SOURCE_GAP_MAX": 0,
-          "ITA_LOCKSTEP_IDLE_GAP_MAX": 0,
+          "ITA_GROUP_IDLE_GAP_MAX": 0,
           "ITA_READY_HIGH_MAX": 1,
           "ITA_READY_LOW_MAX": 0,
           "ITA_SOURCE_GAP_MAX": 0,
@@ -241,10 +238,9 @@
           "-GenerateVectors"
         ],
         "future_plusargs": {
-          "ITA_ASSERT_LEGAL_LOCKSTEP_INPUT": 1,
           "ITA_BIAS_SOURCE_GAP_MAX": 0,
           "ITA_INPUT_SOURCE_GAP_MAX": 0,
-          "ITA_LOCKSTEP_IDLE_GAP_MAX": 0,
+          "ITA_GROUP_IDLE_GAP_MAX": 0,
           "ITA_READY_HIGH_MAX": 1,
           "ITA_READY_LOW_MAX": 0,
           "ITA_SOURCE_GAP_MAX": 0,
@@ -306,10 +302,9 @@
           "-GenerateVectors"
         ],
         "future_plusargs": {
-          "ITA_ASSERT_LEGAL_LOCKSTEP_INPUT": 1,
           "ITA_BIAS_SOURCE_GAP_MAX": 0,
           "ITA_INPUT_SOURCE_GAP_MAX": 0,
-          "ITA_LOCKSTEP_IDLE_GAP_MAX": 0,
+          "ITA_GROUP_IDLE_GAP_MAX": 0,
           "ITA_READY_HIGH_MAX": 1,
           "ITA_READY_LOW_MAX": 0,
           "ITA_SOURCE_GAP_MAX": 0,
@@ -371,10 +366,9 @@
           "-GenerateVectors"
         ],
         "future_plusargs": {
-          "ITA_ASSERT_LEGAL_LOCKSTEP_INPUT": 1,
           "ITA_BIAS_SOURCE_GAP_MAX": 0,
           "ITA_INPUT_SOURCE_GAP_MAX": 0,
-          "ITA_LOCKSTEP_IDLE_GAP_MAX": 0,
+          "ITA_GROUP_IDLE_GAP_MAX": 0,
           "ITA_READY_HIGH_MAX": 1,
           "ITA_READY_LOW_MAX": 0,
           "ITA_SOURCE_GAP_MAX": 0,
@@ -436,10 +430,9 @@
           "-GenerateVectors"
         ],
         "future_plusargs": {
-          "ITA_ASSERT_LEGAL_LOCKSTEP_INPUT": 1,
           "ITA_BIAS_SOURCE_GAP_MAX": 0,
           "ITA_INPUT_SOURCE_GAP_MAX": 0,
-          "ITA_LOCKSTEP_IDLE_GAP_MAX": 0,
+          "ITA_GROUP_IDLE_GAP_MAX": 0,
           "ITA_READY_HIGH_MAX": 1,
           "ITA_READY_LOW_MAX": 0,
           "ITA_SOURCE_GAP_MAX": 0,
@@ -501,10 +494,9 @@
           "-GenerateVectors"
         ],
         "future_plusargs": {
-          "ITA_ASSERT_LEGAL_LOCKSTEP_INPUT": 1,
           "ITA_BIAS_SOURCE_GAP_MAX": 0,
           "ITA_INPUT_SOURCE_GAP_MAX": 0,
-          "ITA_LOCKSTEP_IDLE_GAP_MAX": 0,
+          "ITA_GROUP_IDLE_GAP_MAX": 0,
           "ITA_READY_HIGH_MAX": 1,
           "ITA_READY_LOW_MAX": 0,
           "ITA_SOURCE_GAP_MAX": 0,
