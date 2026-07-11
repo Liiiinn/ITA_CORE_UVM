@@ -6,18 +6,19 @@ class ita_mha8_vsequence extends uvm_sequence;
     `uvm_declare_p_sequencer(ita_mha8_vsequencer)
 
     ita_mha8_core_item core;
-    int unsigned lockstep_idle_gap_min = 0;
-    int unsigned lockstep_idle_gap_max = 0;
+    int unsigned group_idle_gap_min = 0;
+    int unsigned group_idle_gap_max = 0;
     int unsigned source_gap_max = 0;
     int unsigned input_source_gap_max = 0;
     int unsigned weight_source_gap_max = 0;
     int unsigned bias_source_gap_max = 0;
-    bit source_skew_lockstep = 1'b1;
     bit sink_bp_enable = 1'b0;
     int unsigned ready_low_min = 0;
     int unsigned ready_low_max = 0;
     int unsigned ready_high_min = 1;
     int unsigned ready_high_max = 1;
+    int unsigned output_wait_timeout_cycles = 1000000;
+    bit output_bp_timeout_test = 1'b0;
     bit stop_head_output_ready = 1'b0;
 
     function new(string name = "ita_mha8_vsequence");
@@ -28,16 +29,16 @@ class ita_mha8_vsequence extends uvm_sequence;
         if (core == null)
             core = ita_mha8_core_item::type_id::create("core");
 
-        void'($value$plusargs("ITA_LOCKSTEP_IDLE_GAP_MIN=%d", lockstep_idle_gap_min));
-        void'($value$plusargs("ITA_LOCKSTEP_IDLE_GAP_MAX=%d", lockstep_idle_gap_max));
+        void'($value$plusargs("ITA_GROUP_IDLE_GAP_MIN=%d", group_idle_gap_min));
+        void'($value$plusargs("ITA_GROUP_IDLE_GAP_MAX=%d", group_idle_gap_max));
         void'($value$plusargs("ITA_SOURCE_GAP_MAX=%d", source_gap_max));
         void'($value$plusargs("ITA_INPUT_SOURCE_GAP_MAX=%d", input_source_gap_max));
         void'($value$plusargs("ITA_WEIGHT_SOURCE_GAP_MAX=%d", weight_source_gap_max));
         void'($value$plusargs("ITA_BIAS_SOURCE_GAP_MAX=%d", bias_source_gap_max));
-        void'($value$plusargs("ITA_SOURCE_SKEW_LOCKSTEP=%d", source_skew_lockstep));
         load_sink_backpressure_plusargs();
-        if (lockstep_idle_gap_max < lockstep_idle_gap_min)
-            lockstep_idle_gap_max = lockstep_idle_gap_min;
+        load_output_timeout_plusargs();
+        if (group_idle_gap_max < group_idle_gap_min)
+            group_idle_gap_max = group_idle_gap_min;
 
         fork
             drive_head_output_ready_bundle();
@@ -59,6 +60,24 @@ class ita_mha8_vsequence extends uvm_sequence;
         join_any
         disable fork;
     endtask : body
+
+    function void load_output_timeout_plusargs();
+        int unsigned timeout_test;
+
+        void'($value$plusargs("ITA_OUTPUT_WAIT_TIMEOUT_CYCLES=%d", output_wait_timeout_cycles));
+        timeout_test = output_bp_timeout_test;
+        if ($value$plusargs("ITA_OUTPUT_BP_TIMEOUT_TEST=%d", timeout_test))
+            output_bp_timeout_test = (timeout_test != 0);
+        if (output_wait_timeout_cycles == 0)
+            output_wait_timeout_cycles = 1;
+    endfunction : load_output_timeout_plusargs
+
+    task fatal_output_wait_timeout(string message);
+        if (output_bp_timeout_test)
+            `uvm_fatal("ITA_OUTPUT_BP_TIMEOUT", message)
+        else
+            `uvm_fatal("VSEQ", message)
+    endtask : fatal_output_wait_timeout
 
     function void load_sink_backpressure_plusargs();
         int unsigned tmp;
@@ -223,10 +242,10 @@ class ita_mha8_vsequence extends uvm_sequence;
                 end
             end else begin
                 idle_cycles++;
-                if (idle_cycles > 1000000) begin
-                    `uvm_fatal("VSEQ",
+                if (idle_cycles > output_wait_timeout_cycles) begin
+                    fatal_output_wait_timeout(
                         $sformatf("Timeout waiting for %s FF output completion: target tile=%0d inner=%0d beat=%0d",
-                            step.name(), target_tile, target_inner, target_beat))
+                            step.name(), target_tile, target_inner, target_beat));
                 end
             end
         end
@@ -321,10 +340,10 @@ class ita_mha8_vsequence extends uvm_sequence;
                 idle_cycles = 0;
             end else begin
                 idle_cycles++;
-                if (idle_cycles > 1000000) begin
-                    `uvm_fatal("VSEQ",
+                if (idle_cycles > output_wait_timeout_cycles) begin
+                    fatal_output_wait_timeout(
                         $sformatf("Timeout waiting for OW sum output completion: seen=%0d expected=%0d",
-                            seen_beats, expected_beats))
+                            seen_beats, expected_beats));
                 end
             end
         end
@@ -386,10 +405,10 @@ class ita_mha8_vsequence extends uvm_sequence;
                 idle_cycles = 0;
             end else begin
                 idle_cycles++;
-                if (idle_cycles > 1000000) begin
-                    `uvm_fatal("VSEQ",
+                if (idle_cycles > output_wait_timeout_cycles) begin
+                    fatal_output_wait_timeout(
                         $sformatf("Timeout waiting for FF output completion: seen=%0d expected=%0d",
-                            seen_beats, expected_beats))
+                            seen_beats, expected_beats));
                 end
             end
         end
@@ -402,7 +421,7 @@ class ita_mha8_vsequence extends uvm_sequence;
         if (payload.weight_payload_by_head[head_id].size() != beats ||
             payload.bias_payload_by_head[head_id].size() != beats) begin
             `uvm_fatal("VSEQ",
-                $sformatf("Lockstep source size mismatch for %s head%0d: input=%0d weight=%0d bias=%0d",
+                $sformatf("Source size mismatch for %s head%0d: input=%0d weight=%0d bias=%0d",
                     payload.step.name(),
                     head_id,
                     payload.input_payload_by_head[head_id].size(),
@@ -411,12 +430,12 @@ class ita_mha8_vsequence extends uvm_sequence;
         end
 
         for (int unsigned beat = 0; beat < beats; beat++) begin
-            wait_lockstep_idle_gap();
+            wait_group_idle_gap();
             if (source_skew_enabled()) begin
                 fork
-                    send_head_stream_beat(payload, head_id, ITA_STREAM_HEAD_WEIGHT, beat, source_skew_lockstep);
-                    send_head_stream_beat(payload, head_id, ITA_STREAM_HEAD_INPUT, beat, source_skew_lockstep);
-                    send_head_stream_beat(payload, head_id, ITA_STREAM_HEAD_BIAS, beat, source_skew_lockstep);
+                    send_head_stream_beat(payload, head_id, ITA_STREAM_HEAD_WEIGHT, beat, 1'b0);
+                    send_head_stream_beat(payload, head_id, ITA_STREAM_HEAD_INPUT, beat, 1'b0);
+                    send_head_stream_beat(payload, head_id, ITA_STREAM_HEAD_BIAS, beat, 1'b0);
                 join
             end else begin
                 drive_head_lockstep_beat(payload, head_id, beat);
@@ -431,17 +450,17 @@ class ita_mha8_vsequence extends uvm_sequence;
                 bias_source_gap_max != 0);
     endfunction : source_skew_enabled
 
-    task wait_lockstep_idle_gap();
+    task wait_group_idle_gap();
         int unsigned gap_cycles;
 
-        if (lockstep_idle_gap_max == 0)
+        if (group_idle_gap_max == 0)
             return;
 
-        gap_cycles = $urandom_range(lockstep_idle_gap_max, lockstep_idle_gap_min);
+        gap_cycles = $urandom_range(group_idle_gap_max, group_idle_gap_min);
         repeat (gap_cycles) begin
             @(posedge p_sequencer.vif.clk_i);
         end
-    endtask : wait_lockstep_idle_gap
+    endtask : wait_group_idle_gap
 
     task send_head_stream_beat(
         ita_mha8_step_payload payload,
@@ -730,7 +749,7 @@ class ita_mha8_vsequence extends uvm_sequence;
         end
 
         for (int unsigned beat = 0; beat < beats; beat++) begin
-            wait_lockstep_idle_gap();
+            wait_group_idle_gap();
             fork
                 send_head_stream_beat(payload, head_id, ITA_STREAM_HEAD_INPUT, beat, 1'b0);
                 send_head_stream_beat(payload, head_id, ITA_STREAM_HEAD_BIAS, beat, 1'b0);
@@ -758,7 +777,7 @@ class ita_mha8_vsequence extends uvm_sequence;
         end
 
         for (int unsigned beat = 0; beat < beats; beat++) begin
-            wait_lockstep_idle_gap();
+            wait_group_idle_gap();
             for (int unsigned h = 0; h < 8; h++) begin
                 automatic int unsigned head_id = h;
                 fork
@@ -784,12 +803,12 @@ class ita_mha8_vsequence extends uvm_sequence;
         end
 
         for (int unsigned beat = 0; beat < beats; beat++) begin
-            wait_lockstep_idle_gap();
+            wait_group_idle_gap();
             if (source_skew_enabled()) begin
                 fork
-                    send_ff_stream_beat(payload, ITA_STREAM_FF_INPUT, beat, source_skew_lockstep);
-                    send_ff_stream_beat(payload, ITA_STREAM_FF_WEIGHT, beat, source_skew_lockstep);
-                    send_ff_stream_beat(payload, ITA_STREAM_FF_BIAS, beat, source_skew_lockstep);
+                    send_ff_stream_beat(payload, ITA_STREAM_FF_INPUT, beat, 1'b0);
+                    send_ff_stream_beat(payload, ITA_STREAM_FF_WEIGHT, beat, 1'b0);
+                    send_ff_stream_beat(payload, ITA_STREAM_FF_BIAS, beat, 1'b0);
                 join
             end else begin
                 `uvm_fatal("VSEQ", "Internal error: send_ff_payload reference path should not enter beat lockstep drive")
@@ -817,7 +836,7 @@ class ita_mha8_vsequence extends uvm_sequence;
         end
 
         for (int unsigned beat = 0; beat < beats; beat++) begin
-            wait_lockstep_idle_gap();
+            wait_group_idle_gap();
             fork
                 send_ff_stream_beat(payload, ITA_STREAM_FF_INPUT, beat, 1'b0);
                 send_ff_stream_beat(payload, ITA_STREAM_FF_BIAS, beat, 1'b0);

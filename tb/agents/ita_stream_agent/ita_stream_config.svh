@@ -1,6 +1,12 @@
 `ifndef ITA_STREAM_CONFIG_SVH
 `define ITA_STREAM_CONFIG_SVH
 
+typedef enum int unsigned {
+    ITA_NATIVE_VR_FAULT_NONE,
+    ITA_NATIVE_VR_FAULT_DROP_VALID,
+    ITA_NATIVE_VR_FAULT_MUTATE_PAYLOAD_AND_METADATA
+} ita_native_vr_fault_e;
+
 class ita_stream_config extends uvm_object;
     `uvm_object_utils(ita_stream_config)
 
@@ -22,6 +28,10 @@ class ita_stream_config extends uvm_object;
     int unsigned ready_low_max = 0;
     int unsigned ready_high_min = 1;
     int unsigned ready_high_max = 1;
+
+    bit native_vr_fault_enable = 1'b0;
+    ita_native_vr_fault_e native_vr_fault_mode = ITA_NATIVE_VR_FAULT_NONE;
+    bit native_vr_fault_injected = 1'b0;
 
     function new(string name = "ita_stream_config");
         super.new(name);

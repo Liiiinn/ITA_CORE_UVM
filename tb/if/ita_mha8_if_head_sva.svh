@@ -84,8 +84,7 @@ generate
                     inp_step_dbg[h],
                     inp_tile_id_dbg[h],
                     inp_inner_id_dbg[h],
-                    inp_beat_id_dbg[h],
-                    inp_lockstep_dbg[h]
+                    inp_beat_id_dbg[h]
                 });
         endproperty : inp_dbg_known_when_valid
 
@@ -95,8 +94,7 @@ generate
                     inp_weight_step_dbg[h],
                     inp_weight_tile_id_dbg[h],
                     inp_weight_inner_id_dbg[h],
-                    inp_weight_beat_id_dbg[h],
-                    inp_weight_lockstep_dbg[h]
+                    inp_weight_beat_id_dbg[h]
                 });
         endproperty : weight_dbg_known_when_valid
 
@@ -106,8 +104,7 @@ generate
                     inp_bias_step_dbg[h],
                     inp_bias_tile_id_dbg[h],
                     inp_bias_inner_id_dbg[h],
-                    inp_bias_beat_id_dbg[h],
-                    inp_bias_lockstep_dbg[h]
+                    inp_bias_beat_id_dbg[h]
                 });
         endproperty : bias_dbg_known_when_valid
 
@@ -129,8 +126,7 @@ generate
                     inp_step_dbg[h],
                     inp_tile_id_dbg[h],
                     inp_inner_id_dbg[h],
-                    inp_beat_id_dbg[h],
-                    inp_lockstep_dbg[h]
+                    inp_beat_id_dbg[h]
                 });
         endproperty : inp_dbg_stable_until_ready
 
@@ -141,8 +137,7 @@ generate
                     inp_weight_step_dbg[h],
                     inp_weight_tile_id_dbg[h],
                     inp_weight_inner_id_dbg[h],
-                    inp_weight_beat_id_dbg[h],
-                    inp_weight_lockstep_dbg[h]
+                    inp_weight_beat_id_dbg[h]
                 });
         endproperty : weight_dbg_stable_until_ready
 
@@ -153,8 +148,7 @@ generate
                     inp_bias_step_dbg[h],
                     inp_bias_tile_id_dbg[h],
                     inp_bias_inner_id_dbg[h],
-                    inp_bias_beat_id_dbg[h],
-                    inp_bias_lockstep_dbg[h]
+                    inp_bias_beat_id_dbg[h]
                 });
         endproperty : bias_dbg_stable_until_ready
 
@@ -197,37 +191,6 @@ generate
             @(posedge clk_i) disable iff (!rst_ni)
                 inp_bias_valid_i[h] |-> inp_bias_step_dbg[h] inside {Q, K, V, QK, AV, OW, MatMul};
         endproperty : bias_step_legal_when_valid
-
-        property head_legal_source_valid_lockstep_seen;
-            @(posedge clk_i) disable iff (!rst_ni)
-                assert_legal_lockstep_input &&
-                (inp_lockstep_dbg[h] || inp_weight_lockstep_dbg[h] || inp_bias_lockstep_dbg[h]) &&
-                inp_valid_i[h] && inp_weight_valid_i[h] && inp_bias_valid_i[h];
-        endproperty : head_legal_source_valid_lockstep_seen
-
-        property head_lockstep_source_no_skew;
-            @(posedge clk_i) disable iff (!rst_ni)
-                assert_legal_lockstep_input &&
-                ((inp_valid_i[h] && inp_lockstep_dbg[h]) ||
-                 (inp_weight_valid_i[h] && inp_weight_lockstep_dbg[h]) ||
-                 (inp_bias_valid_i[h] && inp_bias_lockstep_dbg[h]))
-                |-> (
-                    inp_valid_i[h] &&
-                    inp_weight_valid_i[h] &&
-                    inp_bias_valid_i[h] &&
-                    inp_lockstep_dbg[h] &&
-                    inp_weight_lockstep_dbg[h] &&
-                    inp_bias_lockstep_dbg[h] &&
-                    inp_step_dbg[h] == inp_weight_step_dbg[h] &&
-                    inp_step_dbg[h] == inp_bias_step_dbg[h] &&
-                    inp_tile_id_dbg[h] == inp_weight_tile_id_dbg[h] &&
-                    inp_tile_id_dbg[h] == inp_bias_tile_id_dbg[h] &&
-                    inp_inner_id_dbg[h] == inp_weight_inner_id_dbg[h] &&
-                    inp_inner_id_dbg[h] == inp_bias_inner_id_dbg[h] &&
-                    inp_beat_id_dbg[h] == inp_weight_beat_id_dbg[h] &&
-                    inp_beat_id_dbg[h] == inp_bias_beat_id_dbg[h]
-                );
-        endproperty : head_lockstep_source_no_skew
 
         property head_output_step_legal_when_valid;
             @(posedge clk_i) disable iff (!rst_ni)
@@ -335,9 +298,12 @@ generate
         weight_ready_known_when_valid_a: assert property(weight_ready_known_when_valid);
         bias_ready_known_when_valid_a: assert property(bias_ready_known_when_valid);
         head_valid_known_when_ready_a: assert property(head_valid_known_when_ready);
-        inp_stable_until_a: assert property(inp_stable_until_ready);
-        weight_stable_until_a: assert property(weight_stable_until_ready);
-        bias_stable_until_a: assert property(bias_stable_until_ready);
+        inp_stable_until_a: assert property(inp_stable_until_ready)
+            else report_native_vr_violation($sformatf("head%0d input", h));
+        weight_stable_until_a: assert property(weight_stable_until_ready)
+            else report_native_vr_violation($sformatf("head%0d weight", h));
+        bias_stable_until_a: assert property(bias_stable_until_ready)
+            else report_native_vr_violation($sformatf("head%0d bias", h));
         head_output_stable_until_ready_a: assert property(head_output_stable_until_ready);
         inp_dbg_known_when_valid_a: assert property(inp_dbg_known_when_valid);
         weight_dbg_known_when_valid_a: assert property(weight_dbg_known_when_valid);
@@ -352,25 +318,6 @@ generate
         inp_step_legal_when_valid_a: assert property(inp_step_legal_when_valid);
         weight_step_legal_when_valid_a: assert property(weight_step_legal_when_valid);
         bias_step_legal_when_valid_a: assert property(bias_step_legal_when_valid);
-        head_lockstep_source_no_skew_a: assert property(head_lockstep_source_no_skew)
-            else $error("[ITA_SOURCE_SKEW] head%0d lockstep source valid/metadata skew: valid=%0b weight_valid=%0b bias_valid=%0b step=%s/%s/%s tile=%0d/%0d/%0d inner=%0d/%0d/%0d beat=%0d/%0d/%0d",
-                h,
-                inp_valid_i[h],
-                inp_weight_valid_i[h],
-                inp_bias_valid_i[h],
-                inp_step_dbg[h].name(),
-                inp_weight_step_dbg[h].name(),
-                inp_bias_step_dbg[h].name(),
-                inp_tile_id_dbg[h],
-                inp_weight_tile_id_dbg[h],
-                inp_bias_tile_id_dbg[h],
-                inp_inner_id_dbg[h],
-                inp_weight_inner_id_dbg[h],
-                inp_bias_inner_id_dbg[h],
-                inp_beat_id_dbg[h],
-                inp_weight_beat_id_dbg[h],
-                inp_bias_beat_id_dbg[h]);
-        head_legal_source_valid_lockstep_seen_c: cover property(head_legal_source_valid_lockstep_seen);
         head_output_step_legal_when_valid_a: assert property(head_output_step_legal_when_valid);
         head_output_last_inner_legal_a: assert property(head_output_last_inner_legal);
         head_ow_output_last_inner_legal_a: assert property(head_ow_output_last_inner_legal);

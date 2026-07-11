@@ -135,8 +135,7 @@ class ita_mha8_cov extends uvm_component;
         int unsigned head_id_value,
         int unsigned tile_id_value,
         int unsigned inner_tile_id_value,
-        int unsigned beat_bucket_value,
-        bit is_lockstep_value
+        int unsigned beat_bucket_value
     );
         option.per_instance = 1;
 
@@ -183,11 +182,6 @@ class ita_mha8_cov extends uvm_component;
             bins first    = {BEAT_BUCKET_FIRST};
             bins nonfirst = {BEAT_BUCKET_NONFIRST};
             illegal_bins illegal_high = {BEAT_BUCKET_HIGH};
-        }
-
-        cp_lockstep: coverpoint is_lockstep_value {
-            bins arrival_skew = {0};
-            bins lockstep     = {1};
         }
 
         cross_kind_step: cross cp_kind, cp_step {
@@ -374,8 +368,7 @@ class ita_mha8_cov extends uvm_component;
             tr.head_id,
             tr.tile_id,
             tr.inner_tile_id,
-            beat_bucket(tr),
-            tr.is_lockstep
+            beat_bucket(tr)
         );
     endfunction : write_cov_stream
 

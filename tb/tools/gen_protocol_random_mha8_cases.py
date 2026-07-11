@@ -10,6 +10,12 @@ from pathlib import Path
 from typing import Any
 
 
+# The controller advances one beat only when all three source valids coincide.
+# Legal protocol randomization therefore inserts bubbles between complete source
+# groups, never between the input/weight/bias members of one compute beat.
+SOURCE_GAP_MAX = 0
+
+
 def repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
@@ -23,10 +29,7 @@ def protocol_case(
     seed: int,
     jobs: int,
     tile_max: int,
-    input_gap: int,
-    weight_gap: int,
-    bias_gap: int,
-    lockstep_idle_gap: int,
+    group_idle_gap: int,
     ready_low: int,
     ready_high: int,
     start_gap: int,
@@ -54,8 +57,9 @@ def protocol_case(
             "num_jobs": jobs,
             "tile_min": 1,
             "tile_max": tile_max,
-            "source_arrival_skew": False,
-            "lockstep_idle_gap_max": lockstep_idle_gap,
+            "source_bundle_mode": "atomic_compute_beat",
+            "group_source_bubbles": group_idle_gap > 0,
+            "group_idle_gap_max": group_idle_gap,
             "sink_backpressure": ready_low > 0,
         },
         "smoke_ps1": {
@@ -79,67 +83,12 @@ def protocol_case(
             ],
             "future_plusargs": {
                 "ntb_random_seed": seed,
-                "ITA_INPUT_SOURCE_GAP_MAX": input_gap,
-                "ITA_WEIGHT_SOURCE_GAP_MAX": weight_gap,
-                "ITA_BIAS_SOURCE_GAP_MAX": bias_gap,
-                "ITA_LOCKSTEP_IDLE_GAP_MAX": lockstep_idle_gap,
+                "ITA_INPUT_SOURCE_GAP_MAX": SOURCE_GAP_MAX,
+                "ITA_WEIGHT_SOURCE_GAP_MAX": SOURCE_GAP_MAX,
+                "ITA_BIAS_SOURCE_GAP_MAX": SOURCE_GAP_MAX,
+                "ITA_GROUP_IDLE_GAP_MAX": group_idle_gap,
                 "ITA_READY_LOW_MAX": ready_low,
                 "ITA_READY_HIGH_MAX": ready_high,
-            },
-        },
-    }
-
-
-def negative_skew_case(seed: int, jobs: int, tile_max: int) -> dict[str, Any]:
-    name = f"pr_neg_lockstep_skew_jobs{jobs}_tile1to{tile_max}_seed{seed}"
-    return {
-        "name": name,
-        "category": "protocol_negative_skew",
-        "spec_basis": "core_spec_observable",
-        "seed": seed,
-        "target": "ita_mha8_tb_top",
-        "dut": "ita_mha8",
-        "projection": "ATTN",
-        "activation": "identity",
-        "tile_s": 0,
-        "tile_e": 0,
-        "tile_p": 0,
-        "tile_f": 0,
-        "expect_fail": True,
-        "expected_error_regex": r"(ITA_SOURCE_SKEW|UVM_ERROR|UVM_FATAL|timeout)",
-        "flow": {
-            "vector_source": "sv_deterministic_protocol",
-            "test_name": "ita_mha8_protocol_random_test",
-            "generate_vectors": False,
-            "compare": False,
-            "num_jobs": jobs,
-            "tile_min": 1,
-            "tile_max": tile_max,
-            "negative_lockstep_skew": True,
-        },
-        "smoke_ps1": {
-            "args": [
-                "-TestName",
-                "ita_mha8_protocol_random_test",
-                "-NoGenerateVectors",
-                "-NoCompare",
-                "-ProtocolNumJobs",
-                str(jobs),
-                "-ProtocolTileMin",
-                "1",
-                "-ProtocolTileMax",
-                str(tile_max),
-                "-ProtocolProjection",
-                "ATTN",
-                "-ProtocolNegativeSkew",
-            ],
-            "future_plusargs": {
-                "ntb_random_seed": seed,
-                "ITA_INPUT_SOURCE_GAP_MAX": 3,
-                "ITA_WEIGHT_SOURCE_GAP_MAX": 0,
-                "ITA_BIAS_SOURCE_GAP_MAX": 1,
-                "ITA_READY_LOW_MAX": 0,
-                "ITA_READY_HIGH_MAX": 1,
             },
         },
     }
@@ -153,7 +102,6 @@ def main() -> int:
     parser.add_argument("--jobs-max", type=int, default=16)
     parser.add_argument("--tile-max", type=int, default=2, help="Maximum randomly selected tile dimension for legal protocol jobs.")
     parser.add_argument("--out", type=Path, default=default_out())
-    parser.add_argument("--include-negative-skew", action="store_true", help="Append one expected-fail lockstep source-skew case.")
     parser.add_argument("--dry-run", action="store_true", help="Print JSON instead of writing --out.")
     args = parser.parse_args()
 
@@ -167,6 +115,7 @@ def main() -> int:
     rng = random.Random(args.seed)
     cases: list[dict[str, Any]] = []
     for index in range(args.count):
+        is_baseline = index == 0
         case_seed = rng.randrange(1, 2**31)
         cases.append(
             protocol_case(
@@ -174,23 +123,17 @@ def main() -> int:
                 seed=case_seed,
                 jobs=rng.randint(args.jobs_min, args.jobs_max),
                 tile_max=args.tile_max,
-                input_gap=0,
-                weight_gap=0,
-                bias_gap=0,
-                lockstep_idle_gap=rng.randrange(1, 9),
-                ready_low=rng.randrange(0, 9),
-                ready_high=rng.randrange(1, 5),
-                start_gap=rng.randrange(0, 9),
-                reset_cycles=rng.randrange(8, 17),
+                group_idle_gap=0 if is_baseline else rng.randrange(1, 9),
+                ready_low=0 if is_baseline else rng.randrange(1, 9),
+                ready_high=1 if is_baseline else rng.randrange(1, 5),
+                start_gap=0 if is_baseline else rng.randrange(0, 9),
+                reset_cycles=8 if is_baseline else rng.randrange(8, 17),
             )
         )
 
-    if args.include_negative_skew:
-        cases.append(negative_skew_case(rng.randrange(1, 2**31), args.jobs_min, args.tile_max))
-
     manifest: dict[str, Any] = {
         "suite": "protocol_random",
-        "description": "Deterministic-payload UVM protocol random jobs; no PyITA numerical compare.",
+        "description": "Deterministic-payload UVM protocol jobs with atomic source bundles; no PyITA numerical compare.",
         "seed": args.seed,
         "cases": cases,
     }

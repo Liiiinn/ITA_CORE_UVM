@@ -27,6 +27,10 @@ class ita_mha8_env_config extends uvm_object;
     int unsigned ready_high_min = 1;
     int unsigned ready_high_max = 1;
 
+    string native_vr_fault_kind = "";
+    string native_vr_fault_mode = "";
+    int unsigned native_vr_fault_head = 0;
+
     ita_ctrl_config ctrl_cfg;
     ita_stream_config input_cfg       [8];
     ita_stream_config weight_cfg      [8];
@@ -84,6 +88,7 @@ class ita_mha8_env_config extends uvm_object;
         cfg.head_id = head_id;
         cfg.is_active = is_active;
         apply_protocol_cfg(cfg);
+        apply_native_vr_fault_cfg(cfg);
         return cfg;
     endfunction : create_stream_cfg
 
@@ -200,7 +205,66 @@ class ita_mha8_env_config extends uvm_object;
             ready_high_min = 1;
         if (ready_high_max < ready_high_min)
             ready_high_max = ready_high_min;
+
+        void'($value$plusargs("ITA_NATIVE_VR_FAULT_KIND=%s", native_vr_fault_kind));
+        void'($value$plusargs("ITA_NATIVE_VR_FAULT_MODE=%s", native_vr_fault_mode));
+        void'($value$plusargs("ITA_NATIVE_VR_FAULT_HEAD=%d", native_vr_fault_head));
+        validate_native_vr_fault_plusargs();
     endfunction : load_protocol_plusargs
+
+    function void validate_native_vr_fault_plusargs();
+        if (native_vr_fault_kind == "") begin
+            if (native_vr_fault_mode != "")
+                `uvm_fatal("ITA_NATIVE_VR_CFG", "ITA_NATIVE_VR_FAULT_MODE requires ITA_NATIVE_VR_FAULT_KIND")
+            return;
+        end
+
+        if (!(native_vr_fault_kind inside {
+            "head_input", "head_weight", "head_bias",
+            "ff_input", "ff_weight", "ff_bias"
+        })) begin
+            `uvm_fatal("ITA_NATIVE_VR_CFG",
+                $sformatf("Unsupported ITA_NATIVE_VR_FAULT_KIND=%s", native_vr_fault_kind))
+        end
+
+        if (!(native_vr_fault_mode inside {"drop_valid", "mutate_payload_and_metadata"})) begin
+            `uvm_fatal("ITA_NATIVE_VR_CFG",
+                $sformatf("Unsupported ITA_NATIVE_VR_FAULT_MODE=%s", native_vr_fault_mode))
+        end
+
+        if (native_vr_fault_head >= 8 && native_vr_fault_kind.substr(0, 3) == "head")
+            `uvm_fatal("ITA_NATIVE_VR_CFG",
+                $sformatf("ITA_NATIVE_VR_FAULT_HEAD=%0d is outside 0..7", native_vr_fault_head))
+    endfunction : validate_native_vr_fault_plusargs
+
+    function void apply_native_vr_fault_cfg(ita_stream_config cfg);
+        bit is_target;
+
+        if (native_vr_fault_kind == "")
+            return;
+
+        is_target = 1'b0;
+        case (native_vr_fault_kind)
+            "head_input":  is_target = cfg.kind == ITA_STREAM_HEAD_INPUT  && cfg.head_id == native_vr_fault_head;
+            "head_weight": is_target = cfg.kind == ITA_STREAM_HEAD_WEIGHT && cfg.head_id == native_vr_fault_head;
+            "head_bias":   is_target = cfg.kind == ITA_STREAM_HEAD_BIAS   && cfg.head_id == native_vr_fault_head;
+            "ff_input":    is_target = cfg.kind == ITA_STREAM_FF_INPUT;
+            "ff_weight":   is_target = cfg.kind == ITA_STREAM_FF_WEIGHT;
+            "ff_bias":     is_target = cfg.kind == ITA_STREAM_FF_BIAS;
+            default: begin end
+        endcase
+
+        if (!is_target)
+            return;
+
+        cfg.native_vr_fault_enable = 1'b1;
+        case (native_vr_fault_mode)
+            "drop_valid": cfg.native_vr_fault_mode = ITA_NATIVE_VR_FAULT_DROP_VALID;
+            "mutate_payload_and_metadata":
+                cfg.native_vr_fault_mode = ITA_NATIVE_VR_FAULT_MUTATE_PAYLOAD_AND_METADATA;
+            default: begin end
+        endcase
+    endfunction : apply_native_vr_fault_cfg
 
 endclass : ita_mha8_env_config
 

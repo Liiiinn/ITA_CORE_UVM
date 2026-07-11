@@ -101,9 +101,9 @@ interface ita_mha8_if
     counter_t                ff_inner_id_dbg;
     counter_t                ff_beat_id_dbg;
     logic                    phase_mismatch_o;
+    bit                      native_vr_violation_seen;
     // Stage 11: add feed-forward stream assertions after the FF path is added to active tests.
 
-    bit                      assert_legal_lockstep_input;
     tile_t                   sva_tile_s_q;
     tile_t                   sva_tile_e_q;
     tile_t                   sva_tile_p_q;
@@ -119,8 +119,7 @@ interface ita_mha8_if
     // TODO ·: initialize or tie off driver-owned pins needed for an idle smoke shell.
     initial begin
         rst_ni = 0;
-        assert_legal_lockstep_input = 1'b1;
-        void'($value$plusargs("ITA_ASSERT_LEGAL_LOCKSTEP_INPUT=%d", assert_legal_lockstep_input));
+        native_vr_violation_seen = 1'b0;
         ctrl_i = '0;
         sum_eps_mult_i = '0;
         sum_right_shift_i = '0;
@@ -198,6 +197,15 @@ interface ita_mha8_if
             sva_tile_f_q <= ctrl_i.tile_f;
         end
     end
+
+    always @(negedge rst_ni) begin
+        native_vr_violation_seen = 1'b0;
+    end
+
+    function void report_native_vr_violation(string channel);
+        native_vr_violation_seen = 1'b1;
+        $error("[ITA_NATIVE_VR] %s changed valid, payload, or metadata before ready", channel);
+    endfunction : report_native_vr_violation
 
     `include "ita_mha8_if_head_sva.svh"
     `include "ita_mha8_if_sum_sva.svh"

@@ -26,6 +26,7 @@ NUMERICAL_PATTERNS = (
     "zero",
 )
 NEGATIVE_ERROR_RE = r"(UVM_ERROR|UVM_FATAL|CORE CSV|ITA_SCB|SVA|timeout|mismatch|illegal|failed|FAIL)"
+NATIVE_VR_ERROR_RE = r"\[ITA_NATIVE_VR\]"
 
 
 @dataclass(frozen=True)
@@ -165,7 +166,7 @@ def adapter_command(
 ) -> list[str]:
     return [
         python,
-        str(core_root() / "tbak" / "tools" / "gen_mha8_pyita_vectors.py"),
+        str(core_root() / "tb" / "tools" / "gen_mha8_pyita_vectors.py"),
         "--pyita-dir",
         str(standalone),
         "--projection",
@@ -286,8 +287,7 @@ def case_entry(
         "ITA_INPUT_SOURCE_GAP_MAX": 0,
         "ITA_WEIGHT_SOURCE_GAP_MAX": 0,
         "ITA_BIAS_SOURCE_GAP_MAX": 0,
-        "ITA_LOCKSTEP_IDLE_GAP_MAX": 0,
-        "ITA_ASSERT_LEGAL_LOCKSTEP_INPUT": 1,
+        "ITA_GROUP_IDLE_GAP_MAX": 0,
         "ITA_READY_LOW_MAX": 0,
         "ITA_READY_HIGH_MAX": 1,
     }
@@ -331,7 +331,7 @@ def case_entry(
 
 def add_protocol_cases(cases: list[dict[str, Any]], heads: int, python: str, no_auto_generate: bool, dry_run: bool) -> None:
     specs = [
-        ("protocol_lockstep_idle_gap", "lockstep_idle_gap", Shape(64, 64, 64, 64), {"ITA_LOCKSTEP_IDLE_GAP_MAX": 6}),
+        ("protocol_group_idle_gap", "group_idle_gap", Shape(64, 64, 64, 64), {"ITA_GROUP_IDLE_GAP_MAX": 6}),
         ("protocol_output_backpressure", "output_backpressure", Shape(64, 64, 64, 64), {"ITA_READY_LOW_MAX": 8, "ITA_READY_HIGH_MAX": 3}),
         ("tile_min_s64_e64_p64_f64", "tile_boundary_min", Shape(64, 64, 64, 64), {}),
         ("tile_mixed_s64_e256_p128_f192", "tile_boundary_mixed", Shape(64, 256, 128, 192), {}),
@@ -380,27 +380,74 @@ def add_negative_cases(cases: list[dict[str, Any]], heads: int, python: str, no_
     shape = Shape(64, 64, 64, 64)
     standalone = ensure_vector(shape, heads, ACTIVATION, "random", python, no_auto_generate, dry_run)
 
-    skew_cases = [
-        ("neg_input_source_skew", "input_source_skew", {"ITA_INPUT_SOURCE_GAP_MAX": 6}),
-        ("neg_weight_source_skew", "weight_source_skew", {"ITA_WEIGHT_SOURCE_GAP_MAX": 6}),
-        ("neg_bias_source_skew", "bias_source_skew", {"ITA_BIAS_SOURCE_GAP_MAX": 6}),
+    native_vr_cases = [
+        ("head_input", "drop_valid"),
+        ("head_input", "mutate_payload_and_metadata"),
+        ("head_weight", "drop_valid"),
+        ("head_weight", "mutate_payload_and_metadata"),
+        ("head_bias", "drop_valid"),
+        ("head_bias", "mutate_payload_and_metadata"),
+        ("ff_input", "drop_valid"),
+        ("ff_input", "mutate_payload_and_metadata"),
+        ("ff_weight", "drop_valid"),
+        ("ff_weight", "mutate_payload_and_metadata"),
+        ("ff_bias", "drop_valid"),
+        ("ff_bias", "mutate_payload_and_metadata"),
     ]
-    for index, (name, intent, plusargs) in enumerate(skew_cases):
-        cases.append(case_entry(
-            name,
-            "negative",
-            intent,
-            shape,
-            heads,
-            ACTIVATION,
-            standalone,
-            f"{name}_stream.csv",
-            f"{name}_requant.csv",
-            f"{name}_manifest.json",
-            {"ntb_random_seed": 290 + index, **plusargs},
-            expect_fail=True,
-            expected_error_regex=NEGATIVE_ERROR_RE,
-        ))
+    for index, (kind, mode) in enumerate(native_vr_cases):
+        name = f"neg_native_vr_{kind}_{mode}"
+        cases.append({
+            "name": name,
+            "category": "native_vr_negative",
+            "spec_basis": "core_spec_observable",
+            "intent": f"native_valid_ready_{kind}_{mode}",
+            "seed": 290 + index,
+            "target": "ita_mha8_tb_top",
+            "dut": "ita_mha8",
+            "H": heads,
+            "S": 64,
+            "E": 64,
+            "P": 64,
+            "F": 64,
+            "layer": "AttentionFeedforward",
+            "projection": "ATTNFF",
+            "activation": "identity",
+            "bias": True,
+            "tile_s": 1,
+            "tile_e": 1,
+            "tile_p": 1,
+            "tile_f": 1,
+            "expect_fail": True,
+            "expected_error_regex": NATIVE_VR_ERROR_RE,
+            "paths": {},
+            "smoke_ps1": {
+                "script": "ITA_CORE_UVM/sim/scripts/smoke.ps1",
+                "args": [
+                    "-TestName", "ita_mha8_native_vr_negative_test",
+                    "-NoGenerateVectors",
+                    "-NoCompare",
+                    "-ProtocolNumJobs", "1",
+                    "-ProtocolTileMin", "1",
+                    "-ProtocolTileMax", "1",
+                    "-ProtocolProjection", "ATTNFF",
+                    "-ReadyLowMax", "64",
+                    "-ReadyHighMax", "1",
+                    "-NativeVrFaultKind", kind,
+                    "-NativeVrFaultMode", mode,
+                    "-NativeVrFaultHead", "0",
+                ],
+                "future_plusargs": {
+                    "ntb_random_seed": 290 + index,
+                    "ITA_SOURCE_GAP_MAX": 0,
+                    "ITA_INPUT_SOURCE_GAP_MAX": 0,
+                    "ITA_WEIGHT_SOURCE_GAP_MAX": 0,
+                    "ITA_BIAS_SOURCE_GAP_MAX": 0,
+                    "ITA_GROUP_IDLE_GAP_MAX": 0,
+                    "ITA_READY_LOW_MAX": 64,
+                    "ITA_READY_HIGH_MAX": 1,
+                },
+            },
+        })
 
     tile_cases = [
         ("neg_tile_zero", "illegal_tile_zero", ["-TileSOverride", "0"]),
@@ -467,7 +514,7 @@ def add_negative_cases(cases: list[dict[str, Any]], heads: int, python: str, no_
     name = "neg_output_timeout_bp"
     cases.append(case_entry(
         name,
-        "negative",
+        "output_backpressure_negative",
         "output_timeout_backpressure",
         shape,
         heads,
@@ -478,7 +525,12 @@ def add_negative_cases(cases: list[dict[str, Any]], heads: int, python: str, no_
         f"{name}_manifest.json",
         {"ntb_random_seed": 320, "ITA_READY_LOW_MAX": 100000, "ITA_READY_HIGH_MAX": 1},
         expect_fail=True,
-        expected_error_regex=NEGATIVE_ERROR_RE,
+        expected_error_regex=r"ITA_OUTPUT_BP_TIMEOUT",
+        extra_smoke_args=[
+            "-ReadyLowMin", "100000",
+            "-OutputBpTimeoutTest",
+            "-OutputWaitTimeoutCycles", "2000",
+        ],
     ))
 
 

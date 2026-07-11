@@ -9,7 +9,6 @@ class ita_mha8_protocol_random_vsequence extends ita_mha8_vsequence;
     int unsigned tile_min = 1;
     int unsigned tile_max = 2;
     int unsigned start_gap_max = 0;
-    bit negative_skew = 1'b0;
     string projection_mode = "ATTNFF";
 
     function new(string name = "ita_mha8_protocol_random_vsequence");
@@ -24,15 +23,14 @@ class ita_mha8_protocol_random_vsequence extends ita_mha8_vsequence;
             stop_head_output_ready = 1'b0;
 
             `uvm_info("PROTOCOL_RAND",
-                $sformatf("Starting protocol job=%0d projection=%s activation=%s tile_s/e/p/f=%0d/%0d/%0d/%0d negative_skew=%0b",
+                $sformatf("Starting protocol job=%0d projection=%s activation=%s tile_s/e/p/f=%0d/%0d/%0d/%0d",
                     job_id,
                     projection_mode,
                     core.activation.name(),
                     core.tile_s,
                     core.tile_e,
                     core.tile_p,
-                    core.tile_f,
-                    negative_skew),
+                    core.tile_f),
                 UVM_LOW)
 
             fork
@@ -60,24 +58,19 @@ class ita_mha8_protocol_random_vsequence extends ita_mha8_vsequence;
     endtask : body
 
     function void load_protocol_random_plusargs();
-        int unsigned tmp;
-
         void'($value$plusargs("ITA_NUM_JOBS=%d", num_jobs));
         void'($value$plusargs("ITA_PROTOCOL_TILE_MIN=%d", tile_min));
         void'($value$plusargs("ITA_PROTOCOL_TILE_MAX=%d", tile_max));
         void'($value$plusargs("ITA_PROTOCOL_START_GAP_MAX=%d", start_gap_max));
         void'($value$plusargs("ITA_PROTOCOL_PROJECTION=%s", projection_mode));
-        tmp = negative_skew;
-        if ($value$plusargs("ITA_PROTOCOL_NEGATIVE_SKEW=%d", tmp))
-            negative_skew = (tmp != 0);
-
         void'($value$plusargs("ITA_SOURCE_GAP_MAX=%d", source_gap_max));
         void'($value$plusargs("ITA_INPUT_SOURCE_GAP_MAX=%d", input_source_gap_max));
         void'($value$plusargs("ITA_WEIGHT_SOURCE_GAP_MAX=%d", weight_source_gap_max));
         void'($value$plusargs("ITA_BIAS_SOURCE_GAP_MAX=%d", bias_source_gap_max));
-        void'($value$plusargs("ITA_LOCKSTEP_IDLE_GAP_MIN=%d", lockstep_idle_gap_min));
-        void'($value$plusargs("ITA_LOCKSTEP_IDLE_GAP_MAX=%d", lockstep_idle_gap_max));
+        void'($value$plusargs("ITA_GROUP_IDLE_GAP_MIN=%d", group_idle_gap_min));
+        void'($value$plusargs("ITA_GROUP_IDLE_GAP_MAX=%d", group_idle_gap_max));
         load_sink_backpressure_plusargs();
+        load_output_timeout_plusargs();
 
         if (num_jobs == 0)
             num_jobs = 1;
@@ -87,12 +80,8 @@ class ita_mha8_protocol_random_vsequence extends ita_mha8_vsequence;
             tile_max = 4;
         if (tile_max < tile_min)
             tile_max = tile_min;
-        if (lockstep_idle_gap_max < lockstep_idle_gap_min)
-            lockstep_idle_gap_max = lockstep_idle_gap_min;
-
-        // Legal protocol skew holds each source valid until handshake, but does
-        // not claim that all three sources were launched as one lockstep beat.
-        source_skew_lockstep = negative_skew;
+        if (group_idle_gap_max < group_idle_gap_min)
+            group_idle_gap_max = group_idle_gap_min;
     endfunction : load_protocol_random_plusargs
 
     task send_attention_phase_if_present();

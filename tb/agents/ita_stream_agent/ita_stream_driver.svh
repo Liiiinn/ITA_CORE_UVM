@@ -140,6 +140,72 @@ class ita_stream_driver extends uvm_driver #(ita_stream_item);
         end
     endtask : wait_source_gap
 
+    function bit native_vr_fault_armed();
+        return cfg.native_vr_fault_enable && !cfg.native_vr_fault_injected;
+    endfunction : native_vr_fault_armed
+
+    task inject_native_vr_fault();
+        cfg.native_vr_fault_injected = 1'b1;
+
+        case (cfg.native_vr_fault_mode)
+            ITA_NATIVE_VR_FAULT_DROP_VALID: begin
+                case (cfg.kind)
+                    ITA_STREAM_HEAD_INPUT:  cfg.vif.inp_valid_i[cfg.head_id] <= 1'b0;
+                    ITA_STREAM_HEAD_WEIGHT: cfg.vif.inp_weight_valid_i[cfg.head_id] <= 1'b0;
+                    ITA_STREAM_HEAD_BIAS:   cfg.vif.inp_bias_valid_i[cfg.head_id] <= 1'b0;
+                    ITA_STREAM_FF_INPUT:    cfg.vif.ff_inp_valid_i <= 1'b0;
+                    ITA_STREAM_FF_WEIGHT:   cfg.vif.ff_inp_weight_valid_i <= 1'b0;
+                    ITA_STREAM_FF_BIAS:     cfg.vif.ff_inp_bias_valid_i <= 1'b0;
+                    default: `uvm_fatal("NATIVE_VR_CFG", "Valid-drop fault requires a source stream")
+                endcase
+            end
+            ITA_NATIVE_VR_FAULT_MUTATE_PAYLOAD_AND_METADATA: begin
+                case (cfg.kind)
+                    ITA_STREAM_HEAD_INPUT: begin
+                        cfg.vif.inp_i[cfg.head_id] <= cfg.vif.inp_i[cfg.head_id] ^ inp_t'(1);
+                        cfg.vif.inp_beat_id_dbg[cfg.head_id] <= cfg.vif.inp_beat_id_dbg[cfg.head_id] + 1;
+                    end
+                    ITA_STREAM_HEAD_WEIGHT: begin
+                        cfg.vif.inp_weight_i[cfg.head_id] <= cfg.vif.inp_weight_i[cfg.head_id] ^ inp_weight_t'(1);
+                        cfg.vif.inp_weight_beat_id_dbg[cfg.head_id] <= cfg.vif.inp_weight_beat_id_dbg[cfg.head_id] + 1;
+                    end
+                    ITA_STREAM_HEAD_BIAS: begin
+                        cfg.vif.inp_bias_i[cfg.head_id] <= cfg.vif.inp_bias_i[cfg.head_id] ^ bias_t'(1);
+                        cfg.vif.inp_bias_beat_id_dbg[cfg.head_id] <= cfg.vif.inp_bias_beat_id_dbg[cfg.head_id] + 1;
+                    end
+                    ITA_STREAM_FF_INPUT: begin
+                        cfg.vif.ff_inp_i <= cfg.vif.ff_inp_i ^ inp_t'(1);
+                        cfg.vif.ff_inp_beat_id_dbg <= cfg.vif.ff_inp_beat_id_dbg + 1;
+                    end
+                    ITA_STREAM_FF_WEIGHT: begin
+                        cfg.vif.ff_inp_weight_i <= cfg.vif.ff_inp_weight_i ^ inp_weight_t'(1);
+                        cfg.vif.ff_inp_weight_beat_id_dbg <= cfg.vif.ff_inp_weight_beat_id_dbg + 1;
+                    end
+                    ITA_STREAM_FF_BIAS: begin
+                        cfg.vif.ff_inp_bias_i <= cfg.vif.ff_inp_bias_i ^ bias_t'(1);
+                        cfg.vif.ff_inp_bias_beat_id_dbg <= cfg.vif.ff_inp_bias_beat_id_dbg + 1;
+                    end
+                    default: `uvm_fatal("NATIVE_VR_CFG", "Payload-mutation fault requires a source stream")
+                endcase
+            end
+            default: `uvm_fatal("NATIVE_VR_CFG", "Native valid/ready fault was enabled without a mode")
+        endcase
+
+        `uvm_info("NATIVE_VR_INJECT",
+            $sformatf("Injected %s on %s head%0d while valid && !ready",
+                cfg.native_vr_fault_mode.name(), cfg.kind.name(), cfg.head_id),
+            UVM_LOW)
+
+        repeat (2) @(posedge cfg.vif.clk_i);
+        if (!cfg.vif.native_vr_violation_seen)
+      `uvm_fatal("NATIVE_VR_MISSED",
+                $sformatf("Injected %s on %s but no native valid/ready SVA fired",
+                    cfg.native_vr_fault_mode.name(), cfg.kind.name()))
+
+        `uvm_fatal("ITA_NATIVE_VR_EXPECTED",
+            $sformatf("Expected native valid/ready violation observed on %s", cfg.kind.name()))
+    endtask : inject_native_vr_fault
+
     task drive_source_item(ita_stream_item tr);
         if (tr.kind != cfg.kind || tr.head_id != cfg.head_id)
             `uvm_error("STREAM_DRV", "item kind/head_id doesn't match with driver config!")
@@ -176,6 +242,8 @@ class ita_stream_driver extends uvm_driver #(ita_stream_item);
         do begin
             @(posedge cfg.vif.clk_i);
             wait_cycles++;
+            if (!cfg.vif.inp_ready_o[cfg.head_id] && native_vr_fault_armed())
+                inject_native_vr_fault();
             if (wait_cycles > 10000)
                 `uvm_fatal("STREAM_DRV", "timeout waiting for inp_ready_o")
         end while (!cfg.vif.inp_ready_o[cfg.head_id]);
@@ -204,6 +272,8 @@ class ita_stream_driver extends uvm_driver #(ita_stream_item);
         do begin
             @(posedge cfg.vif.clk_i);
             wait_cycles++;
+            if (!cfg.vif.inp_weight_ready_o[cfg.head_id] && native_vr_fault_armed())
+                inject_native_vr_fault();
             if (wait_cycles > 10000)
                 `uvm_fatal("STREAM_DRV", "timeout waiting for inp_weight_ready_o")
         end while (!cfg.vif.inp_weight_ready_o[cfg.head_id]);
@@ -233,6 +303,8 @@ class ita_stream_driver extends uvm_driver #(ita_stream_item);
         do begin
             @(posedge cfg.vif.clk_i);
             wait_cycles++;
+            if (!cfg.vif.inp_bias_ready_o[cfg.head_id] && native_vr_fault_armed())
+                inject_native_vr_fault();
             if (wait_cycles > 10000)
                 `uvm_fatal("STREAM_DRV", "timeout waiting for inp_bias_ready_o")
         end while (!cfg.vif.inp_bias_ready_o[cfg.head_id]);
@@ -259,6 +331,8 @@ class ita_stream_driver extends uvm_driver #(ita_stream_item);
         do begin
             @(posedge cfg.vif.clk_i);
             wait_cycles++;
+            if (!cfg.vif.ff_inp_ready_o && native_vr_fault_armed())
+                inject_native_vr_fault();
             if (wait_cycles > 10000)
                 `uvm_fatal("STREAM_DRV", "timeout waiting for ff_inp_ready_o")
         end while (!cfg.vif.ff_inp_ready_o);
@@ -282,6 +356,8 @@ class ita_stream_driver extends uvm_driver #(ita_stream_item);
         do begin
             @(posedge cfg.vif.clk_i);
             wait_cycles++;
+            if (!cfg.vif.ff_inp_weight_ready_o && native_vr_fault_armed())
+                inject_native_vr_fault();
             if (wait_cycles > 10000)
                 `uvm_fatal("STREAM_DRV", "timeout waiting for ff_inp__weight_ready_o")
         end while (!cfg.vif.ff_inp_weight_ready_o);
@@ -305,6 +381,8 @@ class ita_stream_driver extends uvm_driver #(ita_stream_item);
         do begin
             @(posedge cfg.vif.clk_i);
             wait_cycles++;
+            if (!cfg.vif.ff_inp_bias_ready_o && native_vr_fault_armed())
+                inject_native_vr_fault();
             if (wait_cycles > 10000)
                 `uvm_fatal("STREAM_DRV", "timeout waiting for ff_inp_bias_ready_o")
         end while (!cfg.vif.ff_inp_bias_ready_o);
