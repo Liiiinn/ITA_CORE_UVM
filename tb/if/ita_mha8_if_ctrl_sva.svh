@@ -43,6 +43,16 @@ property ctrl_tile_nonzero;
         );
 endproperty : ctrl_tile_nonzero
 
+property ctrl_tile_in_range;
+    @(posedge clk_i) disable iff (!rst_ni)
+        ctrl_i.start |-> (
+            ctrl_i.tile_s <= 4 &&
+            ctrl_i.tile_e <= 4 &&
+            ctrl_i.tile_p <= 4 &&
+            ctrl_i.tile_f <= 4
+        );
+endproperty : ctrl_tile_in_range
+
 property ctrl_layer_legal;
     @(posedge clk_i) disable iff (!rst_ni)
         ctrl_i.start |-> ctrl_i.layer inside {Attention, Feedforward, Linear, SingleAttention};
@@ -61,7 +71,10 @@ endproperty : ctrl_start_pulse
 ctrl_start_known_a: assert property(ctrl_start_known);
 ctrl_known_a: assert property(ctrl_known);
 ctrl_requant_known_a: assert property(ctrl_requant_known);
-ctrl_tile_nonzero_a: assert property(ctrl_tile_nonzero);
+ctrl_tile_nonzero_a: assert property(ctrl_tile_nonzero)
+    else $error("[ITA_CTRL_TILE_ZERO] ctrl tile values must be nonzero");
+ctrl_tile_in_range_a: assert property(ctrl_tile_in_range)
+    else $error("[ITA_CTRL_TILE_RANGE] ctrl tile values must be <= 4");
 ctrl_layer_legal_a: assert property(ctrl_layer_legal);
 ctrl_activation_legal_a: assert property(ctrl_activation_legal);
 ctrl_start_pulse_a: assert property(ctrl_start_pulse);

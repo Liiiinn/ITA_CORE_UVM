@@ -155,6 +155,52 @@ class ita_mha8_predictor extends uvm_component;
         endcase
     endfunction : expected_beats_per_segment
 
+    function bit is_source_kind_step_legal(step_e step, ita_stream_kind_e kind);
+        case (kind)
+            ITA_STREAM_HEAD_INPUT,
+            ITA_STREAM_HEAD_WEIGHT,
+            ITA_STREAM_HEAD_BIAS:
+                return step inside {Q, K, V, QK, AV, OW, MatMul};
+
+            ITA_STREAM_FF_INPUT,
+            ITA_STREAM_FF_WEIGHT,
+            ITA_STREAM_FF_BIAS:
+                return step inside {F1, F2};
+
+            default:
+                return 1'b0;
+        endcase
+    endfunction : is_source_kind_step_legal
+
+    function bit is_source_metadata_legal(
+        step_e step,
+        ita_stream_kind_e kind,
+        int unsigned tile_id,
+        int unsigned inner_id
+    );
+        if (!is_source_kind_step_legal(step, kind))
+            return 1'b0;
+
+        case (step)
+            Q, K, V:
+                return tile_id < tile_s * tile_p && inner_id < tile_e;
+            QK:
+                return tile_id < tile_s * tile_s && inner_id < tile_p;
+            AV:
+                return tile_id < tile_s * tile_p && inner_id < tile_s;
+            OW:
+                return tile_id < tile_s * tile_e && inner_id < tile_p;
+            F1:
+                return tile_id < tile_s * tile_f && inner_id < tile_e;
+            F2:
+                return tile_id < tile_s * tile_e && inner_id < tile_f;
+            MatMul:
+                return tile_id < tile_s * tile_p && inner_id < tile_e;
+            default:
+                return 1'b0;
+        endcase
+    endfunction : is_source_metadata_legal
+
     function bit is_output_inner_legal(step_e step, int unsigned inner_id);
         case (step)
             Q, K, V:

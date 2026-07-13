@@ -42,6 +42,8 @@ param(
     [string]$TileFOverride = "",
     [switch]$EnableCoverage,
     [string]$CoverageUcdb = "",
+    [switch]$EnableCodeCoverage,
+    [string]$CodeCoverageSpec = "sbceft",
     [switch]$GenerateVectors,
     [switch]$NoGenerateVectors,
     [switch]$CompareLinear,
@@ -280,7 +282,12 @@ if ($RunGenerateVectors) {
     }
 }
 
-& (Join-Path $ScriptDir "compile.ps1") -QuestaBin $QuestaBin -UvmHome $UvmHome -DryRun:$DryRun
+& (Join-Path $ScriptDir "compile.ps1") `
+    -QuestaBin $QuestaBin `
+    -UvmHome $UvmHome `
+    -EnableCodeCoverage:$EnableCodeCoverage `
+    -CodeCoverageSpec $CodeCoverageSpec `
+    -DryRun:$DryRun
 
 $VsimTileS = $TileS
 $VsimTileE = $TileE
@@ -300,7 +307,7 @@ if ($TileFOverride -ne "") {
 }
 
 $vsim = Resolve-Tool "vsim.exe"
-$CoverageEnabled = ($EnableCoverage -or $CoverageUcdb -ne "")
+$CoverageEnabled = ($EnableCoverage -or $EnableCodeCoverage -or $CoverageUcdb -ne "")
 $vsimArgs = @(
     "-c",
     "-lib", "work",

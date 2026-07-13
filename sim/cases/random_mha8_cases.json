@@ -2,9 +2,501 @@
   "cases": [
     {
       "E": 128,
-      "F": 128,
+      "F": 256,
       "H": 8,
       "P": 64,
+      "S": 256,
+      "activation": "gelu",
+      "bias": true,
+      "category": "legal_random",
+      "dut": "ita_mha8",
+      "flow": {
+        "compare": true,
+        "generate_vectors": true,
+        "generated_simvectors": true,
+        "sink_backpressure": {
+          "enable": false,
+          "ready_high_max": 1,
+          "ready_high_min": 1,
+          "ready_low_max": 0,
+          "ready_low_min": 0
+        },
+        "source_gap": {
+          "enable": false,
+          "max": 0,
+          "min": 0
+        },
+        "test_name": "ita_mha8_attn_directed_test",
+        "vector_source": "pyita-q"
+      },
+      "layer": "AttentionFeedforward",
+      "name": "cr_000_attnff_gelu_s256_e128_p64_f256_h8_b1_seed918247488",
+      "paths": {
+        "standalone_dir": "ITA/simvectors/data_S256_E128_P64_F256_H8_B1_Gelu/standalone",
+        "uvm_manifest": "ITA_CORE_UVM/sim/logger/cr_000_attnff_gelu_s256_e128_p64_f256_h8_b1_seed918247488_manifest.json",
+        "uvm_requant": "ITA_CORE_UVM/sim/logger/cr_000_attnff_gelu_s256_e128_p64_f256_h8_b1_seed918247488_requant.csv",
+        "uvm_stream": "ITA_CORE_UVM/sim/logger/cr_000_attnff_gelu_s256_e128_p64_f256_h8_b1_seed918247488_stream.csv",
+        "vector_root": "ITA/simvectors/data_S256_E128_P64_F256_H8_B1_Gelu"
+      },
+      "projection": "ATTNFF",
+      "seed": 918247488,
+      "smoke_ps1": {
+        "args": [
+          "-TestName",
+          "ita_mha8_attn_directed_test",
+          "-VectorSource",
+          "pyita-q",
+          "-Projection",
+          "ATTNFF",
+          "-Activation",
+          "Gelu",
+          "-PyitaDir",
+          "ITA/simvectors/data_S256_E128_P64_F256_H8_B1_Gelu/standalone",
+          "-Heads",
+          "8",
+          "-StreamName",
+          "cr_000_attnff_gelu_s256_e128_p64_f256_h8_b1_seed918247488_stream.csv",
+          "-ManifestName",
+          "cr_000_attnff_gelu_s256_e128_p64_f256_h8_b1_seed918247488_manifest.json",
+          "-RequantName",
+          "cr_000_attnff_gelu_s256_e128_p64_f256_h8_b1_seed918247488_requant.csv",
+          "-GenerateVectors"
+        ],
+        "future_plusargs": {
+          "ITA_READY_HIGH_MAX": 1,
+          "ITA_READY_HIGH_MIN": 1,
+          "ITA_READY_LOW_MAX": 0,
+          "ITA_READY_LOW_MIN": 0,
+          "ITA_SINK_BP_ENABLE": 0,
+          "ITA_SOURCE_GAP_ENABLE": 0,
+          "ITA_SOURCE_GAP_MAX": 0,
+          "ITA_SOURCE_GAP_MIN": 0,
+          "ntb_random_seed": 918247488
+        },
+        "script": "ITA_CORE_UVM/sim/scripts/smoke.ps1"
+      },
+      "spec_basis": "core_spec_observable",
+      "target": "ita_mha8_tb_top",
+      "tile_e": 2,
+      "tile_f": 4,
+      "tile_p": 1,
+      "tile_s": 4
+    },
+    {
+      "E": 192,
+      "F": 192,
+      "H": 8,
+      "P": 192,
+      "S": 128,
+      "activation": "gelu",
+      "bias": false,
+      "category": "legal_random",
+      "dut": "ita_mha8",
+      "flow": {
+        "compare": true,
+        "generate_vectors": true,
+        "generated_simvectors": true,
+        "sink_backpressure": {
+          "enable": false,
+          "ready_high_max": 1,
+          "ready_high_min": 1,
+          "ready_low_max": 0,
+          "ready_low_min": 0
+        },
+        "source_gap": {
+          "enable": false,
+          "max": 0,
+          "min": 0
+        },
+        "test_name": "ita_mha8_attn_directed_test",
+        "vector_source": "pyita-q"
+      },
+      "layer": "AttentionFeedforward",
+      "name": "cr_001_attnff_gelu_s128_e192_p192_f192_h8_b0_seed1669086093",
+      "paths": {
+        "standalone_dir": "ITA/simvectors/data_S128_E192_P192_F192_H8_B0_Gelu/standalone",
+        "uvm_manifest": "ITA_CORE_UVM/sim/logger/cr_001_attnff_gelu_s128_e192_p192_f192_h8_b0_seed1669086093_manifest.json",
+        "uvm_requant": "ITA_CORE_UVM/sim/logger/cr_001_attnff_gelu_s128_e192_p192_f192_h8_b0_seed1669086093_requant.csv",
+        "uvm_stream": "ITA_CORE_UVM/sim/logger/cr_001_attnff_gelu_s128_e192_p192_f192_h8_b0_seed1669086093_stream.csv",
+        "vector_root": "ITA/simvectors/data_S128_E192_P192_F192_H8_B0_Gelu"
+      },
+      "projection": "ATTNFF",
+      "seed": 1669086093,
+      "smoke_ps1": {
+        "args": [
+          "-TestName",
+          "ita_mha8_attn_directed_test",
+          "-VectorSource",
+          "pyita-q",
+          "-Projection",
+          "ATTNFF",
+          "-Activation",
+          "Gelu",
+          "-PyitaDir",
+          "ITA/simvectors/data_S128_E192_P192_F192_H8_B0_Gelu/standalone",
+          "-Heads",
+          "8",
+          "-StreamName",
+          "cr_001_attnff_gelu_s128_e192_p192_f192_h8_b0_seed1669086093_stream.csv",
+          "-ManifestName",
+          "cr_001_attnff_gelu_s128_e192_p192_f192_h8_b0_seed1669086093_manifest.json",
+          "-RequantName",
+          "cr_001_attnff_gelu_s128_e192_p192_f192_h8_b0_seed1669086093_requant.csv",
+          "-GenerateVectors"
+        ],
+        "future_plusargs": {
+          "ITA_READY_HIGH_MAX": 1,
+          "ITA_READY_HIGH_MIN": 1,
+          "ITA_READY_LOW_MAX": 0,
+          "ITA_READY_LOW_MIN": 0,
+          "ITA_SINK_BP_ENABLE": 0,
+          "ITA_SOURCE_GAP_ENABLE": 0,
+          "ITA_SOURCE_GAP_MAX": 0,
+          "ITA_SOURCE_GAP_MIN": 0,
+          "ntb_random_seed": 1669086093
+        },
+        "script": "ITA_CORE_UVM/sim/scripts/smoke.ps1"
+      },
+      "spec_basis": "core_spec_observable",
+      "target": "ita_mha8_tb_top",
+      "tile_e": 3,
+      "tile_f": 3,
+      "tile_p": 3,
+      "tile_s": 2
+    },
+    {
+      "E": 64,
+      "F": 256,
+      "H": 8,
+      "P": 256,
+      "S": 256,
+      "activation": "identity",
+      "bias": true,
+      "category": "legal_random",
+      "dut": "ita_mha8",
+      "flow": {
+        "compare": true,
+        "generate_vectors": true,
+        "generated_simvectors": true,
+        "sink_backpressure": {
+          "enable": false,
+          "ready_high_max": 1,
+          "ready_high_min": 1,
+          "ready_low_max": 0,
+          "ready_low_min": 0
+        },
+        "source_gap": {
+          "enable": false,
+          "max": 0,
+          "min": 0
+        },
+        "test_name": "ita_mha8_attn_directed_test",
+        "vector_source": "pyita-q"
+      },
+      "layer": "AttentionFeedforward",
+      "name": "cr_002_attnff_identity_s256_e64_p256_f256_h8_b1_seed674625912",
+      "paths": {
+        "standalone_dir": "ITA/simvectors/data_S256_E64_P256_F256_H8_B1_Identity/standalone",
+        "uvm_manifest": "ITA_CORE_UVM/sim/logger/cr_002_attnff_identity_s256_e64_p256_f256_h8_b1_seed674625912_manifest.json",
+        "uvm_requant": "ITA_CORE_UVM/sim/logger/cr_002_attnff_identity_s256_e64_p256_f256_h8_b1_seed674625912_requant.csv",
+        "uvm_stream": "ITA_CORE_UVM/sim/logger/cr_002_attnff_identity_s256_e64_p256_f256_h8_b1_seed674625912_stream.csv",
+        "vector_root": "ITA/simvectors/data_S256_E64_P256_F256_H8_B1_Identity"
+      },
+      "projection": "ATTNFF",
+      "seed": 674625912,
+      "smoke_ps1": {
+        "args": [
+          "-TestName",
+          "ita_mha8_attn_directed_test",
+          "-VectorSource",
+          "pyita-q",
+          "-Projection",
+          "ATTNFF",
+          "-Activation",
+          "Identity",
+          "-PyitaDir",
+          "ITA/simvectors/data_S256_E64_P256_F256_H8_B1_Identity/standalone",
+          "-Heads",
+          "8",
+          "-StreamName",
+          "cr_002_attnff_identity_s256_e64_p256_f256_h8_b1_seed674625912_stream.csv",
+          "-ManifestName",
+          "cr_002_attnff_identity_s256_e64_p256_f256_h8_b1_seed674625912_manifest.json",
+          "-RequantName",
+          "cr_002_attnff_identity_s256_e64_p256_f256_h8_b1_seed674625912_requant.csv",
+          "-GenerateVectors"
+        ],
+        "future_plusargs": {
+          "ITA_READY_HIGH_MAX": 1,
+          "ITA_READY_HIGH_MIN": 1,
+          "ITA_READY_LOW_MAX": 0,
+          "ITA_READY_LOW_MIN": 0,
+          "ITA_SINK_BP_ENABLE": 0,
+          "ITA_SOURCE_GAP_ENABLE": 0,
+          "ITA_SOURCE_GAP_MAX": 0,
+          "ITA_SOURCE_GAP_MIN": 0,
+          "ntb_random_seed": 674625912
+        },
+        "script": "ITA_CORE_UVM/sim/scripts/smoke.ps1"
+      },
+      "spec_basis": "core_spec_observable",
+      "target": "ita_mha8_tb_top",
+      "tile_e": 1,
+      "tile_f": 4,
+      "tile_p": 4,
+      "tile_s": 4
+    },
+    {
+      "E": 256,
+      "F": 192,
+      "H": 8,
+      "P": 128,
+      "S": 192,
+      "activation": "gelu",
+      "bias": true,
+      "category": "legal_random",
+      "dut": "ita_mha8",
+      "flow": {
+        "compare": true,
+        "generate_vectors": true,
+        "generated_simvectors": true,
+        "sink_backpressure": {
+          "enable": false,
+          "ready_high_max": 1,
+          "ready_high_min": 1,
+          "ready_low_max": 0,
+          "ready_low_min": 0
+        },
+        "source_gap": {
+          "enable": false,
+          "max": 0,
+          "min": 0
+        },
+        "test_name": "ita_mha8_attn_directed_test",
+        "vector_source": "pyita-q"
+      },
+      "layer": "AttentionFeedforward",
+      "name": "cr_003_attnff_gelu_s192_e256_p128_f192_h8_b1_seed999872393",
+      "paths": {
+        "standalone_dir": "ITA/simvectors/data_S192_E256_P128_F192_H8_B1_Gelu/standalone",
+        "uvm_manifest": "ITA_CORE_UVM/sim/logger/cr_003_attnff_gelu_s192_e256_p128_f192_h8_b1_seed999872393_manifest.json",
+        "uvm_requant": "ITA_CORE_UVM/sim/logger/cr_003_attnff_gelu_s192_e256_p128_f192_h8_b1_seed999872393_requant.csv",
+        "uvm_stream": "ITA_CORE_UVM/sim/logger/cr_003_attnff_gelu_s192_e256_p128_f192_h8_b1_seed999872393_stream.csv",
+        "vector_root": "ITA/simvectors/data_S192_E256_P128_F192_H8_B1_Gelu"
+      },
+      "projection": "ATTNFF",
+      "seed": 999872393,
+      "smoke_ps1": {
+        "args": [
+          "-TestName",
+          "ita_mha8_attn_directed_test",
+          "-VectorSource",
+          "pyita-q",
+          "-Projection",
+          "ATTNFF",
+          "-Activation",
+          "Gelu",
+          "-PyitaDir",
+          "ITA/simvectors/data_S192_E256_P128_F192_H8_B1_Gelu/standalone",
+          "-Heads",
+          "8",
+          "-StreamName",
+          "cr_003_attnff_gelu_s192_e256_p128_f192_h8_b1_seed999872393_stream.csv",
+          "-ManifestName",
+          "cr_003_attnff_gelu_s192_e256_p128_f192_h8_b1_seed999872393_manifest.json",
+          "-RequantName",
+          "cr_003_attnff_gelu_s192_e256_p128_f192_h8_b1_seed999872393_requant.csv",
+          "-GenerateVectors"
+        ],
+        "future_plusargs": {
+          "ITA_READY_HIGH_MAX": 1,
+          "ITA_READY_HIGH_MIN": 1,
+          "ITA_READY_LOW_MAX": 0,
+          "ITA_READY_LOW_MIN": 0,
+          "ITA_SINK_BP_ENABLE": 0,
+          "ITA_SOURCE_GAP_ENABLE": 0,
+          "ITA_SOURCE_GAP_MAX": 0,
+          "ITA_SOURCE_GAP_MIN": 0,
+          "ntb_random_seed": 999872393
+        },
+        "script": "ITA_CORE_UVM/sim/scripts/smoke.ps1"
+      },
+      "spec_basis": "core_spec_observable",
+      "target": "ita_mha8_tb_top",
+      "tile_e": 4,
+      "tile_f": 3,
+      "tile_p": 2,
+      "tile_s": 3
+    },
+    {
+      "E": 256,
+      "F": 128,
+      "H": 8,
+      "P": 256,
+      "S": 192,
+      "activation": "identity",
+      "bias": true,
+      "category": "legal_random",
+      "dut": "ita_mha8",
+      "flow": {
+        "compare": true,
+        "generate_vectors": true,
+        "generated_simvectors": true,
+        "sink_backpressure": {
+          "enable": false,
+          "ready_high_max": 1,
+          "ready_high_min": 1,
+          "ready_low_max": 0,
+          "ready_low_min": 0
+        },
+        "source_gap": {
+          "enable": false,
+          "max": 0,
+          "min": 0
+        },
+        "test_name": "ita_mha8_attn_directed_test",
+        "vector_source": "pyita-q"
+      },
+      "layer": "AttentionFeedforward",
+      "name": "cr_004_attnff_identity_s192_e256_p256_f128_h8_b1_seed1257484521",
+      "paths": {
+        "standalone_dir": "ITA/simvectors/data_S192_E256_P256_F128_H8_B1_Identity/standalone",
+        "uvm_manifest": "ITA_CORE_UVM/sim/logger/cr_004_attnff_identity_s192_e256_p256_f128_h8_b1_seed1257484521_manifest.json",
+        "uvm_requant": "ITA_CORE_UVM/sim/logger/cr_004_attnff_identity_s192_e256_p256_f128_h8_b1_seed1257484521_requant.csv",
+        "uvm_stream": "ITA_CORE_UVM/sim/logger/cr_004_attnff_identity_s192_e256_p256_f128_h8_b1_seed1257484521_stream.csv",
+        "vector_root": "ITA/simvectors/data_S192_E256_P256_F128_H8_B1_Identity"
+      },
+      "projection": "ATTNFF",
+      "seed": 1257484521,
+      "smoke_ps1": {
+        "args": [
+          "-TestName",
+          "ita_mha8_attn_directed_test",
+          "-VectorSource",
+          "pyita-q",
+          "-Projection",
+          "ATTNFF",
+          "-Activation",
+          "Identity",
+          "-PyitaDir",
+          "ITA/simvectors/data_S192_E256_P256_F128_H8_B1_Identity/standalone",
+          "-Heads",
+          "8",
+          "-StreamName",
+          "cr_004_attnff_identity_s192_e256_p256_f128_h8_b1_seed1257484521_stream.csv",
+          "-ManifestName",
+          "cr_004_attnff_identity_s192_e256_p256_f128_h8_b1_seed1257484521_manifest.json",
+          "-RequantName",
+          "cr_004_attnff_identity_s192_e256_p256_f128_h8_b1_seed1257484521_requant.csv",
+          "-GenerateVectors"
+        ],
+        "future_plusargs": {
+          "ITA_READY_HIGH_MAX": 1,
+          "ITA_READY_HIGH_MIN": 1,
+          "ITA_READY_LOW_MAX": 0,
+          "ITA_READY_LOW_MIN": 0,
+          "ITA_SINK_BP_ENABLE": 0,
+          "ITA_SOURCE_GAP_ENABLE": 0,
+          "ITA_SOURCE_GAP_MAX": 0,
+          "ITA_SOURCE_GAP_MIN": 0,
+          "ntb_random_seed": 1257484521
+        },
+        "script": "ITA_CORE_UVM/sim/scripts/smoke.ps1"
+      },
+      "spec_basis": "core_spec_observable",
+      "target": "ita_mha8_tb_top",
+      "tile_e": 4,
+      "tile_f": 2,
+      "tile_p": 4,
+      "tile_s": 3
+    },
+    {
+      "E": 64,
+      "F": 128,
+      "H": 8,
+      "P": 128,
+      "S": 64,
+      "activation": "gelu",
+      "bias": true,
+      "category": "legal_random",
+      "dut": "ita_mha8",
+      "flow": {
+        "compare": true,
+        "generate_vectors": true,
+        "generated_simvectors": true,
+        "sink_backpressure": {
+          "enable": false,
+          "ready_high_max": 1,
+          "ready_high_min": 1,
+          "ready_low_max": 0,
+          "ready_low_min": 0
+        },
+        "source_gap": {
+          "enable": false,
+          "max": 0,
+          "min": 0
+        },
+        "test_name": "ita_mha8_attn_directed_test",
+        "vector_source": "pyita-q"
+      },
+      "layer": "AttentionFeedforward",
+      "name": "cr_005_attnff_gelu_s64_e64_p128_f128_h8_b1_seed1983075268",
+      "paths": {
+        "standalone_dir": "ITA/simvectors/data_S64_E64_P128_F128_H8_B1_Gelu/standalone",
+        "uvm_manifest": "ITA_CORE_UVM/sim/logger/cr_005_attnff_gelu_s64_e64_p128_f128_h8_b1_seed1983075268_manifest.json",
+        "uvm_requant": "ITA_CORE_UVM/sim/logger/cr_005_attnff_gelu_s64_e64_p128_f128_h8_b1_seed1983075268_requant.csv",
+        "uvm_stream": "ITA_CORE_UVM/sim/logger/cr_005_attnff_gelu_s64_e64_p128_f128_h8_b1_seed1983075268_stream.csv",
+        "vector_root": "ITA/simvectors/data_S64_E64_P128_F128_H8_B1_Gelu"
+      },
+      "projection": "ATTNFF",
+      "seed": 1983075268,
+      "smoke_ps1": {
+        "args": [
+          "-TestName",
+          "ita_mha8_attn_directed_test",
+          "-VectorSource",
+          "pyita-q",
+          "-Projection",
+          "ATTNFF",
+          "-Activation",
+          "Gelu",
+          "-PyitaDir",
+          "ITA/simvectors/data_S64_E64_P128_F128_H8_B1_Gelu/standalone",
+          "-Heads",
+          "8",
+          "-StreamName",
+          "cr_005_attnff_gelu_s64_e64_p128_f128_h8_b1_seed1983075268_stream.csv",
+          "-ManifestName",
+          "cr_005_attnff_gelu_s64_e64_p128_f128_h8_b1_seed1983075268_manifest.json",
+          "-RequantName",
+          "cr_005_attnff_gelu_s64_e64_p128_f128_h8_b1_seed1983075268_requant.csv",
+          "-GenerateVectors"
+        ],
+        "future_plusargs": {
+          "ITA_READY_HIGH_MAX": 1,
+          "ITA_READY_HIGH_MIN": 1,
+          "ITA_READY_LOW_MAX": 0,
+          "ITA_READY_LOW_MIN": 0,
+          "ITA_SINK_BP_ENABLE": 0,
+          "ITA_SOURCE_GAP_ENABLE": 0,
+          "ITA_SOURCE_GAP_MAX": 0,
+          "ITA_SOURCE_GAP_MIN": 0,
+          "ntb_random_seed": 1983075268
+        },
+        "script": "ITA_CORE_UVM/sim/scripts/smoke.ps1"
+      },
+      "spec_basis": "core_spec_observable",
+      "target": "ita_mha8_tb_top",
+      "tile_e": 1,
+      "tile_f": 2,
+      "tile_p": 2,
+      "tile_s": 1
+    },
+    {
+      "E": 64,
+      "F": 64,
+      "H": 8,
+      "P": 128,
       "S": 64,
       "activation": "identity",
       "bias": false,
@@ -30,16 +522,16 @@
         "vector_source": "pyita-q"
       },
       "layer": "AttentionFeedforward",
-      "name": "cr_000_attnff_identity_s64_e128_p64_f128_h8_b0_seed574832346",
+      "name": "cr_006_attnff_identity_s64_e64_p128_f64_h8_b0_seed973206041",
       "paths": {
-        "standalone_dir": "ITA/simvectors/data_S64_E128_P64_F128_H8_B0_Identity/standalone",
-        "uvm_manifest": "ITA_CORE_UVM/sim/logger/cr_000_attnff_identity_s64_e128_p64_f128_h8_b0_seed574832346_manifest.json",
-        "uvm_requant": "ITA_CORE_UVM/sim/logger/cr_000_attnff_identity_s64_e128_p64_f128_h8_b0_seed574832346_requant.csv",
-        "uvm_stream": "ITA_CORE_UVM/sim/logger/cr_000_attnff_identity_s64_e128_p64_f128_h8_b0_seed574832346_stream.csv",
-        "vector_root": "ITA/simvectors/data_S64_E128_P64_F128_H8_B0_Identity"
+        "standalone_dir": "ITA/simvectors/data_S64_E64_P128_F64_H8_B0_Identity/standalone",
+        "uvm_manifest": "ITA_CORE_UVM/sim/logger/cr_006_attnff_identity_s64_e64_p128_f64_h8_b0_seed973206041_manifest.json",
+        "uvm_requant": "ITA_CORE_UVM/sim/logger/cr_006_attnff_identity_s64_e64_p128_f64_h8_b0_seed973206041_requant.csv",
+        "uvm_stream": "ITA_CORE_UVM/sim/logger/cr_006_attnff_identity_s64_e64_p128_f64_h8_b0_seed973206041_stream.csv",
+        "vector_root": "ITA/simvectors/data_S64_E64_P128_F64_H8_B0_Identity"
       },
       "projection": "ATTNFF",
-      "seed": 574832346,
+      "seed": 973206041,
       "smoke_ps1": {
         "args": [
           "-TestName",
@@ -51,15 +543,15 @@
           "-Activation",
           "Identity",
           "-PyitaDir",
-          "ITA/simvectors/data_S64_E128_P64_F128_H8_B0_Identity/standalone",
+          "ITA/simvectors/data_S64_E64_P128_F64_H8_B0_Identity/standalone",
           "-Heads",
           "8",
           "-StreamName",
-          "cr_000_attnff_identity_s64_e128_p64_f128_h8_b0_seed574832346_stream.csv",
+          "cr_006_attnff_identity_s64_e64_p128_f64_h8_b0_seed973206041_stream.csv",
           "-ManifestName",
-          "cr_000_attnff_identity_s64_e128_p64_f128_h8_b0_seed574832346_manifest.json",
+          "cr_006_attnff_identity_s64_e64_p128_f64_h8_b0_seed973206041_manifest.json",
           "-RequantName",
-          "cr_000_attnff_identity_s64_e128_p64_f128_h8_b0_seed574832346_requant.csv",
+          "cr_006_attnff_identity_s64_e64_p128_f64_h8_b0_seed973206041_requant.csv",
           "-GenerateVectors"
         ],
         "future_plusargs": {
@@ -71,107 +563,25 @@
           "ITA_SOURCE_GAP_ENABLE": 0,
           "ITA_SOURCE_GAP_MAX": 0,
           "ITA_SOURCE_GAP_MIN": 0,
-          "ntb_random_seed": 574832346
+          "ntb_random_seed": 973206041
         },
         "script": "ITA_CORE_UVM/sim/scripts/smoke.ps1"
       },
       "spec_basis": "core_spec_observable",
       "target": "ita_mha8_tb_top",
-      "tile_e": 2,
-      "tile_f": 2,
-      "tile_p": 1,
+      "tile_e": 1,
+      "tile_f": 1,
+      "tile_p": 2,
       "tile_s": 1
     },
     {
       "E": 128,
-      "F": 128,
-      "H": 8,
-      "P": 256,
-      "S": 64,
-      "activation": "identity",
-      "bias": true,
-      "category": "legal_random",
-      "dut": "ita_mha8",
-      "flow": {
-        "compare": true,
-        "generate_vectors": true,
-        "generated_simvectors": true,
-        "sink_backpressure": {
-          "enable": false,
-          "ready_high_max": 1,
-          "ready_high_min": 1,
-          "ready_low_max": 0,
-          "ready_low_min": 0
-        },
-        "source_gap": {
-          "enable": false,
-          "max": 0,
-          "min": 0
-        },
-        "test_name": "ita_mha8_attn_directed_test",
-        "vector_source": "pyita-q"
-      },
-      "layer": "AttentionFeedforward",
-      "name": "cr_001_attnff_identity_s64_e128_p256_f128_h8_b1_seed1651321279",
-      "paths": {
-        "standalone_dir": "ITA/simvectors/data_S64_E128_P256_F128_H8_B1_Identity/standalone",
-        "uvm_manifest": "ITA_CORE_UVM/sim/logger/cr_001_attnff_identity_s64_e128_p256_f128_h8_b1_seed1651321279_manifest.json",
-        "uvm_requant": "ITA_CORE_UVM/sim/logger/cr_001_attnff_identity_s64_e128_p256_f128_h8_b1_seed1651321279_requant.csv",
-        "uvm_stream": "ITA_CORE_UVM/sim/logger/cr_001_attnff_identity_s64_e128_p256_f128_h8_b1_seed1651321279_stream.csv",
-        "vector_root": "ITA/simvectors/data_S64_E128_P256_F128_H8_B1_Identity"
-      },
-      "projection": "ATTNFF",
-      "seed": 1651321279,
-      "smoke_ps1": {
-        "args": [
-          "-TestName",
-          "ita_mha8_attn_directed_test",
-          "-VectorSource",
-          "pyita-q",
-          "-Projection",
-          "ATTNFF",
-          "-Activation",
-          "Identity",
-          "-PyitaDir",
-          "ITA/simvectors/data_S64_E128_P256_F128_H8_B1_Identity/standalone",
-          "-Heads",
-          "8",
-          "-StreamName",
-          "cr_001_attnff_identity_s64_e128_p256_f128_h8_b1_seed1651321279_stream.csv",
-          "-ManifestName",
-          "cr_001_attnff_identity_s64_e128_p256_f128_h8_b1_seed1651321279_manifest.json",
-          "-RequantName",
-          "cr_001_attnff_identity_s64_e128_p256_f128_h8_b1_seed1651321279_requant.csv",
-          "-GenerateVectors"
-        ],
-        "future_plusargs": {
-          "ITA_READY_HIGH_MAX": 1,
-          "ITA_READY_HIGH_MIN": 1,
-          "ITA_READY_LOW_MAX": 0,
-          "ITA_READY_LOW_MIN": 0,
-          "ITA_SINK_BP_ENABLE": 0,
-          "ITA_SOURCE_GAP_ENABLE": 0,
-          "ITA_SOURCE_GAP_MAX": 0,
-          "ITA_SOURCE_GAP_MIN": 0,
-          "ntb_random_seed": 1651321279
-        },
-        "script": "ITA_CORE_UVM/sim/scripts/smoke.ps1"
-      },
-      "spec_basis": "core_spec_observable",
-      "target": "ita_mha8_tb_top",
-      "tile_e": 2,
-      "tile_f": 2,
-      "tile_p": 4,
-      "tile_s": 1
-    },
-    {
-      "E": 64,
-      "F": 256,
+      "F": 192,
       "H": 8,
       "P": 192,
-      "S": 192,
+      "S": 128,
       "activation": "relu",
-      "bias": true,
+      "bias": false,
       "category": "legal_random",
       "dut": "ita_mha8",
       "flow": {
@@ -194,16 +604,16 @@
         "vector_source": "pyita-q"
       },
       "layer": "AttentionFeedforward",
-      "name": "cr_002_attnff_relu_s192_e64_p192_f256_h8_b1_seed572419962",
+      "name": "cr_007_attnff_relu_s128_e128_p192_f192_h8_b0_seed776492205",
       "paths": {
-        "standalone_dir": "ITA/simvectors/data_S192_E64_P192_F256_H8_B1_Relu/standalone",
-        "uvm_manifest": "ITA_CORE_UVM/sim/logger/cr_002_attnff_relu_s192_e64_p192_f256_h8_b1_seed572419962_manifest.json",
-        "uvm_requant": "ITA_CORE_UVM/sim/logger/cr_002_attnff_relu_s192_e64_p192_f256_h8_b1_seed572419962_requant.csv",
-        "uvm_stream": "ITA_CORE_UVM/sim/logger/cr_002_attnff_relu_s192_e64_p192_f256_h8_b1_seed572419962_stream.csv",
-        "vector_root": "ITA/simvectors/data_S192_E64_P192_F256_H8_B1_Relu"
+        "standalone_dir": "ITA/simvectors/data_S128_E128_P192_F192_H8_B0_Relu/standalone",
+        "uvm_manifest": "ITA_CORE_UVM/sim/logger/cr_007_attnff_relu_s128_e128_p192_f192_h8_b0_seed776492205_manifest.json",
+        "uvm_requant": "ITA_CORE_UVM/sim/logger/cr_007_attnff_relu_s128_e128_p192_f192_h8_b0_seed776492205_requant.csv",
+        "uvm_stream": "ITA_CORE_UVM/sim/logger/cr_007_attnff_relu_s128_e128_p192_f192_h8_b0_seed776492205_stream.csv",
+        "vector_root": "ITA/simvectors/data_S128_E128_P192_F192_H8_B0_Relu"
       },
       "projection": "ATTNFF",
-      "seed": 572419962,
+      "seed": 776492205,
       "smoke_ps1": {
         "args": [
           "-TestName",
@@ -215,15 +625,15 @@
           "-Activation",
           "Relu",
           "-PyitaDir",
-          "ITA/simvectors/data_S192_E64_P192_F256_H8_B1_Relu/standalone",
+          "ITA/simvectors/data_S128_E128_P192_F192_H8_B0_Relu/standalone",
           "-Heads",
           "8",
           "-StreamName",
-          "cr_002_attnff_relu_s192_e64_p192_f256_h8_b1_seed572419962_stream.csv",
+          "cr_007_attnff_relu_s128_e128_p192_f192_h8_b0_seed776492205_stream.csv",
           "-ManifestName",
-          "cr_002_attnff_relu_s192_e64_p192_f256_h8_b1_seed572419962_manifest.json",
+          "cr_007_attnff_relu_s128_e128_p192_f192_h8_b0_seed776492205_manifest.json",
           "-RequantName",
-          "cr_002_attnff_relu_s192_e64_p192_f256_h8_b1_seed572419962_requant.csv",
+          "cr_007_attnff_relu_s128_e128_p192_f192_h8_b0_seed776492205_requant.csv",
           "-GenerateVectors"
         ],
         "future_plusargs": {
@@ -235,25 +645,25 @@
           "ITA_SOURCE_GAP_ENABLE": 0,
           "ITA_SOURCE_GAP_MAX": 0,
           "ITA_SOURCE_GAP_MIN": 0,
-          "ntb_random_seed": 572419962
+          "ntb_random_seed": 776492205
         },
         "script": "ITA_CORE_UVM/sim/scripts/smoke.ps1"
       },
       "spec_basis": "core_spec_observable",
       "target": "ita_mha8_tb_top",
-      "tile_e": 1,
-      "tile_f": 4,
+      "tile_e": 2,
+      "tile_f": 3,
       "tile_p": 3,
-      "tile_s": 3
+      "tile_s": 2
     },
     {
       "E": 192,
       "F": 64,
       "H": 8,
-      "P": 128,
+      "P": 64,
       "S": 64,
-      "activation": "identity",
-      "bias": true,
+      "activation": "gelu",
+      "bias": false,
       "category": "legal_random",
       "dut": "ita_mha8",
       "flow": {
@@ -276,16 +686,16 @@
         "vector_source": "pyita-q"
       },
       "layer": "AttentionFeedforward",
-      "name": "cr_003_attnff_identity_s64_e192_p128_f64_h8_b1_seed1800672587",
+      "name": "cr_008_attnff_gelu_s64_e192_p64_f64_h8_b0_seed643744727",
       "paths": {
-        "standalone_dir": "ITA/simvectors/data_S64_E192_P128_F64_H8_B1_Identity/standalone",
-        "uvm_manifest": "ITA_CORE_UVM/sim/logger/cr_003_attnff_identity_s64_e192_p128_f64_h8_b1_seed1800672587_manifest.json",
-        "uvm_requant": "ITA_CORE_UVM/sim/logger/cr_003_attnff_identity_s64_e192_p128_f64_h8_b1_seed1800672587_requant.csv",
-        "uvm_stream": "ITA_CORE_UVM/sim/logger/cr_003_attnff_identity_s64_e192_p128_f64_h8_b1_seed1800672587_stream.csv",
-        "vector_root": "ITA/simvectors/data_S64_E192_P128_F64_H8_B1_Identity"
+        "standalone_dir": "ITA/simvectors/data_S64_E192_P64_F64_H8_B0_Gelu/standalone",
+        "uvm_manifest": "ITA_CORE_UVM/sim/logger/cr_008_attnff_gelu_s64_e192_p64_f64_h8_b0_seed643744727_manifest.json",
+        "uvm_requant": "ITA_CORE_UVM/sim/logger/cr_008_attnff_gelu_s64_e192_p64_f64_h8_b0_seed643744727_requant.csv",
+        "uvm_stream": "ITA_CORE_UVM/sim/logger/cr_008_attnff_gelu_s64_e192_p64_f64_h8_b0_seed643744727_stream.csv",
+        "vector_root": "ITA/simvectors/data_S64_E192_P64_F64_H8_B0_Gelu"
       },
       "projection": "ATTNFF",
-      "seed": 1800672587,
+      "seed": 643744727,
       "smoke_ps1": {
         "args": [
           "-TestName",
@@ -295,17 +705,17 @@
           "-Projection",
           "ATTNFF",
           "-Activation",
-          "Identity",
+          "Gelu",
           "-PyitaDir",
-          "ITA/simvectors/data_S64_E192_P128_F64_H8_B1_Identity/standalone",
+          "ITA/simvectors/data_S64_E192_P64_F64_H8_B0_Gelu/standalone",
           "-Heads",
           "8",
           "-StreamName",
-          "cr_003_attnff_identity_s64_e192_p128_f64_h8_b1_seed1800672587_stream.csv",
+          "cr_008_attnff_gelu_s64_e192_p64_f64_h8_b0_seed643744727_stream.csv",
           "-ManifestName",
-          "cr_003_attnff_identity_s64_e192_p128_f64_h8_b1_seed1800672587_manifest.json",
+          "cr_008_attnff_gelu_s64_e192_p64_f64_h8_b0_seed643744727_manifest.json",
           "-RequantName",
-          "cr_003_attnff_identity_s64_e192_p128_f64_h8_b1_seed1800672587_requant.csv",
+          "cr_008_attnff_gelu_s64_e192_p64_f64_h8_b0_seed643744727_requant.csv",
           "-GenerateVectors"
         ],
         "future_plusargs": {
@@ -317,7 +727,7 @@
           "ITA_SOURCE_GAP_ENABLE": 0,
           "ITA_SOURCE_GAP_MAX": 0,
           "ITA_SOURCE_GAP_MIN": 0,
-          "ntb_random_seed": 1800672587
+          "ntb_random_seed": 643744727
         },
         "script": "ITA_CORE_UVM/sim/scripts/smoke.ps1"
       },
@@ -325,179 +735,15 @@
       "target": "ita_mha8_tb_top",
       "tile_e": 3,
       "tile_f": 1,
-      "tile_p": 2,
+      "tile_p": 1,
       "tile_s": 1
     },
     {
-      "E": 64,
+      "E": 128,
       "F": 128,
       "H": 8,
-      "P": 256,
-      "S": 64,
-      "activation": "relu",
-      "bias": true,
-      "category": "legal_random",
-      "dut": "ita_mha8",
-      "flow": {
-        "compare": true,
-        "generate_vectors": true,
-        "generated_simvectors": true,
-        "sink_backpressure": {
-          "enable": false,
-          "ready_high_max": 1,
-          "ready_high_min": 1,
-          "ready_low_max": 0,
-          "ready_low_min": 0
-        },
-        "source_gap": {
-          "enable": false,
-          "max": 0,
-          "min": 0
-        },
-        "test_name": "ita_mha8_attn_directed_test",
-        "vector_source": "pyita-q"
-      },
-      "layer": "AttentionFeedforward",
-      "name": "cr_004_attnff_relu_s64_e64_p256_f128_h8_b1_seed814163307",
-      "paths": {
-        "standalone_dir": "ITA/simvectors/data_S64_E64_P256_F128_H8_B1_Relu/standalone",
-        "uvm_manifest": "ITA_CORE_UVM/sim/logger/cr_004_attnff_relu_s64_e64_p256_f128_h8_b1_seed814163307_manifest.json",
-        "uvm_requant": "ITA_CORE_UVM/sim/logger/cr_004_attnff_relu_s64_e64_p256_f128_h8_b1_seed814163307_requant.csv",
-        "uvm_stream": "ITA_CORE_UVM/sim/logger/cr_004_attnff_relu_s64_e64_p256_f128_h8_b1_seed814163307_stream.csv",
-        "vector_root": "ITA/simvectors/data_S64_E64_P256_F128_H8_B1_Relu"
-      },
-      "projection": "ATTNFF",
-      "seed": 814163307,
-      "smoke_ps1": {
-        "args": [
-          "-TestName",
-          "ita_mha8_attn_directed_test",
-          "-VectorSource",
-          "pyita-q",
-          "-Projection",
-          "ATTNFF",
-          "-Activation",
-          "Relu",
-          "-PyitaDir",
-          "ITA/simvectors/data_S64_E64_P256_F128_H8_B1_Relu/standalone",
-          "-Heads",
-          "8",
-          "-StreamName",
-          "cr_004_attnff_relu_s64_e64_p256_f128_h8_b1_seed814163307_stream.csv",
-          "-ManifestName",
-          "cr_004_attnff_relu_s64_e64_p256_f128_h8_b1_seed814163307_manifest.json",
-          "-RequantName",
-          "cr_004_attnff_relu_s64_e64_p256_f128_h8_b1_seed814163307_requant.csv",
-          "-GenerateVectors"
-        ],
-        "future_plusargs": {
-          "ITA_READY_HIGH_MAX": 1,
-          "ITA_READY_HIGH_MIN": 1,
-          "ITA_READY_LOW_MAX": 0,
-          "ITA_READY_LOW_MIN": 0,
-          "ITA_SINK_BP_ENABLE": 0,
-          "ITA_SOURCE_GAP_ENABLE": 0,
-          "ITA_SOURCE_GAP_MAX": 0,
-          "ITA_SOURCE_GAP_MIN": 0,
-          "ntb_random_seed": 814163307
-        },
-        "script": "ITA_CORE_UVM/sim/scripts/smoke.ps1"
-      },
-      "spec_basis": "core_spec_observable",
-      "target": "ita_mha8_tb_top",
-      "tile_e": 1,
-      "tile_f": 2,
-      "tile_p": 4,
-      "tile_s": 1
-    },
-    {
-      "E": 256,
-      "F": 256,
-      "H": 8,
-      "P": 128,
+      "P": 192,
       "S": 192,
-      "activation": "relu",
-      "bias": true,
-      "category": "legal_random",
-      "dut": "ita_mha8",
-      "flow": {
-        "compare": true,
-        "generate_vectors": true,
-        "generated_simvectors": true,
-        "sink_backpressure": {
-          "enable": false,
-          "ready_high_max": 1,
-          "ready_high_min": 1,
-          "ready_low_max": 0,
-          "ready_low_min": 0
-        },
-        "source_gap": {
-          "enable": false,
-          "max": 0,
-          "min": 0
-        },
-        "test_name": "ita_mha8_attn_directed_test",
-        "vector_source": "pyita-q"
-      },
-      "layer": "AttentionFeedforward",
-      "name": "cr_005_attnff_relu_s192_e256_p128_f256_h8_b1_seed1207570247",
-      "paths": {
-        "standalone_dir": "ITA/simvectors/data_S192_E256_P128_F256_H8_B1_Relu/standalone",
-        "uvm_manifest": "ITA_CORE_UVM/sim/logger/cr_005_attnff_relu_s192_e256_p128_f256_h8_b1_seed1207570247_manifest.json",
-        "uvm_requant": "ITA_CORE_UVM/sim/logger/cr_005_attnff_relu_s192_e256_p128_f256_h8_b1_seed1207570247_requant.csv",
-        "uvm_stream": "ITA_CORE_UVM/sim/logger/cr_005_attnff_relu_s192_e256_p128_f256_h8_b1_seed1207570247_stream.csv",
-        "vector_root": "ITA/simvectors/data_S192_E256_P128_F256_H8_B1_Relu"
-      },
-      "projection": "ATTNFF",
-      "seed": 1207570247,
-      "smoke_ps1": {
-        "args": [
-          "-TestName",
-          "ita_mha8_attn_directed_test",
-          "-VectorSource",
-          "pyita-q",
-          "-Projection",
-          "ATTNFF",
-          "-Activation",
-          "Relu",
-          "-PyitaDir",
-          "ITA/simvectors/data_S192_E256_P128_F256_H8_B1_Relu/standalone",
-          "-Heads",
-          "8",
-          "-StreamName",
-          "cr_005_attnff_relu_s192_e256_p128_f256_h8_b1_seed1207570247_stream.csv",
-          "-ManifestName",
-          "cr_005_attnff_relu_s192_e256_p128_f256_h8_b1_seed1207570247_manifest.json",
-          "-RequantName",
-          "cr_005_attnff_relu_s192_e256_p128_f256_h8_b1_seed1207570247_requant.csv",
-          "-GenerateVectors"
-        ],
-        "future_plusargs": {
-          "ITA_READY_HIGH_MAX": 1,
-          "ITA_READY_HIGH_MIN": 1,
-          "ITA_READY_LOW_MAX": 0,
-          "ITA_READY_LOW_MIN": 0,
-          "ITA_SINK_BP_ENABLE": 0,
-          "ITA_SOURCE_GAP_ENABLE": 0,
-          "ITA_SOURCE_GAP_MAX": 0,
-          "ITA_SOURCE_GAP_MIN": 0,
-          "ntb_random_seed": 1207570247
-        },
-        "script": "ITA_CORE_UVM/sim/scripts/smoke.ps1"
-      },
-      "spec_basis": "core_spec_observable",
-      "target": "ita_mha8_tb_top",
-      "tile_e": 4,
-      "tile_f": 4,
-      "tile_p": 2,
-      "tile_s": 3
-    },
-    {
-      "E": 256,
-      "F": 128,
-      "H": 8,
-      "P": 64,
-      "S": 128,
       "activation": "gelu",
       "bias": true,
       "category": "legal_random",
@@ -522,16 +768,16 @@
         "vector_source": "pyita-q"
       },
       "layer": "AttentionFeedforward",
-      "name": "cr_006_attnff_gelu_s128_e256_p64_f128_h8_b1_seed731858620",
+      "name": "cr_009_attnff_gelu_s192_e128_p192_f128_h8_b1_seed533492028",
       "paths": {
-        "standalone_dir": "ITA/simvectors/data_S128_E256_P64_F128_H8_B1_Gelu/standalone",
-        "uvm_manifest": "ITA_CORE_UVM/sim/logger/cr_006_attnff_gelu_s128_e256_p64_f128_h8_b1_seed731858620_manifest.json",
-        "uvm_requant": "ITA_CORE_UVM/sim/logger/cr_006_attnff_gelu_s128_e256_p64_f128_h8_b1_seed731858620_requant.csv",
-        "uvm_stream": "ITA_CORE_UVM/sim/logger/cr_006_attnff_gelu_s128_e256_p64_f128_h8_b1_seed731858620_stream.csv",
-        "vector_root": "ITA/simvectors/data_S128_E256_P64_F128_H8_B1_Gelu"
+        "standalone_dir": "ITA/simvectors/data_S192_E128_P192_F128_H8_B1_Gelu/standalone",
+        "uvm_manifest": "ITA_CORE_UVM/sim/logger/cr_009_attnff_gelu_s192_e128_p192_f128_h8_b1_seed533492028_manifest.json",
+        "uvm_requant": "ITA_CORE_UVM/sim/logger/cr_009_attnff_gelu_s192_e128_p192_f128_h8_b1_seed533492028_requant.csv",
+        "uvm_stream": "ITA_CORE_UVM/sim/logger/cr_009_attnff_gelu_s192_e128_p192_f128_h8_b1_seed533492028_stream.csv",
+        "vector_root": "ITA/simvectors/data_S192_E128_P192_F128_H8_B1_Gelu"
       },
       "projection": "ATTNFF",
-      "seed": 731858620,
+      "seed": 533492028,
       "smoke_ps1": {
         "args": [
           "-TestName",
@@ -543,15 +789,15 @@
           "-Activation",
           "Gelu",
           "-PyitaDir",
-          "ITA/simvectors/data_S128_E256_P64_F128_H8_B1_Gelu/standalone",
+          "ITA/simvectors/data_S192_E128_P192_F128_H8_B1_Gelu/standalone",
           "-Heads",
           "8",
           "-StreamName",
-          "cr_006_attnff_gelu_s128_e256_p64_f128_h8_b1_seed731858620_stream.csv",
+          "cr_009_attnff_gelu_s192_e128_p192_f128_h8_b1_seed533492028_stream.csv",
           "-ManifestName",
-          "cr_006_attnff_gelu_s128_e256_p64_f128_h8_b1_seed731858620_manifest.json",
+          "cr_009_attnff_gelu_s192_e128_p192_f128_h8_b1_seed533492028_manifest.json",
           "-RequantName",
-          "cr_006_attnff_gelu_s128_e256_p64_f128_h8_b1_seed731858620_requant.csv",
+          "cr_009_attnff_gelu_s192_e128_p192_f128_h8_b1_seed533492028_requant.csv",
           "-GenerateVectors"
         ],
         "future_plusargs": {
@@ -563,89 +809,7 @@
           "ITA_SOURCE_GAP_ENABLE": 0,
           "ITA_SOURCE_GAP_MAX": 0,
           "ITA_SOURCE_GAP_MIN": 0,
-          "ntb_random_seed": 731858620
-        },
-        "script": "ITA_CORE_UVM/sim/scripts/smoke.ps1"
-      },
-      "spec_basis": "core_spec_observable",
-      "target": "ita_mha8_tb_top",
-      "tile_e": 4,
-      "tile_f": 2,
-      "tile_p": 1,
-      "tile_s": 2
-    },
-    {
-      "E": 128,
-      "F": 128,
-      "H": 8,
-      "P": 64,
-      "S": 64,
-      "activation": "identity",
-      "bias": true,
-      "category": "legal_random",
-      "dut": "ita_mha8",
-      "flow": {
-        "compare": true,
-        "generate_vectors": true,
-        "generated_simvectors": true,
-        "sink_backpressure": {
-          "enable": false,
-          "ready_high_max": 1,
-          "ready_high_min": 1,
-          "ready_low_max": 0,
-          "ready_low_min": 0
-        },
-        "source_gap": {
-          "enable": false,
-          "max": 0,
-          "min": 0
-        },
-        "test_name": "ita_mha8_attn_directed_test",
-        "vector_source": "pyita-q"
-      },
-      "layer": "AttentionFeedforward",
-      "name": "cr_007_attnff_identity_s64_e128_p64_f128_h8_b1_seed342872397",
-      "paths": {
-        "standalone_dir": "ITA/simvectors/data_S64_E128_P64_F128_H8_B1_Identity/standalone",
-        "uvm_manifest": "ITA_CORE_UVM/sim/logger/cr_007_attnff_identity_s64_e128_p64_f128_h8_b1_seed342872397_manifest.json",
-        "uvm_requant": "ITA_CORE_UVM/sim/logger/cr_007_attnff_identity_s64_e128_p64_f128_h8_b1_seed342872397_requant.csv",
-        "uvm_stream": "ITA_CORE_UVM/sim/logger/cr_007_attnff_identity_s64_e128_p64_f128_h8_b1_seed342872397_stream.csv",
-        "vector_root": "ITA/simvectors/data_S64_E128_P64_F128_H8_B1_Identity"
-      },
-      "projection": "ATTNFF",
-      "seed": 342872397,
-      "smoke_ps1": {
-        "args": [
-          "-TestName",
-          "ita_mha8_attn_directed_test",
-          "-VectorSource",
-          "pyita-q",
-          "-Projection",
-          "ATTNFF",
-          "-Activation",
-          "Identity",
-          "-PyitaDir",
-          "ITA/simvectors/data_S64_E128_P64_F128_H8_B1_Identity/standalone",
-          "-Heads",
-          "8",
-          "-StreamName",
-          "cr_007_attnff_identity_s64_e128_p64_f128_h8_b1_seed342872397_stream.csv",
-          "-ManifestName",
-          "cr_007_attnff_identity_s64_e128_p64_f128_h8_b1_seed342872397_manifest.json",
-          "-RequantName",
-          "cr_007_attnff_identity_s64_e128_p64_f128_h8_b1_seed342872397_requant.csv",
-          "-GenerateVectors"
-        ],
-        "future_plusargs": {
-          "ITA_READY_HIGH_MAX": 1,
-          "ITA_READY_HIGH_MIN": 1,
-          "ITA_READY_LOW_MAX": 0,
-          "ITA_READY_LOW_MIN": 0,
-          "ITA_SINK_BP_ENABLE": 0,
-          "ITA_SOURCE_GAP_ENABLE": 0,
-          "ITA_SOURCE_GAP_MAX": 0,
-          "ITA_SOURCE_GAP_MIN": 0,
-          "ntb_random_seed": 342872397
+          "ntb_random_seed": 533492028
         },
         "script": "ITA_CORE_UVM/sim/scripts/smoke.ps1"
       },
@@ -653,179 +817,15 @@
       "target": "ita_mha8_tb_top",
       "tile_e": 2,
       "tile_f": 2,
-      "tile_p": 1,
-      "tile_s": 1
-    },
-    {
-      "E": 192,
-      "F": 192,
-      "H": 8,
-      "P": 256,
-      "S": 64,
-      "activation": "relu",
-      "bias": true,
-      "category": "legal_random",
-      "dut": "ita_mha8",
-      "flow": {
-        "compare": true,
-        "generate_vectors": true,
-        "generated_simvectors": true,
-        "sink_backpressure": {
-          "enable": false,
-          "ready_high_max": 1,
-          "ready_high_min": 1,
-          "ready_low_max": 0,
-          "ready_low_min": 0
-        },
-        "source_gap": {
-          "enable": false,
-          "max": 0,
-          "min": 0
-        },
-        "test_name": "ita_mha8_attn_directed_test",
-        "vector_source": "pyita-q"
-      },
-      "layer": "AttentionFeedforward",
-      "name": "cr_008_attnff_relu_s64_e192_p256_f192_h8_b1_seed724167263",
-      "paths": {
-        "standalone_dir": "ITA/simvectors/data_S64_E192_P256_F192_H8_B1_Relu/standalone",
-        "uvm_manifest": "ITA_CORE_UVM/sim/logger/cr_008_attnff_relu_s64_e192_p256_f192_h8_b1_seed724167263_manifest.json",
-        "uvm_requant": "ITA_CORE_UVM/sim/logger/cr_008_attnff_relu_s64_e192_p256_f192_h8_b1_seed724167263_requant.csv",
-        "uvm_stream": "ITA_CORE_UVM/sim/logger/cr_008_attnff_relu_s64_e192_p256_f192_h8_b1_seed724167263_stream.csv",
-        "vector_root": "ITA/simvectors/data_S64_E192_P256_F192_H8_B1_Relu"
-      },
-      "projection": "ATTNFF",
-      "seed": 724167263,
-      "smoke_ps1": {
-        "args": [
-          "-TestName",
-          "ita_mha8_attn_directed_test",
-          "-VectorSource",
-          "pyita-q",
-          "-Projection",
-          "ATTNFF",
-          "-Activation",
-          "Relu",
-          "-PyitaDir",
-          "ITA/simvectors/data_S64_E192_P256_F192_H8_B1_Relu/standalone",
-          "-Heads",
-          "8",
-          "-StreamName",
-          "cr_008_attnff_relu_s64_e192_p256_f192_h8_b1_seed724167263_stream.csv",
-          "-ManifestName",
-          "cr_008_attnff_relu_s64_e192_p256_f192_h8_b1_seed724167263_manifest.json",
-          "-RequantName",
-          "cr_008_attnff_relu_s64_e192_p256_f192_h8_b1_seed724167263_requant.csv",
-          "-GenerateVectors"
-        ],
-        "future_plusargs": {
-          "ITA_READY_HIGH_MAX": 1,
-          "ITA_READY_HIGH_MIN": 1,
-          "ITA_READY_LOW_MAX": 0,
-          "ITA_READY_LOW_MIN": 0,
-          "ITA_SINK_BP_ENABLE": 0,
-          "ITA_SOURCE_GAP_ENABLE": 0,
-          "ITA_SOURCE_GAP_MAX": 0,
-          "ITA_SOURCE_GAP_MIN": 0,
-          "ntb_random_seed": 724167263
-        },
-        "script": "ITA_CORE_UVM/sim/scripts/smoke.ps1"
-      },
-      "spec_basis": "core_spec_observable",
-      "target": "ita_mha8_tb_top",
-      "tile_e": 3,
-      "tile_f": 3,
-      "tile_p": 4,
-      "tile_s": 1
-    },
-    {
-      "E": 256,
-      "F": 256,
-      "H": 8,
-      "P": 256,
-      "S": 192,
-      "activation": "gelu",
-      "bias": true,
-      "category": "legal_random",
-      "dut": "ita_mha8",
-      "flow": {
-        "compare": true,
-        "generate_vectors": true,
-        "generated_simvectors": true,
-        "sink_backpressure": {
-          "enable": false,
-          "ready_high_max": 1,
-          "ready_high_min": 1,
-          "ready_low_max": 0,
-          "ready_low_min": 0
-        },
-        "source_gap": {
-          "enable": false,
-          "max": 0,
-          "min": 0
-        },
-        "test_name": "ita_mha8_attn_directed_test",
-        "vector_source": "pyita-q"
-      },
-      "layer": "AttentionFeedforward",
-      "name": "cr_009_attnff_gelu_s192_e256_p256_f256_h8_b1_seed716822295",
-      "paths": {
-        "standalone_dir": "ITA/simvectors/data_S192_E256_P256_F256_H8_B1_Gelu/standalone",
-        "uvm_manifest": "ITA_CORE_UVM/sim/logger/cr_009_attnff_gelu_s192_e256_p256_f256_h8_b1_seed716822295_manifest.json",
-        "uvm_requant": "ITA_CORE_UVM/sim/logger/cr_009_attnff_gelu_s192_e256_p256_f256_h8_b1_seed716822295_requant.csv",
-        "uvm_stream": "ITA_CORE_UVM/sim/logger/cr_009_attnff_gelu_s192_e256_p256_f256_h8_b1_seed716822295_stream.csv",
-        "vector_root": "ITA/simvectors/data_S192_E256_P256_F256_H8_B1_Gelu"
-      },
-      "projection": "ATTNFF",
-      "seed": 716822295,
-      "smoke_ps1": {
-        "args": [
-          "-TestName",
-          "ita_mha8_attn_directed_test",
-          "-VectorSource",
-          "pyita-q",
-          "-Projection",
-          "ATTNFF",
-          "-Activation",
-          "Gelu",
-          "-PyitaDir",
-          "ITA/simvectors/data_S192_E256_P256_F256_H8_B1_Gelu/standalone",
-          "-Heads",
-          "8",
-          "-StreamName",
-          "cr_009_attnff_gelu_s192_e256_p256_f256_h8_b1_seed716822295_stream.csv",
-          "-ManifestName",
-          "cr_009_attnff_gelu_s192_e256_p256_f256_h8_b1_seed716822295_manifest.json",
-          "-RequantName",
-          "cr_009_attnff_gelu_s192_e256_p256_f256_h8_b1_seed716822295_requant.csv",
-          "-GenerateVectors"
-        ],
-        "future_plusargs": {
-          "ITA_READY_HIGH_MAX": 1,
-          "ITA_READY_HIGH_MIN": 1,
-          "ITA_READY_LOW_MAX": 0,
-          "ITA_READY_LOW_MIN": 0,
-          "ITA_SINK_BP_ENABLE": 0,
-          "ITA_SOURCE_GAP_ENABLE": 0,
-          "ITA_SOURCE_GAP_MAX": 0,
-          "ITA_SOURCE_GAP_MIN": 0,
-          "ntb_random_seed": 716822295
-        },
-        "script": "ITA_CORE_UVM/sim/scripts/smoke.ps1"
-      },
-      "spec_basis": "core_spec_observable",
-      "target": "ita_mha8_tb_top",
-      "tile_e": 4,
-      "tile_f": 4,
-      "tile_p": 4,
+      "tile_p": 3,
       "tile_s": 3
     }
   ],
   "constraints": {
     "activations": [
+      "Identity",
       "Relu",
-      "Gelu",
-      "Identity"
+      "Gelu"
     ],
     "allow_illegal_source_skew": false,
     "auto_generate": true,
@@ -834,11 +834,64 @@
     "include_no_bias": true,
     "max_tile": 4,
     "min_tile": 1,
+    "observed_shape_values": {
+      "E": [
+        64,
+        128,
+        192,
+        256
+      ],
+      "F": [
+        64,
+        128,
+        192,
+        256
+      ],
+      "P": [
+        64,
+        128,
+        192,
+        256
+      ],
+      "S": [
+        64,
+        128,
+        192,
+        256
+      ]
+    },
     "projections": [
       "ATTNFF"
     ],
     "ready_high_max": 1,
     "ready_low_max": 0,
+    "required_shape_values": {
+      "E": [
+        64,
+        128,
+        192,
+        256
+      ],
+      "F": [
+        64,
+        128,
+        192,
+        256
+      ],
+      "P": [
+        64,
+        128,
+        192,
+        256
+      ],
+      "S": [
+        64,
+        128,
+        192,
+        256
+      ]
+    },
+    "shape_sampling_mode": "balanced_independent_dimensions",
     "shape_values": [
       64,
       128,
@@ -847,22 +900,23 @@
     ],
     "source_gap_max": 0,
     "test_generator": "ITA/testGenerator.py",
+    "unique_shape_tuples": true,
     "vector_seed": 0
   },
   "count": 10,
   "generated_vector_roots": [
-    "ITA/simvectors/data_S128_E256_P64_F128_H8_B1_Gelu",
-    "ITA/simvectors/data_S192_E256_P128_F256_H8_B1_Relu",
-    "ITA/simvectors/data_S192_E256_P256_F256_H8_B1_Gelu",
-    "ITA/simvectors/data_S192_E64_P192_F256_H8_B1_Relu",
-    "ITA/simvectors/data_S64_E128_P256_F128_H8_B1_Identity",
-    "ITA/simvectors/data_S64_E128_P64_F128_H8_B0_Identity",
-    "ITA/simvectors/data_S64_E128_P64_F128_H8_B1_Identity",
-    "ITA/simvectors/data_S64_E192_P128_F64_H8_B1_Identity",
-    "ITA/simvectors/data_S64_E192_P256_F192_H8_B1_Relu",
-    "ITA/simvectors/data_S64_E64_P256_F128_H8_B1_Relu"
+    "ITA/simvectors/data_S128_E128_P192_F192_H8_B0_Relu",
+    "ITA/simvectors/data_S128_E192_P192_F192_H8_B0_Gelu",
+    "ITA/simvectors/data_S192_E128_P192_F128_H8_B1_Gelu",
+    "ITA/simvectors/data_S192_E256_P128_F192_H8_B1_Gelu",
+    "ITA/simvectors/data_S192_E256_P256_F128_H8_B1_Identity",
+    "ITA/simvectors/data_S256_E128_P64_F256_H8_B1_Gelu",
+    "ITA/simvectors/data_S256_E64_P256_F256_H8_B1_Identity",
+    "ITA/simvectors/data_S64_E192_P64_F64_H8_B0_Gelu",
+    "ITA/simvectors/data_S64_E64_P128_F128_H8_B1_Gelu",
+    "ITA/simvectors/data_S64_E64_P128_F64_H8_B0_Identity"
   ],
   "generator": "gen_random_mha8_cases.py",
   "name": "random_mha8_regression_cases",
-  "seed": 123
+  "seed": 7
 }

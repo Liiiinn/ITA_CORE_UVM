@@ -566,6 +566,23 @@ class ita_mha8_scoreboard extends uvm_component;
         end
     endfunction : check_source_bias_rule
 
+    function void check_source_metadata_rule(ita_stream_item tr);
+        if (!pred.is_source_kind_step_legal(tr.step, tr.kind)) begin
+            scb_rule_error("ITA_SCB_SOURCE_STEP",
+                $sformatf("Illegal source kind/step pairing kind=%s step=%s head=%0d tile=%0d inner=%0d beat=%0d",
+                    stream_kind_label(tr.kind), tr.step.name(), tr.head_id, tr.tile_id,
+                    tr.inner_tile_id, tr.beat_id));
+            return;
+        end
+
+        if (!pred.is_source_metadata_legal(tr.step, tr.kind, tr.tile_id, tr.inner_tile_id)) begin
+            scb_rule_error("ITA_SCB_SOURCE_TILE",
+                $sformatf("Illegal source metadata kind=%s step=%s head=%0d tile=%0d inner=%0d beat=%0d tile_s/e/p/f=%0d/%0d/%0d/%0d",
+                    stream_kind_label(tr.kind), tr.step.name(), tr.head_id, tr.tile_id,
+                    tr.inner_tile_id, tr.beat_id, tile_s, tile_e, tile_p, tile_f));
+        end
+    endfunction : check_source_metadata_rule
+
     function bit is_output_inner_legal(ita_stream_item tr);
         return pred.is_output_metadata_legal(tr.step, tr.kind, tr.tile_id, tr.inner_tile_id);
     endfunction : is_output_inner_legal
@@ -581,6 +598,7 @@ class ita_mha8_scoreboard extends uvm_component;
 
     function void sanity_check_source(ita_stream_item tr);
         check_active_window_rule(tr);
+        check_source_metadata_rule(tr);
 
         if (!(tr.kind inside {
                 ITA_STREAM_HEAD_INPUT,

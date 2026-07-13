@@ -270,6 +270,42 @@ def build_specs(
     return specs
 
 
+def balanced_dimension_schedule(values: list[int], count: int, rng: random.Random) -> list[int]:
+    """Build one shuffled schedule that covers every value as evenly as possible."""
+    repetitions, remainder = divmod(count, len(values))
+    schedule = values * repetitions
+    if remainder:
+        schedule.extend(rng.sample(values, remainder))
+    rng.shuffle(schedule)
+    return schedule
+
+
+def build_balanced_shape_tuples(
+    values: list[int],
+    count: int,
+    rng: random.Random,
+    max_attempts: int = 1000,
+) -> list[tuple[int, int, int, int]]:
+    if count < len(values):
+        raise ValueError(
+            f"--count must be at least {len(values)} to cover every legal shape value in S/E/P/F"
+        )
+    if count > len(values) ** 4:
+        raise ValueError(
+            f"--count={count} exceeds the {len(values) ** 4} unique S/E/P/F tuples available"
+        )
+
+    for _ in range(max_attempts):
+        schedules = [balanced_dimension_schedule(values, count, rng) for _ in range(4)]
+        tuples = list(zip(*schedules))
+        if len(set(tuples)) == count:
+            return tuples
+
+    raise RuntimeError(
+        f"Unable to construct {count} unique balanced S/E/P/F tuples after {max_attempts} attempts"
+    )
+
+
 def test_generator_command(python: str, test_generator: Path, spec: VectorSpec, vector_seed: int) -> list[str]:
     cmd = [
         python,
@@ -493,7 +529,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Generate constrained-random MHA8 regression case manifests.")
     parser.add_argument("--out", type=Path, default=core_root() / "sim" / "logger" / "random_mha8_cases.json")
     parser.add_argument("--simvectors-root", type=Path, default=default_simvectors_root())
-    parser.add_argument("--count", type=int, default=8)
+    parser.add_argument("--count", type=int, default=10)
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--projections", action="append", help="Comma-separated subset of Q,K,V,QKV,ATTN,ATTNFF.")
     parser.add_argument("--activations", action="append", help="Comma-separated subset of Identity,Relu,Gelu.")
@@ -536,6 +572,16 @@ def main() -> int:
         allow_no_bias = True
 
     shape_values = parse_shape_values(args.shape_values)
+    legal_shape_values = [
+        value for value in shape_values if args.min_tile <= (value // 64) <= args.max_tile
+    ]
+    if not legal_shape_values:
+        raise ValueError("No --shape-values remain after applying --min-tile/--max-tile")
+    if args.count < len(legal_shape_values):
+        raise ValueError(
+            f"--count must be at least {len(legal_shape_values)} to cover every legal shape value "
+            "in each of S/E/P/F"
+        )
     simvectors_root = args.simvectors_root
     if not simvectors_root.is_absolute():
         simvectors_root = (workspace_root() / simvectors_root).resolve()
@@ -582,14 +628,41 @@ def main() -> int:
             for projection in projections:
                 candidates.append((spec, projection))
 
+    rng = random.Random(args.seed)
+    shape_tuples = build_balanced_shape_tuples(legal_shape_values, args.count, rng)
     if not candidates:
+        if args.no_auto_generate:
+            formatted = ", ".join(
+                f"S{s}/E{e}/P{p}/F{f}" for s, e, p, f in sorted(shape_tuples)
+            )
+            raise RuntimeError(
+                "--no-auto-generate cannot satisfy the balanced shape schedule; "
+                f"missing usable simvectors for: {formatted}"
+            )
         raise RuntimeError("No usable vector/projection candidates found with the selected constraints")
 
-    rng = random.Random(args.seed)
+    candidates_by_shape: dict[tuple[int, int, int, int], list[tuple[VectorSpec, str]]] = {}
+    for candidate in candidates:
+        spec, _ = candidate
+        key = (spec.s, spec.e, spec.p, spec.f)
+        candidates_by_shape.setdefault(key, []).append(candidate)
+
+    missing_shapes = [shape for shape in shape_tuples if shape not in candidates_by_shape]
+    if missing_shapes:
+        formatted = ", ".join(
+            f"S{s}/E{e}/P{p}/F{f}" for s, e, p, f in sorted(missing_shapes)
+        )
+        if args.no_auto_generate:
+            raise RuntimeError(
+                "--no-auto-generate cannot satisfy the balanced shape schedule; "
+                f"missing usable simvectors for: {formatted}"
+            )
+        raise RuntimeError(f"Internal candidate generation is missing balanced shapes: {formatted}")
+
+    selected_candidates = [rng.choice(candidates_by_shape[shape]) for shape in shape_tuples]
     entries: list[dict[str, Any]] = []
     generated_vector_roots: list[str] = []
-    for index in range(args.count):
-        spec, projection = rng.choice(candidates)
+    for index, (spec, projection) in enumerate(selected_candidates):
         vector, generated_vector = ensure_vector_case(
             simvectors_root=simvectors_root,
             spec=spec,
@@ -615,6 +688,23 @@ def main() -> int:
             )
         )
 
+    required_shape_values = sorted(legal_shape_values)
+    observed_shape_values = {
+        "S": sorted({spec.s for spec, _ in selected_candidates}),
+        "E": sorted({spec.e for spec, _ in selected_candidates}),
+        "P": sorted({spec.p for spec, _ in selected_candidates}),
+        "F": sorted({spec.f for spec, _ in selected_candidates}),
+    }
+    required_by_dimension = {dimension: required_shape_values for dimension in "SEPF"}
+    for dimension in "SEPF":
+        if observed_shape_values[dimension] != required_by_dimension[dimension]:
+            raise AssertionError(
+                f"Balanced sampling failed for {dimension}: required={required_by_dimension[dimension]} "
+                f"observed={observed_shape_values[dimension]}"
+            )
+    if len(set(shape_tuples)) != len(shape_tuples):
+        raise AssertionError("Balanced sampling produced duplicate S/E/P/F tuples")
+
     manifest = {
         "name": "random_mha8_regression_cases",
         "generator": Path(__file__).name,
@@ -625,6 +715,10 @@ def main() -> int:
             "activations": activations,
             "heads": args.heads,
             "shape_values": shape_values,
+            "shape_sampling_mode": "balanced_independent_dimensions",
+            "required_shape_values": required_by_dimension,
+            "observed_shape_values": observed_shape_values,
+            "unique_shape_tuples": True,
             "min_tile": args.min_tile,
             "max_tile": args.max_tile,
             "include_bias": allow_bias,

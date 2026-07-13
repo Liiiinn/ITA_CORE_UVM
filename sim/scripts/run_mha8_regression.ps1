@@ -4,6 +4,8 @@ param(
     [string]$UvmHome = $env:UVM_HOME,
     [string]$Python = "python",
     [string]$OutDir = "",
+    [switch]$EnableCodeCoverage,
+    [string]$CodeCoverageSpec = "sbceft",
     [switch]$DryRun,
     [switch]$StopOnFirstFail
 )
@@ -303,6 +305,11 @@ foreach ($case in $cases) {
     $smokeArgs = Set-ValueArg $smokeArgs "-ReadyHighMax" ([string]$readyHighMax)
     $smokeArgs = Set-SwitchArg $smokeArgs "-EnableCoverage" $true
     $smokeArgs = Set-ValueArg $smokeArgs "-CoverageUcdb" $caseUcdb
+    $caseCodeCoverageEnabled = ($EnableCodeCoverage -and -not $expectFail)
+    $smokeArgs = Set-SwitchArg $smokeArgs "-EnableCodeCoverage" $caseCodeCoverageEnabled
+    if ($caseCodeCoverageEnabled) {
+        $smokeArgs = Set-ValueArg $smokeArgs "-CodeCoverageSpec" $CodeCoverageSpec
+    }
     if ($DryRun) {
         $smokeArgs = Set-SwitchArg $smokeArgs "-DryRun" $true
     }
@@ -312,16 +319,29 @@ foreach ($case in $cases) {
     $exitCode = 0
     $failureMessage = ""
     $matchedExpectedError = $false
+    $matchedExpectedErrorLine = ""
+    $sourceVsimLog = Join-Path $SimLogDir "$testName.log"
 
     Write-Host ("[{0}/{1}] {2}" -f ($caseIndex + 1), $cases.Count, $caseName)
 
-    if ($DryRun) {
+    if ($expectFail -and [string]::IsNullOrWhiteSpace($expectedErrorRegex)) {
+        $status = "FAIL"
+        $exitCode = 1
+        $failureMessage = "Expected-fail case has an empty expected_error_regex"
+        if (-not $DryRun) {
+            New-Item -ItemType Directory -Path $caseDir -Force | Out-Null
+            Write-Utf8File $caseLog ("FAILED: " + $failureMessage + [Environment]::NewLine)
+        }
+    } elseif ($DryRun) {
         $processArgs = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $SmokeScript) + $smokeArgs
         Write-Host ("PS> " + (Format-CommandLine $PowerShellExe $processArgs))
         & $PowerShellExe @processArgs
         $status = "DRYRUN"
     } else {
         New-Item -ItemType Directory -Path $caseDir -Force | Out-Null
+        if (Test-Path -LiteralPath $sourceVsimLog -PathType Leaf) {
+            Remove-Item -LiteralPath $sourceVsimLog -Force
+        }
         $processArgs = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $SmokeScript) + $smokeArgs
         Write-Utf8File $caseLog ("PS> " + (Format-CommandLine $PowerShellExe $processArgs) + [Environment]::NewLine)
         try {
@@ -342,7 +362,6 @@ foreach ($case in $cases) {
             Add-TextLine $caseLog ("FAILED: " + $failureMessage)
         }
 
-        $sourceVsimLog = Join-Path $SimLogDir "$testName.log"
         if (Test-Path -LiteralPath $sourceVsimLog -PathType Leaf) {
             Copy-Item -LiteralPath $sourceVsimLog -Destination $caseVsimLog -Force
         }
@@ -351,17 +370,18 @@ foreach ($case in $cases) {
             if ($exitCode -eq 0) {
                 $status = "FAIL"
                 $failureMessage = "Expected failure but smoke.ps1 exited 0"
+            } elseif (-not (Test-Path -LiteralPath $caseVsimLog -PathType Leaf)) {
+                $status = "FAIL"
+                $failureMessage = "Expected-fail case produced no vsim.log"
             } else {
-                $logText = ""
-                if (Test-Path -LiteralPath $caseLog -PathType Leaf) {
-                    $logText = Get-Content -LiteralPath $caseLog -Raw
-                }
-                if ($expectedErrorRegex -eq "" -or [regex]::IsMatch($logText, $expectedErrorRegex, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase -bor [System.Text.RegularExpressions.RegexOptions]::Singleline)) {
+                $expectedErrorMatch = Select-String -LiteralPath $caseVsimLog -Pattern $expectedErrorRegex | Select-Object -First 1
+                if ($null -ne $expectedErrorMatch) {
                     $matchedExpectedError = $true
+                    $matchedExpectedErrorLine = $expectedErrorMatch.Line.Trim()
                     $status = "PASS"
                 } else {
                     $status = "FAIL"
-                    $failureMessage = "Expected failure did not match regex: $expectedErrorRegex"
+                    $failureMessage = "vsim.log did not match expected error regex: $expectedErrorRegex"
                 }
             }
         }
@@ -394,11 +414,13 @@ foreach ($case in $cases) {
         expect_fail = $expectFail
         expected_error_regex = $expectedErrorRegex
         matched_expected_error = $matchedExpectedError
+        matched_expected_error_line = $matchedExpectedErrorLine
         log_path = $caseLog
         vsim_log_path = $caseVsimLog
         manifest_path = $manifestPath
         ucdb_path = $caseUcdb
         ucdb_exists = $ucdbExists
+        code_coverage_enabled = $caseCodeCoverageEnabled
         failure_message = $failureMessage
     }
     $results.Add([pscustomobject]$result)
@@ -442,11 +464,13 @@ if ($stoppedEarly -and ($caseIndex + 1) -lt $cases.Count) {
             expect_fail = [bool](Get-JsonProp $skippedCase "expect_fail" $false)
             expected_error_regex = [string](Get-JsonProp $skippedCase "expected_error_regex" "")
             matched_expected_error = $false
+            matched_expected_error_line = ""
             log_path = ""
             vsim_log_path = ""
             manifest_path = ""
             ucdb_path = ""
             ucdb_exists = $false
+            code_coverage_enabled = $false
             failure_message = "Skipped after first failure"
         })
     }
@@ -496,6 +520,15 @@ $coverage = [ordered]@{
     merge_log = ""
     failure_message = ""
 }
+$codeCoverage = [ordered]@{
+    enabled = [bool]$EnableCodeCoverage
+    spec = $CodeCoverageSpec
+    scope = "/ita_mha8_tb_top/dut"
+    status = if (-not $EnableCodeCoverage) { "DISABLED" } elseif ($DryRun) { "DRYRUN" } else { "SKIPPED" }
+    text_report = ""
+    html_report = ""
+    failure_message = ""
+}
 
 if (-not $DryRun) {
     $passUcdbs = @($results | Where-Object { $_.status -eq "PASS" -and -not $_.expect_fail -and $_.ucdb_exists } | ForEach-Object { $_.ucdb_path })
@@ -508,6 +541,8 @@ if (-not $DryRun) {
         $mergedUcdb = Join-Path $coverageDir "random_mha8_merged.ucdb"
         $coverageReport = Join-Path $coverageDir "coverage_report.txt"
         $coverageHtmlReport = Join-Path $coverageDir "coverage_html"
+        $codeCoverageReport = Join-Path $coverageDir "code_coverage_report.txt"
+        $codeCoverageHtmlReport = Join-Path $coverageDir "code_coverage_html"
         $coverageLog = Join-Path $coverageDir "vcover.log"
         $vcover = Resolve-Tool "vcover.exe"
 
@@ -531,6 +566,32 @@ if (-not $DryRun) {
                 throw "vcover html report failed with exit code $htmlReportExit"
             }
 
+            if ($EnableCodeCoverage) {
+                $codeReportArgs = @(
+                    "report", "-code", $CodeCoverageSpec, "-details", "-zeros",
+                    "-instance=/ita_mha8_tb_top/dut", "-recursive",
+                    "-output", $codeCoverageReport, $mergedUcdb
+                )
+                $codeReportExit = Invoke-LoggedTool $vcover $codeReportArgs $coverageLog
+                if ($codeReportExit -ne 0) {
+                    throw "vcover code coverage report failed with exit code $codeReportExit"
+                }
+
+                $codeHtmlReportArgs = @(
+                    "report", "-html", "-code", $CodeCoverageSpec, "-details", "-zeros",
+                    "-instance=/ita_mha8_tb_top/dut", "-recursive",
+                    "-output", $codeCoverageHtmlReport, $mergedUcdb
+                )
+                $codeHtmlReportExit = Invoke-LoggedTool $vcover $codeHtmlReportArgs $coverageLog
+                if ($codeHtmlReportExit -ne 0) {
+                    throw "vcover code coverage html report failed with exit code $codeHtmlReportExit"
+                }
+
+                $codeCoverage.status = "PASS"
+                $codeCoverage.text_report = $codeCoverageReport
+                $codeCoverage.html_report = $codeCoverageHtmlReport
+            }
+
             $coverage.status = "PASS"
             $coverage.merged_ucdb = $mergedUcdb
             $coverage.report = $coverageReport
@@ -545,6 +606,12 @@ if (-not $DryRun) {
             $coverage.html_report = $coverageHtmlReport
             $coverage.merge_log = $coverageLog
             $coverage.failure_message = $_.Exception.Message
+            if ($EnableCodeCoverage) {
+                $codeCoverage.status = "FAIL"
+                $codeCoverage.text_report = $codeCoverageReport
+                $codeCoverage.html_report = $codeCoverageHtmlReport
+                $codeCoverage.failure_message = $_.Exception.Message
+            }
         }
     }
 }
@@ -564,6 +631,7 @@ $summary.Add("dryrun", $dryRunCount)
 $summary.Add("xfail_pass", $xfailPassCount)
 $summary.Add("by_category", $categorySummary)
 $summary.Add("coverage_merge", $coverage)
+$summary.Add("code_coverage", $codeCoverage)
 $caseResults = $results.ToArray()
 $summary.Add("cases", [object]$caseResults)
 
@@ -584,6 +652,10 @@ if ($coverage.merged_ucdb -ne "") { $summaryLines.Add("merged_ucdb=$($coverage.m
 if ($coverage.text_report -ne "") { $summaryLines.Add("coverage_text_report=$($coverage.text_report)") }
 if ($coverage.html_report -ne "") { $summaryLines.Add("coverage_html_report=$($coverage.html_report)") }
 if ($coverage.failure_message -ne "") { $summaryLines.Add("coverage_failure=$($coverage.failure_message)") }
+$summaryLines.Add("code_coverage_enabled=$($codeCoverage.enabled) spec=$($codeCoverage.spec) scope=$($codeCoverage.scope) status=$($codeCoverage.status)")
+if ($codeCoverage.text_report -ne "") { $summaryLines.Add("code_coverage_text_report=$($codeCoverage.text_report)") }
+if ($codeCoverage.html_report -ne "") { $summaryLines.Add("code_coverage_html_report=$($codeCoverage.html_report)") }
+if ($codeCoverage.failure_message -ne "") { $summaryLines.Add("code_coverage_failure=$($codeCoverage.failure_message)") }
 $summaryLines.Add("")
 foreach ($result in $results) {
     $displayStatus = $result.status
@@ -596,6 +668,9 @@ foreach ($result in $results) {
         $result.source_gap_max, $result.group_idle_gap_max, $result.ready_low_max, $result.ready_high_max
     if ($result.failure_message -ne "") {
         $line += " failure=" + $result.failure_message
+    }
+    if ($result.matched_expected_error_line -ne "") {
+        $line += " matched_error=" + $result.matched_expected_error_line
     }
     $line += " name=" + $result.name
     $summaryLines.Add($line)
@@ -615,6 +690,9 @@ if (-not $DryRun) {
 }
 
 if ($DryRun) {
+    if ($failCount -gt 0) {
+        exit 1
+    }
     exit 0
 }
 if ($failCount -gt 0 -or $coverage.status -eq "FAIL") {

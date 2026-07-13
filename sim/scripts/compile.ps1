@@ -1,6 +1,8 @@
 param(
     [string]$QuestaBin = "",
     [string]$UvmHome = $env:UVM_HOME,
+    [switch]$EnableCodeCoverage,
+    [string]$CodeCoverageSpec = "sbceft",
     [switch]$DryRun
 )
 
@@ -57,6 +59,12 @@ try {
     Invoke-Step $vmap @("work", $WorkDir)
 
     $vlogArgs = @("-sv", "-work", "work", "+acc")
+    if ($EnableCodeCoverage) {
+        if ($CodeCoverageSpec -notmatch "^[sbceftx]+$") {
+            throw "Invalid -CodeCoverageSpec '$CodeCoverageSpec'; expected a combination of s,b,c,e,f,t,x"
+        }
+        $vlogArgs += "+cover=$CodeCoverageSpec"
+    }
 
     if ($UvmHome) {
         $UvmPkg = Join-Path $UvmHome "src/uvm_pkg.sv"

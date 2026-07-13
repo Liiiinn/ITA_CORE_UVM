@@ -25,8 +25,24 @@ NUMERICAL_PATTERNS = (
     "sparse",
     "zero",
 )
-NEGATIVE_ERROR_RE = r"(UVM_ERROR|UVM_FATAL|CORE CSV|ITA_SCB|SVA|timeout|mismatch|illegal|failed|FAIL)"
+CORNER_INTERACTION_MODES = ("none", "minimal", "extended")
+SUITE_ORDER = ("protocol", "numerical", "negative")
+SINGLE_SUITE_MANIFEST_NAMES = {
+    "protocol": "protocol_directed_mha8_cases.json",
+    "numerical": "numerical_corner_mha8_cases.json",
+    "negative": "negative_mha8_cases.json",
+}
 NATIVE_VR_ERROR_RE = r"\[ITA_NATIVE_VR\]"
+TILE_ERROR_RE = {
+    "neg_tile_zero": r"\[ITA_CTRL_TILE_ZERO\]",
+    "neg_tile_over_max": r"\[ITA_CTRL_TILE_RANGE\]",
+}
+MUTATION_ERROR_RE = {
+    "wrong_inner_id": r"\[ITA_SCB_SOURCE_TILE\]",
+    "wrong_step_metadata": r"\[ITA_SCB_SOURCE_STEP\]",
+    "missing_beat": r"\[ITA_SCB_BEAT_MISSING\]",
+    "extra_beat": r"\[ITA_SCB_BEAT_ORDER\]",
+}
 
 
 @dataclass(frozen=True)
@@ -53,6 +69,78 @@ class Shape:
         return self.f // 64
 
 
+@dataclass(frozen=True)
+class NumericalInteraction:
+    name: str
+    pattern: str
+    shape: Shape
+    activation: str
+    bias: bool
+
+
+MINIMAL_NUMERICAL_INTERACTIONS = (
+    NumericalInteraction(
+        "corner_rounding_multitile",
+        "requant_rounding",
+        Shape(128, 192, 64, 128),
+        "Gelu",
+        False,
+    ),
+    NumericalInteraction(
+        "corner_saturation_multitile",
+        "requant_saturation",
+        Shape(64, 128, 192, 256),
+        "Identity",
+        True,
+    ),
+    NumericalInteraction(
+        "corner_softmax_dominant_multitile",
+        "softmax_dominant",
+        Shape(192, 64, 128, 64),
+        "Relu",
+        False,
+    ),
+    NumericalInteraction(
+        "corner_bias_minmax_multitile",
+        "bias_minmax",
+        Shape(64, 128, 64, 192),
+        "Gelu",
+        True,
+    ),
+)
+
+EXTENDED_NUMERICAL_INTERACTIONS = MINIMAL_NUMERICAL_INTERACTIONS + (
+    NumericalInteraction(
+        "corner_bias_zero_multitile",
+        "bias_zero",
+        Shape(128, 64, 256, 128),
+        "Identity",
+        True,
+    ),
+    NumericalInteraction(
+        "corner_softmax_all_equal_multitile",
+        "softmax_all_equal",
+        Shape(256, 128, 64, 128),
+        "Gelu",
+        True,
+    ),
+    NumericalInteraction(
+        "corner_sparse_multitile",
+        "sparse",
+        Shape(128, 256, 192, 64),
+        "Relu",
+        False,
+    ),
+    NumericalInteraction(
+        "corner_zero_multitile",
+        "zero",
+        Shape(64, 192, 128, 256),
+        "Identity",
+        False,
+    ),
+)
+
+
 def core_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
@@ -67,6 +155,10 @@ def ita_root() -> Path:
 
 def logger_dir() -> Path:
     return core_root() / "sim" / "logger"
+
+
+def cases_dir() -> Path:
+    return core_root() / "sim" / "cases"
 
 
 def rel_to_workspace(path: Path) -> str:
@@ -118,8 +210,9 @@ def ensure_vector(
     python: str,
     no_auto_generate: bool,
     dry_run: bool,
+    bias: bool = True,
 ) -> Path:
-    root = vector_root(shape, heads, activation, pattern)
+    root = vector_root(shape, heads, activation, pattern, bias)
     standalone = root / "standalone"
     if has_required_vector_files(standalone, PROJECTION, heads):
         return standalone
@@ -148,6 +241,8 @@ def ensure_vector(
         "--pattern",
         pattern,
     ]
+    if not bias:
+        cmd.append("--no-bias")
     run(cmd, ita_root(), dry_run)
     if not dry_run and not has_required_vector_files(standalone, PROJECTION, heads):
         raise RuntimeError(f"Generated vector is incomplete: {standalone}")
@@ -277,6 +372,7 @@ def case_entry(
     expect_fail: bool = False,
     expected_error_regex: str = "",
     extra_smoke_args: list[str] | None = None,
+    bias: bool = True,
 ) -> dict[str, Any]:
     args = smoke_args(name, standalone, heads, activation, stream_name, requant_name, manifest_name, generate_vectors)
     if extra_smoke_args:
@@ -308,7 +404,7 @@ def case_entry(
         "layer": "AttentionFeedforward",
         "projection": PROJECTION,
         "activation": activation.lower(),
-        "bias": True,
+        "bias": bias,
         "tile_s": shape.tile_s,
         "tile_e": shape.tile_e,
         "tile_p": shape.tile_p,
@@ -355,13 +451,30 @@ def add_protocol_cases(cases: list[dict[str, Any]], heads: int, python: str, no_
         ))
 
 
-def add_numerical_cases(cases: list[dict[str, Any]], heads: int, python: str, no_auto_generate: bool, dry_run: bool) -> None:
+def numerical_interactions_for_mode(mode: str) -> tuple[NumericalInteraction, ...]:
+    if mode == "none":
+        return ()
+    if mode == "minimal":
+        return MINIMAL_NUMERICAL_INTERACTIONS
+    if mode == "extended":
+        return EXTENDED_NUMERICAL_INTERACTIONS
+    raise ValueError(f"Unsupported corner interaction mode: {mode}")
+
+
+def add_numerical_cases(
+    cases: list[dict[str, Any]],
+    heads: int,
+    python: str,
+    no_auto_generate: bool,
+    dry_run: bool,
+    corner_interactions: str,
+) -> None:
     shape = Shape(64, 64, 64, 64)
     for index, pattern in enumerate(NUMERICAL_PATTERNS):
         activation = "Identity" if pattern == "zero" else ACTIVATION
         standalone = ensure_vector(shape, heads, activation, pattern, python, no_auto_generate, dry_run)
         name = f"numerical_{pattern}"
-        cases.append(case_entry(
+        entry = case_entry(
             name,
             "numerical",
             pattern,
@@ -373,7 +486,39 @@ def add_numerical_cases(cases: list[dict[str, Any]], heads: int, python: str, no
             f"{name}_requant.csv",
             f"{name}_manifest.json",
             {"ntb_random_seed": 200 + index},
-        ))
+        )
+        entry["corner_role"] = "canonical"
+        entry["pattern"] = pattern
+        cases.append(entry)
+
+    for index, spec in enumerate(numerical_interactions_for_mode(corner_interactions)):
+        standalone = ensure_vector(
+            spec.shape,
+            heads,
+            spec.activation,
+            spec.pattern,
+            python,
+            no_auto_generate,
+            dry_run,
+            bias=spec.bias,
+        )
+        entry = case_entry(
+            spec.name,
+            "numerical",
+            f"{spec.pattern}_multitile_interaction",
+            spec.shape,
+            heads,
+            spec.activation,
+            standalone,
+            f"{spec.name}_stream.csv",
+            f"{spec.name}_requant.csv",
+            f"{spec.name}_manifest.json",
+            {"ntb_random_seed": 220 + index},
+            bias=spec.bias,
+        )
+        entry["corner_role"] = "interaction"
+        entry["pattern"] = spec.pattern
+        cases.append(entry)
 
 
 def add_negative_cases(cases: list[dict[str, Any]], heads: int, python: str, no_auto_generate: bool, dry_run: bool) -> None:
@@ -467,8 +612,8 @@ def add_negative_cases(cases: list[dict[str, Any]], heads: int, python: str, no_
             f"{name}_manifest.json",
             {"ntb_random_seed": 300 + index},
             expect_fail=True,
-            expected_error_regex=NEGATIVE_ERROR_RE,
-            extra_smoke_args=extra_args,
+            expected_error_regex=TILE_ERROR_RE[name],
+            extra_smoke_args=extra_args + ["-NoCompare"],
         ))
 
     mutation_base = "neg_base_attnff_relu_s64"
@@ -508,7 +653,8 @@ def add_negative_cases(cases: list[dict[str, Any]], heads: int, python: str, no_
             {"ntb_random_seed": 310 + index},
             generate_vectors=False,
             expect_fail=True,
-            expected_error_regex=NEGATIVE_ERROR_RE,
+            expected_error_regex=MUTATION_ERROR_RE[mutation],
+            extra_smoke_args=["-NoCompare"],
         ))
 
     name = "neg_output_timeout_bp"
@@ -527,6 +673,7 @@ def add_negative_cases(cases: list[dict[str, Any]], heads: int, python: str, no_
         expect_fail=True,
         expected_error_regex=r"ITA_OUTPUT_BP_TIMEOUT",
         extra_smoke_args=[
+            "-NoCompare",
             "-ReadyLowMin", "100000",
             "-OutputBpTimeoutTest",
             "-OutputWaitTimeoutCycles", "2000",
@@ -535,24 +682,42 @@ def add_negative_cases(cases: list[dict[str, Any]], heads: int, python: str, no_
 
 
 def parse_suites(values: list[str]) -> list[str]:
-    suites: list[str] = []
+    selected: set[str] = set()
     for value in values:
         for item in value.split(","):
             item = item.strip().lower()
             if not item:
                 continue
-            if item not in {"protocol", "numerical", "negative"}:
+            if item not in SUITE_ORDER:
                 raise ValueError(f"Unsupported suite: {item}")
-            suites.append(item)
-    return suites or ["protocol", "numerical", "negative"]
+            selected.add(item)
+    return [suite for suite in SUITE_ORDER if suite in selected] or list(SUITE_ORDER)
+
+
+def default_manifest_path(suites: list[str]) -> Path:
+    if len(suites) == 1:
+        filename = SINGLE_SUITE_MANIFEST_NAMES[suites[0]]
+    else:
+        filename = "directed_mha8_cases.json"
+    return cases_dir() / filename
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Generate directed MHA8 regression cases.")
     parser.add_argument("--suite", action="append")
     parser.add_argument("--python", default=sys.executable)
-    parser.add_argument("--out", type=Path, default=logger_dir() / "directed_mha8_cases.json")
+    parser.add_argument(
+        "--out",
+        type=Path,
+        help="Output manifest path; defaults to a suite-specific name under sim/cases.",
+    )
     parser.add_argument("--heads", type=int, default=8)
+    parser.add_argument(
+        "--corner-interactions",
+        choices=CORNER_INTERACTION_MODES,
+        default="minimal",
+        help="Numerical corner interaction set: none=8, minimal=12, extended=16 cases.",
+    )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--no-auto-generate", action="store_true")
     args = parser.parse_args()
@@ -561,29 +726,43 @@ def main() -> int:
         raise ValueError("--heads must be in the range 1..8")
 
     suites = parse_suites(args.suite or ["protocol,numerical,negative"])
+    output_path = args.out if args.out is not None else default_manifest_path(suites)
     cases: list[dict[str, Any]] = []
     if "protocol" in suites:
         add_protocol_cases(cases, args.heads, args.python, args.no_auto_generate, args.dry_run)
     if "numerical" in suites:
-        add_numerical_cases(cases, args.heads, args.python, args.no_auto_generate, args.dry_run)
+        add_numerical_cases(
+            cases,
+            args.heads,
+            args.python,
+            args.no_auto_generate,
+            args.dry_run,
+            args.corner_interactions,
+        )
     if "negative" in suites:
         add_negative_cases(cases, args.heads, args.python, args.no_auto_generate, args.dry_run)
 
     manifest = {
-        "name": "directed_mha8_cases",
+        "name": output_path.stem,
         "generator": "gen_directed_mha8_cases.py",
         "suites": suites,
         "cases": cases,
     }
+    if "numerical" in suites:
+        manifest["corner_interactions"] = args.corner_interactions
+        manifest["numerical_case_counts"] = {
+            "canonical": len(NUMERICAL_PATTERNS),
+            "interaction": len(numerical_interactions_for_mode(args.corner_interactions)),
+        }
 
     if args.dry_run:
         print(json.dumps(manifest, indent=2, sort_keys=True))
     else:
-        args.out.parent.mkdir(parents=True, exist_ok=True)
-        with args.out.open("w", encoding="utf-8") as f:
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        with output_path.open("w", encoding="utf-8") as f:
             json.dump(manifest, f, indent=2, sort_keys=True)
             f.write("\n")
-        print(f"Wrote {len(cases)} directed case(s) -> {args.out}")
+        print(f"Wrote {len(cases)} case(s) for suite(s) {','.join(suites)} -> {output_path}")
 
     return 0
 
