@@ -1,0 +1,145 @@
+{
+  "schema_version": 1,
+  "scope": "/ita_mha8_tb_top/dut",
+  "policy": {
+    "raw_coverage_only": true,
+    "automatic_exclusions": false,
+    "allowed_status": [
+      "PROPOSED",
+      "APPROVED",
+      "REJECTED"
+    ]
+  },
+  "waivers": [
+    {
+      "id": "MHA8-COV-W001",
+      "design_unit": "ita_mha8",
+      "symbol": "phase_mismatch_o",
+      "source_location": "dut/ita_mha8.sv:108",
+      "metrics": [
+        "branch",
+        "condition",
+        "expression",
+        "statement"
+      ],
+      "reason": "The branch requires otherwise synchronized head instances to report different internal output phases while all heads are valid. Legal top-level stimulus does not directly control per-head phase state.",
+      "reachability_evidence": "phase_mismatch_o is derived only from per_head_step_o differences inside the generated head loop; all heads receive the same ctrl_i start/layer/tile configuration.",
+      "verification_impact": "A real head phase divergence remains observable through phase_mismatch_o and output suppression, but this defensive path is not a legal functional coverage target.",
+      "owner": "RTL/DV review",
+      "status": "PROPOSED",
+      "review_date": null,
+      "notes": "Do not apply an exclusion until the RTL owner confirms that independent head phase divergence is structurally unreachable."
+    },
+    {
+      "id": "MHA8-COV-W002",
+      "design_unit": "ita_serdiv",
+      "symbol": "opcode_i signed/remainder modes",
+      "source_location": "dut/ita_serdiv.sv:20",
+      "metrics": [
+        "branch",
+        "condition",
+        "expression"
+      ],
+      "reason": "The integrated softmax divider uses unsigned divide only; signed divide and remainder opcode combinations cannot be selected through the MHA8 top-level interface.",
+      "reachability_evidence": "dut/ita_softmax_top.sv connects ita_serdiv.opcode_i to constant 2'b00.",
+      "verification_impact": "These generic divider modes require a separate ita_serdiv unit-level verification target if they are owned and intended for reuse.",
+      "owner": "RTL/DV review",
+      "status": "PROPOSED",
+      "review_date": null,
+      "notes": "Integration-level waiver only; it does not establish standalone divider correctness."
+    },
+    {
+      "id": "MHA8-COV-W003",
+      "design_unit": "ita_serdiv",
+      "symbol": "flush_i",
+      "source_location": "dut/ita_serdiv.sv:24",
+      "metrics": [
+        "branch",
+        "statement",
+        "fsm_transition"
+      ],
+      "reason": "The MHA8 softmax integration does not expose divider flush behavior.",
+      "reachability_evidence": "dut/ita_softmax_top.sv connects ita_serdiv.flush_i to constant 1'b0.",
+      "verification_impact": "Flush behavior is outside the current MHA8 integration contract and must be verified separately if the divider is reused elsewhere.",
+      "owner": "RTL/DV review",
+      "status": "PROPOSED",
+      "review_date": null,
+      "notes": "Do not automatically exclude this path from a standalone ita_serdiv coverage target."
+    },
+    {
+      "id": "MHA8-COV-W004",
+      "design_unit": "ita_controller",
+      "symbol": "softmax_div stall",
+      "source_location": "dut/ita_controller.sv:90",
+      "metrics": [
+        "branch",
+        "condition",
+        "expression",
+        "statement"
+      ],
+      "reason": "The guarded AV stall requires division to remain incomplete after QK has finished and AV input reaches soft_addr_div_i. Maximum-rate legal QK stimulus completed division before this window.",
+      "reachability_evidence": "coverage_stall_boundaries drives continuous valid at one accepted beat per cycle with tile_s=4 and tile_p=4; ITA_STALL_TARGET_SUMMARY reported softmax_div=0.",
+      "verification_impact": "If a future divider implementation or parameter set has higher latency, this path may become reachable and the waiver must be rejected.",
+      "owner": "RTL/DV review",
+      "status": "PROPOSED",
+      "review_date": null,
+      "notes": "Targeted simulation evidence exists, but parameter-level proof is still required before approval."
+    },
+    {
+      "id": "MHA8-COV-W005",
+      "design_unit": "ita_controller/ita_softmax",
+      "symbol": "softmax FIFO full occupancy stall",
+      "source_location": "dut/ita_controller.sv:93",
+      "metrics": [
+        "branch",
+        "condition",
+        "expression"
+      ],
+      "reason": "The integrated ten-divider consumer sustained the maximum legal QK producer rate, so ongoing_soft_q did not reach SoftFifoDepth and the physical softmax FIFO full flag remained low.",
+      "reachability_evidence": "coverage_stall_boundaries reported softmax_fifo_stall=0 and softmax_full=0 under continuous-valid tile_s=4/tile_p=4 QK traffic.",
+      "verification_impact": "This is configuration-specific. Reducing NumDiv, changing divider latency, or changing FIFO depth can make the path reachable.",
+      "owner": "RTL/DV review",
+      "status": "PROPOSED",
+      "review_date": null,
+      "notes": "Do not approve without confirming the throughput inequality for the integrated parameters."
+    },
+    {
+      "id": "MHA8-COV-W006",
+      "design_unit": "ita/ita_controller",
+      "symbol": "physical output FIFO full",
+      "source_location": "dut/ita.sv:438",
+      "metrics": [
+        "branch",
+        "condition",
+        "toggle"
+      ],
+      "reason": "The controller stalls source progress when ongoing_q reaches FifoDepth, preventing the physical output FIFO from asserting full under legal output backpressure.",
+      "reachability_evidence": "coverage_stall_boundaries reported output_stall=1 and output_full=0 while per_head_ready_i was held low until the controller capacity guard fired.",
+      "verification_impact": "The full flag remains a defensive implementation path; FIFO overflow protection is verified through the controller stall instead.",
+      "owner": "RTL/DV review",
+      "status": "PROPOSED",
+      "review_date": null,
+      "notes": "A unit-level fifo_v3 target may still need to cover full independently of MHA8 integration."
+    }
+  ],
+  "reachable_gaps_not_waived": [
+    {
+      "design_unit": "ita_controller",
+      "symbols": [
+        "Q->Idle",
+        "K->Idle",
+        "V->Idle",
+        "QK->Idle",
+        "AV->Idle",
+        "F1->Idle"
+      ],
+      "reason": "These are reset-driven transitions and remain targeted coverage gaps until mid-transaction reset requirements are decided. QK->Idle is not a normal SingleAttention completion path; normal SingleAttention is QK->AV->Idle."
+    }
+  ],
+  "ownership_review": [
+    "fifo_v3",
+    "tc_sram",
+    "cluster_clk_cells",
+    "tc_clk"
+  ]
+}

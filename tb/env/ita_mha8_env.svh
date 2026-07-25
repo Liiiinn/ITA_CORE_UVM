@@ -78,6 +78,7 @@ class ita_mha8_env extends uvm_env;
         uvm_config_db#(int unsigned)::set(this, "scb", "tile_f", cfg.tile_f);
         scb = ita_mha8_scoreboard::type_id::create("scb", this);
         scb.pred = pred;
+        scb.vif = cfg.vif;
 
         uvm_config_db#(int unsigned)::set(this, "cov", "tile_s", cfg.tile_s);
         uvm_config_db#(int unsigned)::set(this, "cov", "tile_e", cfg.tile_e);

@@ -211,10 +211,11 @@ def ensure_vector(
     no_auto_generate: bool,
     dry_run: bool,
     bias: bool = True,
+    projection: str = PROJECTION,
 ) -> Path:
     root = vector_root(shape, heads, activation, pattern, bias)
     standalone = root / "standalone"
-    if has_required_vector_files(standalone, PROJECTION, heads):
+    if has_required_vector_files(standalone, projection, heads):
         return standalone
     if dry_run:
         return standalone
@@ -328,14 +329,17 @@ def smoke_args(
     requant_name: str,
     manifest_name: str,
     generate_vectors: bool,
+    projection: str = PROJECTION,
+    test_name: str = "ita_mha8_attn_directed_test",
+    directed_layer: str | None = None,
 ) -> list[str]:
     args = [
         "-TestName",
-        "ita_mha8_attn_directed_test",
+        test_name,
         "-VectorSource",
         "pyita-q",
         "-Projection",
-        PROJECTION,
+        projection,
         "-Activation",
         activation,
         "-PyitaDir",
@@ -349,6 +353,8 @@ def smoke_args(
         "-RequantName",
         requant_name,
     ]
+    if directed_layer is not None:
+        args.extend(["-DirectedLayer", directed_layer])
     if generate_vectors:
         args.append("-GenerateVectors")
     else:
@@ -373,8 +379,24 @@ def case_entry(
     expected_error_regex: str = "",
     extra_smoke_args: list[str] | None = None,
     bias: bool = True,
+    projection: str = PROJECTION,
+    layer: str = "AttentionFeedforward",
+    test_name: str = "ita_mha8_attn_directed_test",
+    directed_layer: str | None = None,
 ) -> dict[str, Any]:
-    args = smoke_args(name, standalone, heads, activation, stream_name, requant_name, manifest_name, generate_vectors)
+    args = smoke_args(
+        name,
+        standalone,
+        heads,
+        activation,
+        stream_name,
+        requant_name,
+        manifest_name,
+        generate_vectors,
+        projection=projection,
+        test_name=test_name,
+        directed_layer=directed_layer,
+    )
     if extra_smoke_args:
         args.extend(extra_smoke_args)
     default_plusargs = {
@@ -401,8 +423,8 @@ def case_entry(
         "E": shape.e,
         "P": shape.p,
         "F": shape.f,
-        "layer": "AttentionFeedforward",
-        "projection": PROJECTION,
+        "layer": layer,
+        "projection": projection,
         "activation": activation.lower(),
         "bias": bias,
         "tile_s": shape.tile_s,
@@ -449,6 +471,126 @@ def add_protocol_cases(cases: list[dict[str, Any]], heads: int, python: str, no_
             f"{name}_manifest.json",
             {"ntb_random_seed": 100 + index, **plusargs},
         ))
+
+    mode_shape = Shape(64, 64, 64, 64)
+    mode_standalone = ensure_vector(
+        mode_shape, heads, "Identity", "random", python, no_auto_generate, dry_run,
+        projection="ATTN")
+    cases.append(case_entry(
+        "mode_linear_matmul_s64",
+        "protocol",
+        "linear_matmul_mode",
+        mode_shape,
+        heads,
+        "Identity",
+        mode_standalone,
+        "mode_linear_matmul_s64_stream.csv",
+        "mode_linear_matmul_s64_requant.csv",
+        "mode_linear_matmul_s64_manifest.json",
+        {"ntb_random_seed": 106},
+        projection="Q",
+        layer="Linear",
+        test_name="ita_mha8_linear_directed_test",
+    ))
+    cases.append(case_entry(
+        "mode_single_attention_qk_av_s64",
+        "protocol",
+        "single_attention_qk_av_mode",
+        mode_shape,
+        heads,
+        "Identity",
+        mode_standalone,
+        "mode_single_attention_qk_av_s64_stream.csv",
+        "mode_single_attention_qk_av_s64_requant.csv",
+        "mode_single_attention_qk_av_s64_manifest.json",
+        {"ntb_random_seed": 107},
+        projection="QKAV",
+        layer="SingleAttention",
+        test_name="ita_mha8_attn_directed_test",
+        directed_layer="SingleAttention",
+    ))
+
+    for index, reset_step in enumerate(("Q", "K", "V", "QK", "F1")):
+        reset_name = f"coverage_mid_reset_{reset_step.lower()}"
+        cases.append(case_entry(
+            reset_name,
+            "coverage_target",
+            f"mid_transaction_reset_{reset_step.lower()}_to_idle",
+            mode_shape,
+            heads,
+            "Relu",
+            mode_standalone,
+            f"{reset_name}_unused_stream.csv",
+            f"{reset_name}_unused_requant.csv",
+            f"{reset_name}_unused_manifest.json",
+            {"ntb_random_seed": 108 + index},
+            generate_vectors=False,
+            extra_smoke_args=[
+                "-NoCompare",
+                "-NoAutoVectorFlow",
+                "-CoverageTargetMode", "MID_RESET",
+                "-MidResetStep", reset_step,
+                "-MidResetCycles", "3",
+            ],
+            test_name="ita_mha8_coverage_target_test",
+        ))
+
+    stall_shape = Shape(256, 64, 256, 64)
+    cases.append(case_entry(
+        "coverage_stall_boundaries",
+        "coverage_target",
+        "softmax_div_and_fifo_full_empty_boundaries",
+        stall_shape,
+        heads,
+        "Identity",
+        mode_standalone,
+        "coverage_stall_boundaries_unused_stream.csv",
+        "coverage_stall_boundaries_unused_requant.csv",
+        "coverage_stall_boundaries_unused_manifest.json",
+        {"ntb_random_seed": 113},
+        generate_vectors=False,
+        extra_smoke_args=[
+            "-NoCompare",
+            "-NoAutoVectorFlow",
+            "-CoverageTargetMode", "STALL_BOUNDARIES",
+            "-OutputWaitTimeoutCycles", "1000000",
+        ],
+        test_name="ita_mha8_coverage_target_test",
+    ))
+
+    toggle_entry = case_entry(
+        "coverage_config_toggle_multijob",
+        "coverage_target",
+        "multi_job_tile_activation_requant_bias_value_toggle",
+        mode_shape,
+        heads,
+        "Auto",
+        mode_standalone,
+        "coverage_config_toggle_multijob_unused_stream.csv",
+        "coverage_config_toggle_multijob_unused_requant.csv",
+        "coverage_config_toggle_multijob_unused_manifest.json",
+        {"ntb_random_seed": 114},
+        generate_vectors=False,
+        extra_smoke_args=[
+            "-NoCompare",
+            "-NoAutoVectorFlow",
+            "-ProtocolNumJobs", "3",
+            "-ProtocolTileMin", "1",
+            "-ProtocolTileMax", "2",
+            "-ProtocolProjection", "ATTNFF",
+            "-ProtocolConfigToggle",
+        ],
+        test_name="ita_mha8_protocol_random_test",
+    )
+    toggle_entry["job_config_schedule"] = {
+        "jobs": 3,
+        "tile_values_per_dimension": [1, 2],
+        "activations": ["Identity", "Relu", "Gelu"],
+        "requant_profiles": [0, 1],
+        "bias_value_modes": ["zero", "nonzero"],
+        "note": "RTL has no separate bias-enable field; the test toggles zero/nonzero bias values while keeping the source handshake legal.",
+    }
+    cases.append(toggle_entry)
 
 
 def numerical_interactions_for_mode(mode: str) -> tuple[NumericalInteraction, ...]:
@@ -759,7 +901,7 @@ def main() -> int:
         print(json.dumps(manifest, indent=2, sort_keys=True))
     else:
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        with output_path.open("w", encoding="utf-8") as f:
+        with output_path.open("w", encoding="utf-8", newline="\n") as f:
             json.dump(manifest, f, indent=2, sort_keys=True)
             f.write("\n")
         print(f"Wrote {len(cases)} case(s) for suite(s) {','.join(suites)} -> {output_path}")

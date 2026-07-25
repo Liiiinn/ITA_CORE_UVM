@@ -19,7 +19,9 @@ class ita_mha8_attn_directed_test extends ita_mha8_base_test;
         int unsigned tile_p;
         int unsigned tile_f;
         string activation_name;
+        string directed_layer_name;
         activation_e activation_value;
+        layer_e layer_value;
 
         phase.raise_objection(this);
 
@@ -48,7 +50,17 @@ class ita_mha8_attn_directed_test extends ita_mha8_base_test;
             endcase
         end
 
-        core.load_stream_csv(stream_path, Attention, Idle, activation_value, tile_s, tile_e, tile_p, tile_f);
+        layer_value = Attention;
+        if ($value$plusargs("ITA_DIRECTED_LAYER=%s", directed_layer_name)) begin
+            case (directed_layer_name)
+                "Attention",       "attention":        layer_value = Attention;
+                "SingleAttention", "singleattention": layer_value = SingleAttention;
+                default:
+                    `uvm_fatal("ATTN_TEST", $sformatf("Unsupported ITA_DIRECTED_LAYER=%s", directed_layer_name))
+            endcase
+        end
+
+        core.load_stream_csv(stream_path, layer_value, Idle, activation_value, tile_s, tile_e, tile_p, tile_f);
         if ($value$plusargs("ITA_REQUANT_CSV=%s", requant_path))
             core.load_requant_csv(requant_path);
 

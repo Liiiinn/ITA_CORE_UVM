@@ -19,6 +19,7 @@ class ita_mha8_scoreboard extends uvm_component;
     int unsigned actual_count;
 
     ita_mha8_predictor pred;
+    virtual ita_mha8_if vif;
 
     int unsigned tile_s;
     int unsigned tile_e;
@@ -54,6 +55,7 @@ class ita_mha8_scoreboard extends uvm_component;
     int unsigned current_job_id;
     int unsigned ctrl_count;
     bit          has_active_ctrl;
+    bit          aborted_job[string];
     layer_e      active_layer;
     activation_e active_activation;
 
@@ -115,8 +117,29 @@ class ita_mha8_scoreboard extends uvm_component;
             process_ctrl_fifo();
             process_source_fifo();
             process_output_fifo();
+            process_reset_abort();
         join
     endtask : run_phase
+
+    task process_reset_abort();
+        string active_job;
+
+        if (vif == null)
+            `uvm_fatal("ITA_SCB_VIF", "ita_mha8_if handle was not set")
+
+        forever begin
+            @(negedge vif.rst_ni);
+            if (has_active_ctrl) begin
+                active_job = job_key();
+                aborted_job[active_job] = 1'b1;
+                has_active_ctrl = 1'b0;
+                `uvm_info("ITA_SCB_RESET_ABORT",
+                    $sformatf("Reset aborted partial %s; final beat/segment completeness checks are suppressed for this job",
+                        active_job),
+                    UVM_LOW)
+            end
+        end
+    endtask : process_reset_abort
 
     task process_ctrl_fifo();
         ita_ctrl_item tr;
@@ -246,6 +269,13 @@ class ita_mha8_scoreboard extends uvm_component;
         return group_key;
     endfunction : job_key_from_group_key
 
+    function bit group_belongs_to_aborted_job(string group_key);
+        string group_job;
+
+        group_job = job_key_from_group_key(group_key);
+        return aborted_job.exists(group_job) && aborted_job[group_job];
+    endfunction : group_belongs_to_aborted_job
+
     function string beat_key(ita_stream_item tr);
         return $sformatf("%s:b%0d", count_key(tr), tr.beat_id);
     endfunction : beat_key
@@ -309,6 +339,10 @@ class ita_mha8_scoreboard extends uvm_component;
                 steps.push_back(F2);
             end
             Linear: steps.push_back(MatMul);
+            SingleAttention: begin
+                steps.push_back(QK);
+                steps.push_back(AV);
+            end
             default: begin end
         endcase
 
@@ -344,6 +378,8 @@ class ita_mha8_scoreboard extends uvm_component;
                 return (step inside {F1, F2});
             Linear:
                 return (step == MatMul);
+            SingleAttention:
+                return (step inside {QK, AV});
             default:
                 return 1'b0;
         endcase
@@ -668,6 +704,8 @@ class ita_mha8_scoreboard extends uvm_component;
         string b_key;
 
         foreach (max_beat_id_by_key[cnt_key]) begin
+            if (group_belongs_to_aborted_job(cnt_key))
+                continue;
             for (int unsigned beat = 0; beat <= max_beat_id_by_key[cnt_key]; beat++) begin
                 b_key = $sformatf("%s:b%0d", cnt_key, beat);
                 if (!beat_seen.exists(b_key)) begin
@@ -685,6 +723,8 @@ class ita_mha8_scoreboard extends uvm_component;
         int unsigned bias_n;
 
         foreach (source_segment_seen[key]) begin
+            if (group_belongs_to_aborted_job(key))
+                continue;
             input_n = input_count_by_segment.exists(key) ? input_count_by_segment[key] : 0;
             weight_n = weight_count_by_segment.exists(key) ? weight_count_by_segment[key] : 0;
             bias_n = bias_count_by_segment.exists(key) ? bias_count_by_segment[key] : 0;
@@ -706,6 +746,8 @@ class ita_mha8_scoreboard extends uvm_component;
         int unsigned actual_n;
 
         foreach (source_segment_count_by_step_head[key]) begin
+            if (group_belongs_to_aborted_job(key))
+                continue;
             step = source_step_by_step_head[key];
             head_id = source_head_by_step_head[key];
             expected_n = expected_source_segments_by_step_head.exists(key) ?
@@ -725,6 +767,8 @@ class ita_mha8_scoreboard extends uvm_component;
         end
 
         foreach (output_segment_count_by_kind_step_head[key]) begin
+            if (group_belongs_to_aborted_job(key))
+                continue;
             kind = output_kind_by_kind_step_head[key];
             step = output_step_by_kind_step_head[key];
             head_id = output_head_by_kind_step_head[key];

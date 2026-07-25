@@ -73,6 +73,27 @@ module ita_mha8_tb_top;
 
     assign vif.per_head_ready_dbg = dut.head_ready;
 
+    for (genvar h = 0; h < 8; h++) begin : gen_tb_observe
+        assign vif.controller_step_dbg[h] = dut.gen_head[h].i_ita_head.i_controller.step_q;
+        assign vif.controller_beat_dbg[h] = dut.gen_head[h].i_ita_head.i_controller.count_q;
+        assign vif.controller_output_fifo_stall_dbg[h] =
+            dut.gen_head[h].i_ita_head.i_controller.ongoing_q >= FifoDepth;
+        assign vif.controller_softmax_fifo_stall_dbg[h] =
+            dut.gen_head[h].i_ita_head.i_controller.softmax_fifo &&
+            dut.gen_head[h].i_ita_head.i_controller.ongoing_soft_q >= SoftFifoDepth;
+        assign vif.controller_softmax_div_stall_dbg[h] =
+            dut.gen_head[h].i_ita_head.i_controller.softmax_div;
+        assign vif.output_fifo_full_dbg[h] = dut.gen_head[h].i_ita_head.fifo_full;
+        assign vif.output_fifo_empty_dbg[h] = dut.gen_head[h].i_ita_head.fifo_empty;
+        assign vif.softmax_fifo_full_dbg[h] =
+            dut.gen_head[h].i_ita_head.i_softmax_top.i_softmax.fifo_full;
+        assign vif.softmax_fifo_empty_dbg[h] =
+            dut.gen_head[h].i_ita_head.i_softmax_top.i_softmax.fifo_empty;
+    end
+
+    assign vif.ff_controller_step_dbg = dut.i_ffn.i_controller.step_q;
+    assign vif.ff_controller_beat_dbg = dut.i_ffn.i_controller.count_q;
+
     initial begin
         clk = 1'b0;
         forever begin

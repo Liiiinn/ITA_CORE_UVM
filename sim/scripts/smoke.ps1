@@ -6,8 +6,10 @@ param(
     [int]$Heads = 8,
     [ValidateSet("synthetic", "pyita-q")]
     [string]$VectorSource = "synthetic",
-    [ValidateSet("Q", "K", "V", "QKV", "ATTN", "ATTNFF")]
+    [ValidateSet("Q", "K", "V", "QK", "QKAV", "QKV", "ATTN", "ATTNFF")]
     [string]$Projection = "Q",
+    [ValidateSet("Attention", "SingleAttention")]
+    [string]$DirectedLayer = "Attention",
     [ValidateSet("Auto", "Identity", "Relu", "Gelu")]
     [string]$Activation = "Auto",
     [string]$PyitaDir = "",
@@ -30,6 +32,11 @@ param(
     [int]$ProtocolStartGapMax = 0,
     [ValidateSet("ATTN", "FF", "ATTNFF", "RANDOM")]
     [string]$ProtocolProjection = "ATTNFF",
+    [switch]$ProtocolConfigToggle,
+    [string]$CoverageTargetMode = "",
+    [ValidateSet("Q", "K", "V", "QK", "F1")]
+    [string]$MidResetStep = "Q",
+    [int]$MidResetCycles = 3,
     [string]$NativeVrFaultKind = "",
     [string]$NativeVrFaultMode = "",
     [int]$NativeVrFaultHead = 0,
@@ -44,6 +51,7 @@ param(
     [string]$CoverageUcdb = "",
     [switch]$EnableCodeCoverage,
     [string]$CodeCoverageSpec = "sbceft",
+    [switch]$NoCompile,
     [switch]$GenerateVectors,
     [switch]$NoGenerateVectors,
     [switch]$CompareLinear,
@@ -118,6 +126,7 @@ $IsQDirected = ($TestName -eq "ita_mha8_q_directed_test")
 $IsQkvDirected = ($TestName -eq "ita_mha8_qkv_directed_test")
 $IsAttnDirected = ($TestName -eq "ita_mha8_attn_directed_test")
 $IsProtocolRandom = ($TestName -eq "ita_mha8_protocol_random_test")
+$IsCoverageTarget = ($TestName -eq "ita_mha8_coverage_target_test")
 $IsNativeVrNegative = ($TestName -eq "ita_mha8_native_vr_negative_test")
 $AutoVectorFlow = (($IsLinearDirected -or $IsQDirected -or $IsQkvDirected -or $IsAttnDirected) -and -not $NoAutoVectorFlow)
 $RunGenerateVectors = (($GenerateVectors -or $AutoVectorFlow) -and -not $NoGenerateVectors)
@@ -135,6 +144,9 @@ if ($ProtocolTileMin -lt 1 -or $ProtocolTileMin -gt 4 -or
 }
 if ($ProtocolStartGapMax -lt 0 -or $ResetCycles -lt 1) {
     throw "-ProtocolStartGapMax must be non-negative and -ResetCycles must be positive"
+}
+if ($MidResetCycles -lt 1) {
+    throw "-MidResetCycles must be positive"
 }
 
 if ($InputSourceGapMax -lt 0) {
@@ -224,8 +236,13 @@ if ($RunGenerateVectors) {
             throw "-PyitaDir is required when -VectorSource pyita-q generates vectors"
         }
         $DutStep = "MatMul"
-        if ($IsQDirected -or $IsQkvDirected -or $IsAttnDirected) {
+        $DutLayer = "Linear"
+        if ($IsQDirected -or $IsQkvDirected) {
             $DutStep = $Projection
+            $DutLayer = "Attention"
+        } elseif ($IsAttnDirected) {
+            $DutStep = $Projection
+            $DutLayer = $DirectedLayer
         }
         $ResolvedPyitaDir = Resolve-RepoPath $PyitaDir
         $PyitaCaseDir = Split-Path -Parent $ResolvedPyitaDir
@@ -259,13 +276,14 @@ if ($RunGenerateVectors) {
             "--requant-name", $RequantName,
             "--manifest-name", (Split-Path -Leaf $ManifestPath),
             "--dut-step", $DutStep,
+            "--dut-layer", $DutLayer,
             "--tile-s", [string]$TileS,
             "--tile-e", [string]$TileE,
             "--tile-p", [string]$TileP,
             "--tile-f", [string]$TileF,
             "--activation", $ResolvedActivation
         )
-        if ($Projection -ne "QKV" -and $Projection -ne "ATTN" -and $Projection -ne "ATTNFF") {
+        if ($Projection -ne "QKV" -and $Projection -ne "QKAV" -and $Projection -ne "ATTN" -and $Projection -ne "ATTNFF") {
             $genArgs += @("--source-step", $Projection)
         }
         Invoke-PythonStep (Join-Path $ToolsDir "gen_mha8_pyita_vectors.py") $genArgs
@@ -282,12 +300,16 @@ if ($RunGenerateVectors) {
     }
 }
 
-& (Join-Path $ScriptDir "compile.ps1") `
-    -QuestaBin $QuestaBin `
-    -UvmHome $UvmHome `
-    -EnableCodeCoverage:$EnableCodeCoverage `
-    -CodeCoverageSpec $CodeCoverageSpec `
-    -DryRun:$DryRun
+if (-not $NoCompile) {
+    & (Join-Path $ScriptDir "compile.ps1") `
+        -QuestaBin $QuestaBin `
+        -UvmHome $UvmHome `
+        -EnableCodeCoverage:$EnableCodeCoverage `
+        -CodeCoverageSpec $CodeCoverageSpec `
+        -DryRun:$DryRun
+} else {
+    Write-Host "PS> compile skipped; reusing the regression work library"
+}
 
 $VsimTileS = $TileS
 $VsimTileE = $TileE
@@ -350,6 +372,10 @@ if ($IsProtocolRandom -or $IsNativeVrNegative) {
         "+ITA_RESET_CYCLES=$ResetCycles"
     )
 
+    if ($ProtocolConfigToggle) {
+        $vsimArgs += "+ITA_PROTOCOL_CONFIG_TOGGLE=1"
+    }
+
     if ($IsNativeVrNegative) {
         if ($NativeVrFaultKind -eq "" -or $NativeVrFaultMode -eq "") {
             throw "ita_mha8_native_vr_negative_test requires -NativeVrFaultKind and -NativeVrFaultMode"
@@ -360,6 +386,18 @@ if ($IsProtocolRandom -or $IsNativeVrNegative) {
             "+ITA_NATIVE_VR_FAULT_HEAD=$NativeVrFaultHead"
         )
     }
+}
+
+if ($IsCoverageTarget) {
+    if ($CoverageTargetMode -eq "") {
+        throw "ita_mha8_coverage_target_test requires -CoverageTargetMode"
+    }
+    $vsimArgs += @(
+        "+ITA_COV_TARGET_MODE=$CoverageTargetMode",
+        "+ITA_MID_RESET_STEP=$MidResetStep",
+        "+ITA_MID_RESET_CYCLES=$MidResetCycles",
+        "+ITA_RESET_CYCLES=$ResetCycles"
+    )
 }
 
 if ($OutputBpTimeoutTest) {
@@ -374,7 +412,7 @@ if ($OutputBpTimeoutTest) {
 
 if (($IsLinearDirected -or $IsQDirected -or $IsQkvDirected -or $IsAttnDirected) -and -not $NoAutoVectorFlow) {
     $vsimArgs += "+ITA_STREAM_CSV=$StreamPlusArg"
-    if (($IsQDirected -or $IsQkvDirected -or $IsAttnDirected) -and $VectorSource -eq "pyita-q" -and $RequantPlusArg -ne "") {
+    if (($IsLinearDirected -or $IsQDirected -or $IsQkvDirected -or $IsAttnDirected) -and $VectorSource -eq "pyita-q" -and $RequantPlusArg -ne "") {
         if ($IsQDirected) {
             $vsimArgs += "+ITA_DIRECTED_STEP=$Projection"
         }
@@ -384,6 +422,9 @@ if (($IsLinearDirected -or $IsQDirected -or $IsQkvDirected -or $IsAttnDirected) 
         $vsimArgs += "+ITA_TILE_P=$VsimTileP"
         $vsimArgs += "+ITA_TILE_F=$VsimTileF"
         $vsimArgs += "+ITA_ACTIVATION=$ResolvedActivation"
+        if ($IsAttnDirected) {
+            $vsimArgs += "+ITA_DIRECTED_LAYER=$DirectedLayer"
+        }
     }
 }
 $DoCommand = "run -all; quit -f"

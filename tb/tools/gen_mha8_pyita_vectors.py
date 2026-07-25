@@ -239,9 +239,12 @@ PROJECTION_FILES = {
 
 MULTI_STEP_PROJECTIONS = {
     "QKV": ["Q", "K", "V"],
+    "QKAV": ["QK", "AV"],
     "ATTN": ["Q", "K", "V", "QK", "AV", "OW"],
     "ATTNFF": ["Q", "K", "V", "QK", "AV", "OW", "F1", "F2"],
 }
+
+TILED_SINGLE_STEP_PROJECTIONS = {"QK"}
 
 FF_STEPS = {"F1", "F2"}
 
@@ -529,11 +532,12 @@ def main() -> int:
     parser.add_argument("--out-dir", type=Path, default=default_out_dir, help="Directory for generated UVM files.")
     parser.add_argument(
         "--projection",
-        choices=sorted(PROJECTION_FILES) + sorted(MULTI_STEP_PROJECTIONS),
+        choices=sorted(PROJECTION_FILES) + sorted(TILED_SINGLE_STEP_PROJECTIONS) + sorted(MULTI_STEP_PROJECTIONS),
         default="Q",
         help=(
-            "PyITA projection to adapt. QKV emits Q -> K -> V; ATTN emits Q -> K -> V -> QK -> AV -> OW; "
-            "ATTNFF appends F1 -> F2 feed-forward streams."
+            "PyITA projection to adapt. QKV emits Q -> K -> V; QKAV emits QK -> AV; "
+            "ATTN emits Q -> K -> V -> QK -> AV -> OW; "
+            "ATTNFF appends F1 -> F2 feed-forward streams; QK emits the SingleAttention QK phase."
         ),
     )
     parser.add_argument("--heads", type=int, default=8, help="Number of MHA heads to adapt, starting at head 0.")
@@ -560,6 +564,12 @@ def main() -> int:
     )
     parser.add_argument("--source-step", help="PyITA source step recorded in the manifest; defaults to --projection.")
     parser.add_argument("--dut-step", default="MatMul", help="DUT compare step used by the current UVM Linear path.")
+    parser.add_argument(
+        "--dut-layer",
+        choices=("Auto", "Attention", "Linear", "SingleAttention"),
+        default="Auto",
+        help="DUT layer recorded in the adapter manifest; Auto preserves the existing inference.",
+    )
     parser.add_argument("--input-file", help="Override projection input file name, e.g. Q.txt.")
     parser.add_argument("--weight-prefix", help="Override projection weight prefix, e.g. Wq.")
     parser.add_argument("--bias-prefix", help="Override projection bias prefix, e.g. Bq.")
@@ -584,20 +594,27 @@ def main() -> int:
     ):
         raise ValueError(f"{projection} mode uses fixed file conventions; do not pass source/file override arguments")
 
-    projection_files = PROJECTION_FILES[projection] if not is_multi_step else None
+    projection_files = PROJECTION_FILES.get(projection) if not is_multi_step else None
     source_step = args.source_step if args.source_step is not None else projection
     if is_multi_step:
         input_file = None
         weight_prefix = None
         bias_prefix = None
         expected_source_prefix = None
-    else:
+    elif projection_files is not None:
         input_file = args.input_file if args.input_file is not None else projection_files["input_file"]
         weight_prefix = args.weight_prefix if args.weight_prefix is not None else projection_files["weight_prefix"]
         bias_prefix = args.bias_prefix if args.bias_prefix is not None else projection_files["bias_prefix"]
         expected_source_prefix = (
             args.expected_source_prefix if args.expected_source_prefix is not None else projection_files["expected_prefix"]
         )
+    else:
+        if any(value is not None for value in (args.input_file, args.weight_prefix, args.bias_prefix, args.expected_source_prefix)):
+            raise ValueError(f"{projection} mode uses fixed file conventions; do not pass source/file overrides")
+        input_file = None
+        weight_prefix = None
+        bias_prefix = None
+        expected_source_prefix = None
     stream_name = args.stream_name if args.stream_name is not None else f"uvm_pyita_{projection_lower}_mha8_stream.csv"
     requant_name = args.requant_name if args.requant_name is not None else f"uvm_pyita_{projection_lower}_mha8_requant.csv"
     manifest_name = (
@@ -656,17 +673,21 @@ def main() -> int:
     requant_rows: list[dict[str, Any]] = []
     requant_rows.extend(make_activation_requant_rows(pyita_dir, args.activation))
     per_head: list[dict[str, Any]] = [{"head_id": head, "steps": {}} for head in range(args.heads)] if is_multi_step else []
-    tile_aware = is_multi_step
+    tile_aware = is_multi_step or projection in TILED_SINGLE_STEP_PROJECTIONS
     head_stream_info: dict[tuple[str, int], dict[str, Any]] = {}
     ff_stream_info: dict[str, dict[str, Any]] = {}
 
     for step_name in head_projections:
         step_lower = step_name.lower()
         step_source_step = step_name
+        stream_step_name = step_name if is_multi_step else args.dut_step
         step_expected_prefix = f"expected_{step_lower}_head" if is_multi_step else expected_prefix
         step_actual_prefix = f"actual_{step_lower}_head" if is_multi_step else actual_prefix
 
         step_requant_rows = make_requant_rows(pyita_dir, step_source_step, args.heads)
+        if stream_step_name != step_source_step:
+            for row in step_requant_rows:
+                row["step"] = stream_step_name
         requant_rows.extend(step_requant_rows)
 
         for head in range(args.heads):
@@ -731,7 +752,7 @@ def main() -> int:
                     else:
                         start = beat * args.weight_lanes
                         payload = pack_lanes(sources.stream_weight_values[start : start + args.weight_lanes], 8)
-                    rows.append(make_row("head_weight", head, 0, 0, beat, step_name, payload))
+                    rows.append(make_row("head_weight", head, 0, 0, beat, stream_step_name, payload))
 
                 for beat in range(input_beats):
                     if is_multi_step:
@@ -739,7 +760,7 @@ def main() -> int:
                     else:
                         start = beat * args.input_lanes
                         payload = pack_lanes(sources.stream_input_values[start : start + args.input_lanes], 8)
-                    rows.append(make_row("head_input", head, 0, 0, beat, step_name, payload))
+                    rows.append(make_row("head_input", head, 0, 0, beat, stream_step_name, payload))
 
                 for beat in range(bias_beats):
                     if sources.generated_zero_bias:
@@ -757,7 +778,7 @@ def main() -> int:
                             )
                     start = source_beat * args.bias_lanes
                     payload = pack_lanes(sources.bias_values[start : start + args.bias_lanes], args.bias_bits)
-                    rows.append(make_row("head_bias", head, 0, 0, beat, step_name, payload))
+                    rows.append(make_row("head_bias", head, 0, 0, beat, stream_step_name, payload))
 
             expected_path = out_dir / f"{step_expected_prefix}{head}.txt"
             actual_path = out_dir / f"{step_actual_prefix}{head}.txt"
@@ -1158,9 +1179,14 @@ def main() -> int:
     else:
         compare_cfg = {"actual_step": args.dut_step, "stream": "per_head"}
 
+    if args.dut_layer == "Auto":
+        dut_layer = "Attention" if is_multi_step or args.dut_step == source_step else "Linear"
+    else:
+        dut_layer = args.dut_layer
+
     manifest = {
         "name": f"pyita_{projection_lower}_mha8_adapter",
-        "layer": "Attention" if is_multi_step or args.dut_step == source_step else "Linear",
+        "layer": dut_layer,
         "activation": args.activation,
         "heads": args.heads,
         "step": projection if is_multi_step else args.dut_step,

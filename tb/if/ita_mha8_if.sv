@@ -102,6 +102,20 @@ interface ita_mha8_if
     counter_t                ff_beat_id_dbg;
     logic                    phase_mismatch_o;
     bit                      native_vr_violation_seen;
+
+    // TB-only observability for targeted reset/stall coverage. These signals
+    // mirror existing DUT internals and do not drive functional RTL inputs.
+    step_e                   controller_step_dbg                [NumHeads];
+    counter_t                controller_beat_dbg                [NumHeads];
+    logic                    controller_output_fifo_stall_dbg   [NumHeads];
+    logic                    controller_softmax_fifo_stall_dbg  [NumHeads];
+    logic                    controller_softmax_div_stall_dbg   [NumHeads];
+    logic                    output_fifo_full_dbg               [NumHeads];
+    logic                    output_fifo_empty_dbg              [NumHeads];
+    logic                    softmax_fifo_full_dbg              [NumHeads];
+    logic                    softmax_fifo_empty_dbg             [NumHeads];
+    step_e                   ff_controller_step_dbg;
+    counter_t                ff_controller_beat_dbg;
     // Stage 11: add feed-forward stream assertions after the FF path is added to active tests.
 
     tile_t                   sva_tile_s_q;

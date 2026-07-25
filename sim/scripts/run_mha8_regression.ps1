@@ -6,6 +6,10 @@ param(
     [string]$OutDir = "",
     [switch]$EnableCodeCoverage,
     [string]$CodeCoverageSpec = "sbceft",
+    [switch]$Resume,
+    [switch]$CompilePerCase,
+    [ValidateRange(0, 3600)]
+    [int]$CaseCooldownSeconds = 0,
     [switch]$DryRun,
     [switch]$StopOnFirstFail
 )
@@ -20,6 +24,7 @@ $WorkspaceDir = Split-Path -Parent $CoreDir
 $LoggerDir = Join-Path $SimDir "logger"
 $SimLogDir = Join-Path $SimDir "output\logs"
 $SmokeScript = Join-Path $ScriptDir "smoke.ps1"
+$CompileScript = Join-Path $ScriptDir "compile.ps1"
 $Timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
 
 if ($CasesManifest -eq "") {
@@ -223,11 +228,12 @@ function Invoke-LoggedTool {
     $cmdLine = Format-CommandLine $Command $Arguments
     Write-Host "PS> $cmdLine"
     Add-TextLine $LogFile "PS> $cmdLine"
-    $output = & $Command @Arguments 2>&1
-    $exitCode = $LASTEXITCODE
-    foreach ($line in @($output)) {
-        Add-TextLine $LogFile ([string]$line)
+    & $Command @Arguments 2>&1 | ForEach-Object {
+        $line = [string]$_
+        Add-TextLine $LogFile $line
+        Write-Host $line
     }
+    $exitCode = $LASTEXITCODE
     return $exitCode
 }
 
@@ -245,6 +251,17 @@ if ($cases.Count -eq 0) {
 
 if (-not $DryRun) {
     New-Item -ItemType Directory -Path $OutDir -Force | Out-Null
+}
+
+if (-not $CompilePerCase) {
+    Write-Host "Preparing one clean work library for the entire suite"
+    & $CompileScript `
+        -QuestaBin $QuestaBin `
+        -UvmHome $UvmHome `
+        -EnableCodeCoverage:$EnableCodeCoverage `
+        -CodeCoverageSpec $CodeCoverageSpec `
+        -CleanWork `
+        -DryRun:$DryRun
 }
 
 $results = New-Object System.Collections.Generic.List[object]
@@ -310,6 +327,7 @@ foreach ($case in $cases) {
     if ($caseCodeCoverageEnabled) {
         $smokeArgs = Set-ValueArg $smokeArgs "-CodeCoverageSpec" $CodeCoverageSpec
     }
+    $smokeArgs = Set-SwitchArg $smokeArgs "-NoCompile" (-not $CompilePerCase)
     if ($DryRun) {
         $smokeArgs = Set-SwitchArg $smokeArgs "-DryRun" $true
     }
@@ -323,6 +341,54 @@ foreach ($case in $cases) {
     $sourceVsimLog = Join-Path $SimLogDir "$testName.log"
 
     Write-Host ("[{0}/{1}] {2}" -f ($caseIndex + 1), $cases.Count, $caseName)
+
+    if ($Resume -and -not $DryRun -and (Test-Path -LiteralPath $caseResultPath -PathType Leaf)) {
+        try {
+            $existingResult = Get-Content -LiteralPath $caseResultPath -Raw | ConvertFrom-Json
+            $existingUcdb = [string](Get-JsonProp $existingResult "ucdb_path" "")
+            $existingLog = [string](Get-JsonProp $existingResult "log_path" $caseLog)
+            $existingVsimLog = [string](Get-JsonProp $existingResult "vsim_log_path" $caseVsimLog)
+            $existingExitStatus = [int](Get-JsonProp $existingResult "exit_status" 1)
+            $resumeValid = (
+                ([string](Get-JsonProp $existingResult "name" "") -eq $caseName) -and
+                ([string](Get-JsonProp $existingResult "status" "") -eq "PASS") -and
+                ([bool](Get-JsonProp $existingResult "code_coverage_enabled" $false) -eq $caseCodeCoverageEnabled)
+            )
+            if ($expectFail) {
+                $resumeValid = (
+                    $resumeValid -and
+                    ($existingExitStatus -ne 0) -and
+                    [bool](Get-JsonProp $existingResult "matched_expected_error" $false) -and
+                    (Test-Path -LiteralPath $existingVsimLog -PathType Leaf)
+                )
+            } else {
+                $resumeValid = (
+                    $resumeValid -and
+                    ($existingExitStatus -eq 0) -and
+                    ($existingUcdb -ne "") -and
+                    (Test-Path -LiteralPath $existingUcdb -PathType Leaf)
+                )
+            }
+            if ($resumeValid -and $caseCodeCoverageEnabled) {
+                $launchLine = if (Test-Path -LiteralPath $existingLog -PathType Leaf) {
+                    [string](Get-Content -LiteralPath $existingLog -First 1)
+                } else {
+                    ""
+                }
+                $resumeValid = ($launchLine -match ("-CodeCoverageSpec\s+" + [regex]::Escape($CodeCoverageSpec) + "(?:\s|$)"))
+            }
+            if ($resumeValid) {
+                $existingResult | Add-Member -NotePropertyName resume_reused -NotePropertyValue $true -Force
+                $results.Add($existingResult)
+                Write-Host "  RESUME> reused completed PASS case and UCDB"
+                $caseIndex++
+                continue
+            }
+            Write-Host "  RESUME> existing artifacts are incomplete or incompatible; rerunning case"
+        } catch {
+            Write-Warning "Could not validate existing case result; rerunning $caseName`: $($_.Exception.Message)"
+        }
+    }
 
     if ($expectFail -and [string]::IsNullOrWhiteSpace($expectedErrorRegex)) {
         $status = "FAIL"
@@ -339,18 +405,25 @@ foreach ($case in $cases) {
         $status = "DRYRUN"
     } else {
         New-Item -ItemType Directory -Path $caseDir -Force | Out-Null
+        foreach ($stalePath in @($caseUcdb, $caseVsimLog, $caseResultPath)) {
+            if (Test-Path -LiteralPath $stalePath -PathType Leaf) {
+                Remove-Item -LiteralPath $stalePath -Force
+            }
+        }
         if (Test-Path -LiteralPath $sourceVsimLog -PathType Leaf) {
             Remove-Item -LiteralPath $sourceVsimLog -Force
         }
         $processArgs = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $SmokeScript) + $smokeArgs
         Write-Utf8File $caseLog ("PS> " + (Format-CommandLine $PowerShellExe $processArgs) + [Environment]::NewLine)
         try {
-            $output = & $PowerShellExe @processArgs 2>&1
-            foreach ($line in @($output)) {
-                Add-TextLine $caseLog ([string]$line)
+            & $PowerShellExe @processArgs 2>&1 | ForEach-Object {
+                $line = [string]$_
+                Add-TextLine $caseLog $line
+                Write-Host $line
             }
-            if ($LASTEXITCODE -ne 0) {
-                $exitCode = $LASTEXITCODE
+            $processExitCode = $LASTEXITCODE
+            if ($processExitCode -ne 0) {
+                $exitCode = $processExitCode
                 throw "smoke.ps1 failed with exit code $exitCode"
             }
         } catch {
@@ -421,6 +494,7 @@ foreach ($case in $cases) {
         ucdb_path = $caseUcdb
         ucdb_exists = $ucdbExists
         code_coverage_enabled = $caseCodeCoverageEnabled
+        resume_reused = $false
         failure_message = $failureMessage
     }
     $results.Add([pscustomobject]$result)
@@ -432,6 +506,11 @@ foreach ($case in $cases) {
     if ($status -eq "FAIL" -and $StopOnFirstFail) {
         $stoppedEarly = $true
         break
+    }
+
+    if (-not $DryRun -and $CaseCooldownSeconds -gt 0 -and ($caseIndex + 1) -lt $cases.Count) {
+        Write-Host "  cooldown> sleeping $CaseCooldownSeconds seconds before the next case"
+        Start-Sleep -Seconds $CaseCooldownSeconds
     }
 
     $caseIndex++

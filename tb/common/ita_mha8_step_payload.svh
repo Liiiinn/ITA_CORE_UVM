@@ -119,7 +119,7 @@ class ita_mha8_step_payload extends uvm_object;
         enabled = 1'b1;
 
         case (step)
-            Q, K, V, QK, AV, OW: begin
+            Q, K, V, QK, AV, OW, MatMul: begin
                 drive_head_streams = 1'b1;
                 expect_head_output = 1'b1;
             end

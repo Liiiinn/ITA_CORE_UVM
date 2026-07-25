@@ -11,5 +11,6 @@ package ita_mha8_vseq_pkg;
 
     `include "ita_mha8_vsequence.svh"
     `include "ita_mha8_protocol_random_vsequence.svh"
+    `include "ita_mha8_coverage_target_vsequence.svh"
 
 endpackage : ita_mha8_vseq_pkg

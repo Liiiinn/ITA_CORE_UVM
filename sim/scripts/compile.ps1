@@ -3,6 +3,7 @@ param(
     [string]$UvmHome = $env:UVM_HOME,
     [switch]$EnableCodeCoverage,
     [string]$CodeCoverageSpec = "sbceft",
+    [switch]$CleanWork,
     [switch]$DryRun
 )
 
@@ -45,8 +46,18 @@ if (-not (Test-Path -LiteralPath $FileList -PathType Leaf)) {
 
 if (-not $DryRun) {
     New-Item -ItemType Directory -Path $OutputDir -Force | Out-Null
+    if ($CleanWork -and (Test-Path -LiteralPath $WorkDir)) {
+        $resolvedOutput = [System.IO.Path]::GetFullPath($OutputDir).TrimEnd('\')
+        $resolvedWork = [System.IO.Path]::GetFullPath($WorkDir)
+        if (-not $resolvedWork.StartsWith($resolvedOutput + '\', [System.StringComparison]::OrdinalIgnoreCase)) {
+            throw "Refusing to clean work directory outside simulation output: $resolvedWork"
+        }
+        Remove-Item -LiteralPath $resolvedWork -Recurse -Force
+    }
     New-Item -ItemType Directory -Path $WorkDir -Force | Out-Null
     New-Item -ItemType Directory -Path $LogDir -Force | Out-Null
+} elseif ($CleanWork) {
+    Write-Host "DRYRUN> clean work library $WorkDir"
 }
 
 $vlib = Resolve-Tool "vlib.exe"

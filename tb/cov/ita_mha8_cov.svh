@@ -77,9 +77,10 @@ class ita_mha8_cov extends uvm_component;
         option.per_instance = 1;
 
         cp_layer: coverpoint layer_value {
-            bins attention   = {Attention};
-            // bins linear      = {Linear};
-            bins feedforward = {Feedforward};
+            bins attention        = {Attention};
+            bins feedforward      = {Feedforward};
+            bins linear           = {Linear};
+            bins single_attention = {SingleAttention};
         }
 
         cp_activation: coverpoint activation_value {
@@ -157,6 +158,7 @@ class ita_mha8_cov extends uvm_component;
             bins ow     = {OW};
             bins f1     = {F1};
             bins f2     = {F2};
+            bins matmul = {MatMul};
             illegal_bins idle = {Idle};
         }
 
@@ -197,21 +199,24 @@ class ita_mha8_cov extends uvm_component;
                 binsof(cp_kind.ff_input)  && (binsof(cp_step.q)  ||
                                             binsof(cp_step.k)  ||
                                             binsof(cp_step.v)  ||
-                                            binsof(cp_step.qk) ||
-                                            binsof(cp_step.av) ||
-                                            binsof(cp_step.ow)) ||
+                                             binsof(cp_step.qk) ||
+                                             binsof(cp_step.av) ||
+                                             binsof(cp_step.ow) ||
+                                             binsof(cp_step.matmul)) ||
                 binsof(cp_kind.ff_weight) && (binsof(cp_step.q)  ||
                                             binsof(cp_step.k)  ||
                                             binsof(cp_step.v)  ||
-                                            binsof(cp_step.qk) ||
-                                            binsof(cp_step.av) ||
-                                            binsof(cp_step.ow)) ||
+                                             binsof(cp_step.qk) ||
+                                             binsof(cp_step.av) ||
+                                             binsof(cp_step.ow) ||
+                                             binsof(cp_step.matmul)) ||
                 binsof(cp_kind.ff_bias)   && (binsof(cp_step.q)  ||
                                             binsof(cp_step.k)  ||
                                             binsof(cp_step.v)  ||
-                                            binsof(cp_step.qk) ||
-                                            binsof(cp_step.av) ||
-                                            binsof(cp_step.ow));
+                                             binsof(cp_step.qk) ||
+                                             binsof(cp_step.av) ||
+                                             binsof(cp_step.ow) ||
+                                             binsof(cp_step.matmul));
         }
         cross_step_head: cross cp_step, cp_head {
             ignore_bins ff_step_has_no_head =
@@ -245,6 +250,7 @@ class ita_mha8_cov extends uvm_component;
             bins ow     = {OW};
             bins f1     = {F1};
             bins f2     = {F2};
+            bins matmul = {MatMul};
             illegal_bins idle = {Idle};
         }
 
@@ -286,16 +292,18 @@ class ita_mha8_cov extends uvm_component;
                                             binsof(cp_step.k)  ||
                                             binsof(cp_step.v)  ||
                                             binsof(cp_step.qk) ||
-                                            binsof(cp_step.av) ||
-                                            binsof(cp_step.ow));
+                                             binsof(cp_step.av) ||
+                                             binsof(cp_step.ow) ||
+                                             binsof(cp_step.matmul));
 
             ignore_bins ff_kind_head_step =
                 binsof(cp_kind.ff_output)  && (binsof(cp_step.q)  ||
                                             binsof(cp_step.k)  ||
                                             binsof(cp_step.v)  ||
                                             binsof(cp_step.qk) ||
-                                            binsof(cp_step.av) ||
-                                            binsof(cp_step.ow));
+                                             binsof(cp_step.av) ||
+                                             binsof(cp_step.ow) ||
+                                             binsof(cp_step.matmul));
         }
         cross_step_head: cross cp_step, cp_head {
             ignore_bins ff_step_has_no_head =

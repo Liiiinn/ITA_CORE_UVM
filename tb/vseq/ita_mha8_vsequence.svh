@@ -43,23 +43,200 @@ class ita_mha8_vsequence extends uvm_sequence;
         fork
             drive_head_output_ready_bundle();
             begin
-                fork
-                    send_attention_phase();
-                    wait_attention_sum_complete();
-                join
+                case (core.layer)
+                    Linear:
+                        run_head_only_layer(Linear, MatMul);
+                    SingleAttention:
+                        run_single_attention_layer();
+                    Feedforward: begin
+                        if (!has_ff_steps())
+                            `uvm_fatal("VSEQ", "No feed-forward payload is available for Feedforward layer")
+                        fork
+                            send_feedforward_phase();
+                            wait_feedforward_complete();
+                        join
+                    end
+                    default: begin
+                        fork
+                            send_attention_phase();
+                            wait_attention_sum_complete();
+                        join
 
-                if (has_ff_steps()) begin
-                    fork
-                        send_feedforward_phase();
-                        wait_feedforward_complete();
-                    join
-                end
+                        if (has_ff_steps()) begin
+                            fork
+                                send_feedforward_phase();
+                                wait_feedforward_complete();
+                            join
+                        end
+                    end
+                endcase
 
                 stop_head_output_ready = 1'b1;
             end
         join_any
         disable fork;
     endtask : body
+
+    task run_head_only_layer(layer_e layer, step_e step);
+        fork
+            send_head_only_phase(layer, step);
+            wait_head_step_output_complete(step);
+        join
+    endtask : run_head_only_layer
+
+    task run_single_attention_layer();
+        fork
+            send_single_attention_phase();
+            wait_head_step_output_complete(AV);
+        join
+    endtask : run_single_attention_layer
+
+    task send_single_attention_phase();
+        bit qk_found;
+        bit av_found;
+
+        qk_found = 1'b0;
+        av_found = 1'b0;
+        send_ctrl_item(
+            "SingleAttention_QK_ctrl_seq",
+            make_ctrl_item(core, SingleAttention, QK, Identity, 1'b1));
+
+        foreach (core.payload_schedule[i]) begin
+            ita_mha8_step_payload payload;
+
+            payload = core.payload_schedule[i];
+            if (!(payload.step inside {QK, AV}))
+                continue;
+
+            if (payload.step == QK)
+                qk_found = 1'b1;
+            else
+                av_found = 1'b1;
+            if (payload.drive_head_streams)
+                send_step_payload(payload);
+        end
+
+        if (!qk_found || !av_found)
+            `uvm_fatal("VSEQ", "SingleAttention requires both QK and AV payloads")
+    endtask : send_single_attention_phase
+
+    task send_head_only_phase(layer_e layer, step_e step);
+        bit payload_found;
+
+        payload_found = 1'b0;
+        send_ctrl_item(
+            $sformatf("%s_%s_ctrl_seq", layer.name(), step.name()),
+            make_ctrl_item(core, layer, step, Identity, 1'b1));
+
+        foreach (core.payload_schedule[i]) begin
+            ita_mha8_step_payload payload;
+
+            payload = core.payload_schedule[i];
+            if (payload.step != step)
+                continue;
+
+            payload_found = 1'b1;
+            if (payload.drive_head_streams)
+                send_step_payload(payload);
+        end
+
+        if (!payload_found)
+            `uvm_fatal("VSEQ", $sformatf("No %s payload is available for layer %s", step.name(), layer.name()))
+    endtask : send_head_only_phase
+
+    task wait_head_step_output_complete(step_e step);
+        int unsigned target_tile;
+        int unsigned target_inner;
+        int unsigned target_beat;
+        int unsigned idle_cycles;
+        bit          seen_head[8];
+        bit          all_seen;
+        bit          saw_handshake;
+
+        if (p_sequencer.vif == null)
+            `uvm_fatal("VSEQ", "Virtual sequencer vif is not set; cannot wait for head output completion")
+
+        case (step)
+            Q, K, V: begin
+                if (core.tile_s == 0 || core.tile_p == 0 || core.tile_e == 0)
+                    return;
+                target_tile = core.tile_s * core.tile_p - 1;
+                target_inner = core.tile_e - 1;
+            end
+            QK: begin
+                if (core.tile_s == 0 || core.tile_p == 0)
+                    return;
+                target_tile = core.tile_s * core.tile_s - 1;
+                target_inner = core.tile_p - 1;
+            end
+            AV: begin
+                if (core.tile_s == 0 || core.tile_p == 0)
+                    return;
+                target_tile = core.tile_s * core.tile_p - 1;
+                target_inner = core.tile_s - 1;
+            end
+            OW: begin
+                if (core.tile_s == 0 || core.tile_e == 0 || core.tile_p == 0)
+                    return;
+                target_tile = core.tile_s * core.tile_e - 1;
+                target_inner = core.tile_p - 1;
+            end
+            MatMul: begin
+                if (core.tile_s == 0 || core.tile_p == 0 || core.tile_e == 0)
+                    return;
+                target_tile = core.tile_s * core.tile_p - 1;
+                target_inner = core.tile_e - 1;
+            end
+            default:
+                `uvm_fatal("VSEQ", $sformatf("Unsupported head output completion step %s", step.name()))
+        endcase
+
+        target_beat = M * M / N - 1;
+        idle_cycles = 0;
+        foreach (seen_head[h])
+            seen_head[h] = 1'b0;
+
+        forever begin
+            @(posedge p_sequencer.vif.clk_i);
+
+            if (!p_sequencer.vif.rst_ni) begin
+                idle_cycles = 0;
+                foreach (seen_head[h])
+                    seen_head[h] = 1'b0;
+                continue;
+            end
+
+            saw_handshake = 1'b0;
+            for (int unsigned h = 0; h < 8; h++) begin
+                if (p_sequencer.vif.per_head_valid_o[h] && p_sequencer.vif.per_head_ready_i[h]) begin
+                    saw_handshake = 1'b1;
+                    if (p_sequencer.vif.per_head_step_o[h] == step &&
+                        p_sequencer.vif.per_head_tile_id_dbg[h] == target_tile &&
+                        p_sequencer.vif.per_head_inner_id_dbg[h] == target_inner &&
+                        p_sequencer.vif.per_head_beat_id_dbg[h] == target_beat) begin
+                        seen_head[h] = 1'b1;
+                    end
+                end
+            end
+
+            all_seen = 1'b1;
+            foreach (seen_head[h])
+                all_seen &= seen_head[h];
+            if (all_seen)
+                return;
+
+            if (saw_handshake)
+                idle_cycles = 0;
+            else begin
+                idle_cycles++;
+                if (idle_cycles > output_wait_timeout_cycles) begin
+                    fatal_output_wait_timeout(
+                        $sformatf("Timeout waiting for %s head output completion: target tile=%0d inner=%0d beat=%0d",
+                            step.name(), target_tile, target_inner, target_beat));
+                end
+            end
+        end
+    endtask : wait_head_step_output_complete
 
     function void load_output_timeout_plusargs();
         int unsigned timeout_test;
