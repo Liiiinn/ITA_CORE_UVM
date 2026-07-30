@@ -277,8 +277,8 @@ $codeExit = Invoke-LoggedTool $vcover @(
 ) $coverageLog
 if ($codeExit -ne 0) { throw "code coverage report failed with exit code $codeExit" }
 $codeHtmlExit = Invoke-LoggedTool $vcover @(
-    "report", "-html", "-code", $CodeCoverageSpec, "-zeros",
-    "-instance=$CoverageScope", "-recursive", "-output", $codeHtml, $mergedUcdb
+    "report", "-html", "-code", $CodeCoverageSpec, "-details",
+    "-instance=$CoverageScope.", "-output", $codeHtml, $mergedUcdb
 ) $coverageLog
 if ($codeHtmlExit -ne 0) { throw "code coverage HTML report failed with exit code $codeHtmlExit" }
 

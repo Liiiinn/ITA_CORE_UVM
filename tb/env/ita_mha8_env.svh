@@ -94,7 +94,7 @@ class ita_mha8_env extends uvm_env;
 
         vsqr.vif = cfg.vif;
         vsqr.ctrl_sqr = ctrl_agt.sqr;
-        ctrl_agt.ap.connect(pred.ctrl_export);
+        ctrl_agt.ap.connect(pred.ctrl_imp);
         ctrl_agt.ap.connect(scb.ctrl_export);
         ctrl_agt.ap.connect(cov.ctrl_imp);
 

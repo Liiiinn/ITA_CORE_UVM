@@ -5,7 +5,7 @@ class ita_mha8_predictor extends uvm_component;
     `uvm_component_utils(ita_mha8_predictor)
     `uvm_analysis_imp_decl(_ctrl)
 
-    uvm_analysis_imp_ctrl #(ita_ctrl_item, ita_mha8_predictor) ctrl_export;
+    uvm_analysis_imp_ctrl #(ita_ctrl_item, ita_mha8_predictor) ctrl_imp;
 
     bit          has_ctrl;
     layer_e      active_layer;
@@ -17,7 +17,7 @@ class ita_mha8_predictor extends uvm_component;
 
     function new(string name = "ita_mha8_predictor", uvm_component parent = null);
         super.new(name, parent);
-        ctrl_export = new("ctrl_export", this);
+        ctrl_imp = new("ctrl_imp", this);
         has_ctrl = 1'b0;
         active_layer = Attention;
         active_activation = Identity;
