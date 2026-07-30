@@ -4,51 +4,35 @@
 class ita_mha8_qkv_directed_test extends ita_mha8_base_test;
     `uvm_component_utils(ita_mha8_qkv_directed_test)
 
-    string stream_path;
-    string requant_path;
-
     function new(string name = "ita_mha8_qkv_directed_test", uvm_component parent = null);
         super.new(name, parent);
     endfunction : new
 
-    task run_phase(uvm_phase phase);
-        ita_mha8_vsequence vseq;
-        ita_mha8_core_item core;
-        int unsigned tile_s;
-        int unsigned tile_e;
-        int unsigned tile_p;
-        int unsigned tile_f;
+    virtual function void set_scenario_defaults(ita_mha8_scenario_cfg scenario_cfg);
+        scenario_cfg.stream_path = "logger/uvm_pyita_qkv_mha8_stream.csv";
+        scenario_cfg.layer = Attention;
+        scenario_cfg.directed_step = Idle;
+        scenario_cfg.activation = Identity;
+        scenario_cfg.post_vseq_drain_cycles = 200;
+    endfunction : set_scenario_defaults
 
-        phase.raise_objection(this);
+    virtual task configure_vseq(ita_mha8_vsequence vseq);
+        ita_mha8_core_item core;
 
         core = ita_mha8_core_item::type_id::create("core");
-        
-        if (!$value$plusargs("ITA_STREAM_CSV=%s", stream_path))
-            stream_path = "logger/uvm_pyita_qkv_mha8_stream.csv";
-
-        tile_s = 1;
-        tile_e = 1;
-        tile_p = 1;
-        tile_f = 1;
-        void'($value$plusargs("ITA_TILE_S=%d", tile_s));
-        void'($value$plusargs("ITA_TILE_E=%d", tile_e));
-        void'($value$plusargs("ITA_TILE_P=%d", tile_p));
-        void'($value$plusargs("ITA_TILE_F=%d", tile_f));
-
-        core.load_stream_csv(stream_path, Attention, Idle, Identity, tile_s, tile_e, tile_p, tile_f);
-        if ($value$plusargs("ITA_REQUANT_CSV=%s", requant_path))
-            core.load_requant_csv(requant_path);
-
-        vseq = ita_mha8_vsequence::type_id::create("vseq");
+        core.load_stream_csv(
+            scenario.stream_path,
+            scenario.layer,
+            scenario.directed_step,
+            scenario.activation,
+            scenario.tile_s,
+            scenario.tile_e,
+            scenario.tile_p,
+            scenario.tile_f);
+        if (scenario.requant_path != "")
+            core.load_requant_csv(scenario.requant_path);
         vseq.core = core;
-        vseq.start(env.vsqr);
-
-        // Stage 10: QKV CSV step metadata owns Q -> K -> V ordering.
-        // Manifest/Python owns expected/actual/compare paths.
-        repeat (200) @(posedge vif.clk_i);
-
-        phase.drop_objection(this);
-    endtask : run_phase
+    endtask : configure_vseq
 endclass
 
 `endif // ITA_MHA8_QKV_DIRECTED_TEST_SVH

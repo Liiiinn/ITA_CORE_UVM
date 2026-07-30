@@ -1,36 +1,29 @@
 `ifndef ITA_MHA8_COVERAGE_TARGET_VSEQUENCE_SVH
 `define ITA_MHA8_COVERAGE_TARGET_VSEQUENCE_SVH
 
-class ita_mha8_coverage_target_vsequence extends ita_mha8_protocol_random_vsequence;
+class ita_mha8_coverage_target_vsequence extends ita_mha8_vsequence;
     `uvm_object_utils(ita_mha8_coverage_target_vsequence)
     `uvm_declare_p_sequencer(ita_mha8_vsequencer)
-
-    string target_mode = "MID_RESET";
-    string mid_reset_step_name = "Q";
-    int unsigned mid_reset_cycles = 3;
 
     function new(string name = "ita_mha8_coverage_target_vsequence");
         super.new(name);
     endfunction : new
 
     virtual task body();
-        void'($value$plusargs("ITA_COV_TARGET_MODE=%s", target_mode));
-        void'($value$plusargs("ITA_MID_RESET_STEP=%s", mid_reset_step_name));
-        void'($value$plusargs("ITA_MID_RESET_CYCLES=%d", mid_reset_cycles));
-        if (mid_reset_cycles == 0)
-            mid_reset_cycles = 1;
+        if (scenario == null)
+            `uvm_fatal("ITA_COV_TARGET_CFG", "Scenario config is not set")
 
-        case (target_mode.toupper())
+        case (scenario.coverage_target_mode.toupper())
             "MID_RESET":       run_mid_transaction_reset();
             "STALL_BOUNDARIES": run_stall_boundaries();
             default:
                 `uvm_fatal("ITA_COV_TARGET_CFG",
-                    $sformatf("Unsupported coverage target mode %s", target_mode))
+                    $sformatf("Unsupported coverage target mode %s", scenario.coverage_target_mode))
         endcase
     endtask : body
 
     function step_e parse_mid_reset_step();
-        case (mid_reset_step_name.toupper())
+        case (scenario.mid_reset_step_name.toupper())
             "Q":  return Q;
             "K":  return K;
             "V":  return V;
@@ -38,7 +31,7 @@ class ita_mha8_coverage_target_vsequence extends ita_mha8_protocol_random_vseque
             "F1": return F1;
             default: begin
                 `uvm_fatal("ITA_MID_RESET_CFG",
-                    $sformatf("Unsupported mid-transaction reset step %s", mid_reset_step_name))
+                    $sformatf("Unsupported mid-transaction reset step %s", scenario.mid_reset_step_name))
                 return Idle;
             end
         endcase
@@ -63,19 +56,19 @@ class ita_mha8_coverage_target_vsequence extends ita_mha8_protocol_random_vseque
 
         if (include_attention) begin
             core.layer = Attention;
-            add_protocol_step(core, Q, 0);
-            add_protocol_step(core, K, 0);
-            add_protocol_step(core, V, 0);
-            add_protocol_step(core, QK, 0);
-            add_protocol_step(core, AV, 0);
-            add_protocol_step(core, OW, 0);
+            ita_mha8_add_protocol_step(core, Q, 0);
+            ita_mha8_add_protocol_step(core, K, 0);
+            ita_mha8_add_protocol_step(core, V, 0);
+            ita_mha8_add_protocol_step(core, QK, 0);
+            ita_mha8_add_protocol_step(core, AV, 0);
+            ita_mha8_add_protocol_step(core, OW, 0);
         end
 
         if (include_ff) begin
             if (!include_attention)
                 core.layer = Feedforward;
-            add_protocol_step(core, F1, 0);
-            add_protocol_step(core, F2, 0);
+            ita_mha8_add_protocol_step(core, F1, 0);
+            ita_mha8_add_protocol_step(core, F2, 0);
         end
     endtask : build_target_core
 
@@ -134,7 +127,7 @@ class ita_mha8_coverage_target_vsequence extends ita_mha8_protocol_random_vseque
                     all_ready &= p_sequencer.vif.inp_bias_ready_o[h];
                 end
                 wait_cycles++;
-                if (wait_cycles > output_wait_timeout_cycles)
+                if (wait_cycles > scenario.output_wait_timeout_cycles)
                     `uvm_fatal("ITA_STALL_SOURCE_TIMEOUT",
                         $sformatf("Timed out driving continuous %s tile=%0d inner=%0d beat=%0d",
                             payload.step.name(), payload.tile_id, payload.inner_tile_id, beat))
@@ -195,7 +188,7 @@ class ita_mha8_coverage_target_vsequence extends ita_mha8_protocol_random_vseque
             end
 
             wait_cycles++;
-            if (wait_cycles > output_wait_timeout_cycles)
+            if (wait_cycles > scenario.output_wait_timeout_cycles)
                 `uvm_fatal("ITA_MID_RESET_TIMEOUT",
                     $sformatf("Timed out waiting for active step %s before reset", target_step.name()))
         end
@@ -216,7 +209,7 @@ class ita_mha8_coverage_target_vsequence extends ita_mha8_protocol_random_vseque
         drive_all_sources_idle();
         p_sequencer.vif.rst_ni <= 1'b0;
 
-        repeat (mid_reset_cycles)
+        repeat (scenario.mid_reset_cycles)
             @(posedge p_sequencer.vif.clk_i);
 
         if (target_step == F1) begin
@@ -244,7 +237,6 @@ class ita_mha8_coverage_target_vsequence extends ita_mha8_protocol_random_vseque
     task run_mid_transaction_reset();
         step_e target_step;
 
-        load_output_timeout_plusargs();
         target_step = parse_mid_reset_step();
         if (target_step == F1)
             build_target_core("mid_reset_ff_core", 1, 1, 1, 1, 1'b0, 1'b1);
@@ -320,7 +312,6 @@ class ita_mha8_coverage_target_vsequence extends ita_mha8_protocol_random_vseque
         bit softmax_full_seen;
         bit softmax_empty_seen;
 
-        load_output_timeout_plusargs();
         build_target_core("stall_boundary_core", 4, 1, 4, 1, 1'b1, 1'b0);
         stop_head_output_ready = 1'b0;
 

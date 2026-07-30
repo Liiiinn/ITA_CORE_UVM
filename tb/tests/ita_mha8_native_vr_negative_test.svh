@@ -8,15 +8,16 @@ class ita_mha8_native_vr_negative_test extends ita_mha8_base_test;
         super.new(name, parent);
     endfunction : new
 
-    task run_phase(uvm_phase phase);
+    virtual function ita_mha8_vsequence create_vseq();
         ita_mha8_protocol_random_vsequence vseq;
 
-        phase.raise_objection(this);
-        vif.native_vr_violation_seen = 1'b0;
         vseq = ita_mha8_protocol_random_vsequence::type_id::create("native_vr_negative_vseq");
-        vseq.start(env.vsqr);
-        phase.drop_objection(this);
-    endtask : run_phase
+        return vseq;
+    endfunction : create_vseq
+
+    virtual task pre_vseq_start();
+        vif.native_vr_violation_seen = 1'b0;
+    endtask : pre_vseq_start
 
 endclass : ita_mha8_native_vr_negative_test
 

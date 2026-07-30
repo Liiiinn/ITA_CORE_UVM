@@ -48,10 +48,36 @@ class ita_mha8_env_config extends uvm_object;
         super.new(name);
     endfunction : new
 
+    function void apply_scenario(ita_mha8_scenario_cfg scenario);
+        tile_s = scenario.tile_s;
+        tile_e = scenario.tile_e;
+        tile_p = scenario.tile_p;
+        tile_f = scenario.tile_f;
+
+        source_gap_enable = scenario.source_gap_enable;
+        source_gap_min = scenario.source_gap_min;
+        source_gap_max = scenario.source_gap_max;
+        input_source_gap_min = scenario.input_source_gap_min;
+        input_source_gap_max = scenario.input_source_gap_max;
+        weight_source_gap_min = scenario.weight_source_gap_min;
+        weight_source_gap_max = scenario.weight_source_gap_max;
+        bias_source_gap_min = scenario.bias_source_gap_min;
+        bias_source_gap_max = scenario.bias_source_gap_max;
+
+        sink_bp_enable = scenario.sink_bp_enable;
+        ready_low_min = scenario.ready_low_min;
+        ready_low_max = scenario.ready_low_max;
+        ready_high_min = scenario.ready_high_min;
+        ready_high_max = scenario.ready_high_max;
+
+        native_vr_fault_kind = scenario.native_vr_fault_kind;
+        native_vr_fault_mode = scenario.native_vr_fault_mode;
+        native_vr_fault_head = scenario.native_vr_fault_head;
+    endfunction : apply_scenario
+
     function void create_default_agent_configs();
-        load_tile_plusargs();
-        load_protocol_plusargs();
         validate_tile_plusargs();
+        validate_native_vr_fault_cfg();
 
         // Stage 2: allocate ctrl_cfg and bind cfg.vif to the ctrl agent config.
         ctrl_cfg = ita_ctrl_config::type_id::create("ctrl_cfg");
@@ -144,13 +170,6 @@ class ita_mha8_env_config extends uvm_object;
         endcase
     endfunction : source_gap_max_for_kind
 
-    function void load_tile_plusargs();
-        void'($value$plusargs("ITA_TILE_S=%d", tile_s));
-        void'($value$plusargs("ITA_TILE_E=%d", tile_e));
-        void'($value$plusargs("ITA_TILE_P=%d", tile_p));
-        void'($value$plusargs("ITA_TILE_F=%d", tile_f));
-    endfunction : load_tile_plusargs
-
     function void validate_tile_plusargs();
         if (tile_s < 1 || tile_s > 4 ||
             tile_e < 1 || tile_e > 4 ||
@@ -162,57 +181,7 @@ class ita_mha8_env_config extends uvm_object;
         end
     endfunction : validate_tile_plusargs
 
-    function void load_protocol_plusargs();
-        int unsigned tmp;
-
-        tmp = source_gap_enable;
-        if ($value$plusargs("ITA_SOURCE_GAP_ENABLE=%d", tmp))
-            source_gap_enable = (tmp != 0);
-        void'($value$plusargs("ITA_SOURCE_GAP_MIN=%d", source_gap_min));
-        void'($value$plusargs("ITA_SOURCE_GAP_MAX=%d", source_gap_max));
-        input_source_gap_min = source_gap_min;
-        input_source_gap_max = source_gap_max;
-        weight_source_gap_min = source_gap_min;
-        weight_source_gap_max = source_gap_max;
-        bias_source_gap_min = source_gap_min;
-        bias_source_gap_max = source_gap_max;
-        void'($value$plusargs("ITA_INPUT_SOURCE_GAP_MIN=%d", input_source_gap_min));
-        void'($value$plusargs("ITA_INPUT_SOURCE_GAP_MAX=%d", input_source_gap_max));
-        void'($value$plusargs("ITA_WEIGHT_SOURCE_GAP_MIN=%d", weight_source_gap_min));
-        void'($value$plusargs("ITA_WEIGHT_SOURCE_GAP_MAX=%d", weight_source_gap_max));
-        void'($value$plusargs("ITA_BIAS_SOURCE_GAP_MIN=%d", bias_source_gap_min));
-        void'($value$plusargs("ITA_BIAS_SOURCE_GAP_MAX=%d", bias_source_gap_max));
-
-        tmp = sink_bp_enable;
-        if ($value$plusargs("ITA_SINK_BP_ENABLE=%d", tmp))
-            sink_bp_enable = (tmp != 0);
-        void'($value$plusargs("ITA_READY_LOW_MIN=%d", ready_low_min));
-        void'($value$plusargs("ITA_READY_LOW_MAX=%d", ready_low_max));
-        void'($value$plusargs("ITA_READY_HIGH_MIN=%d", ready_high_min));
-        void'($value$plusargs("ITA_READY_HIGH_MAX=%d", ready_high_max));
-
-        if (source_gap_max < source_gap_min)
-            source_gap_max = source_gap_min;
-        if (input_source_gap_max < input_source_gap_min)
-            input_source_gap_max = input_source_gap_min;
-        if (weight_source_gap_max < weight_source_gap_min)
-            weight_source_gap_max = weight_source_gap_min;
-        if (bias_source_gap_max < bias_source_gap_min)
-            bias_source_gap_max = bias_source_gap_min;
-        if (ready_low_max < ready_low_min)
-            ready_low_max = ready_low_min;
-        if (ready_high_min == 0)
-            ready_high_min = 1;
-        if (ready_high_max < ready_high_min)
-            ready_high_max = ready_high_min;
-
-        void'($value$plusargs("ITA_NATIVE_VR_FAULT_KIND=%s", native_vr_fault_kind));
-        void'($value$plusargs("ITA_NATIVE_VR_FAULT_MODE=%s", native_vr_fault_mode));
-        void'($value$plusargs("ITA_NATIVE_VR_FAULT_HEAD=%d", native_vr_fault_head));
-        validate_native_vr_fault_plusargs();
-    endfunction : load_protocol_plusargs
-
-    function void validate_native_vr_fault_plusargs();
+    function void validate_native_vr_fault_cfg();
         if (native_vr_fault_kind == "") begin
             if (native_vr_fault_mode != "")
                 `uvm_fatal("ITA_NATIVE_VR_CFG", "ITA_NATIVE_VR_FAULT_MODE requires ITA_NATIVE_VR_FAULT_KIND")
@@ -235,7 +204,7 @@ class ita_mha8_env_config extends uvm_object;
         if (native_vr_fault_head >= 8 && native_vr_fault_kind.substr(0, 3) == "head")
             `uvm_fatal("ITA_NATIVE_VR_CFG",
                 $sformatf("ITA_NATIVE_VR_FAULT_HEAD=%0d is outside 0..7", native_vr_fault_head))
-    endfunction : validate_native_vr_fault_plusargs
+    endfunction : validate_native_vr_fault_cfg
 
     function void apply_native_vr_fault_cfg(ita_stream_config cfg);
         bit is_target;

@@ -8,14 +8,12 @@ class ita_mha8_coverage_target_test extends ita_mha8_base_test;
         super.new(name, parent);
     endfunction : new
 
-    task run_phase(uvm_phase phase);
+    virtual function ita_mha8_vsequence create_vseq();
         ita_mha8_coverage_target_vsequence vseq;
 
-        phase.raise_objection(this);
         vseq = ita_mha8_coverage_target_vsequence::type_id::create("coverage_target_vseq");
-        vseq.start(env.vsqr);
-        phase.drop_objection(this);
-    endtask : run_phase
+        return vseq;
+    endfunction : create_vseq
 
 endclass : ita_mha8_coverage_target_test
 
