@@ -99,6 +99,7 @@ class ita_mha8_env extends uvm_env;
         super.connect_phase(phase);
 
         vsqr.vif = cfg.vif;
+        vsqr.scb = scb;
         vsqr.ctrl_sqr = ctrl_agt.sqr;
         if (ref_model != null) begin
             ctrl_agt.ap.connect(ref_model.ctrl_imp);

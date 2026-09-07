@@ -47,6 +47,10 @@ class ita_mha8_scoreboard extends uvm_component;
     int unsigned expected_output_segments_by_kind_step_head[string];
     string       tile_cfg_by_job[string];
 
+    int unsigned output_completion_progress[string];
+    int unsigned output_channel_progress[string];
+    bit          output_completion_seen[string];
+
     bit          beat_seen[string];
     int unsigned max_beat_id_by_key[string];
     int unsigned last_beat_id_by_key[string];
@@ -222,9 +226,242 @@ class ita_mha8_scoreboard extends uvm_component;
             accept_numeric(tr, 1'b0);
             actual_count++;
             record_output_transaction(tr);
+            record_output_completion(tr);
             sanity_check_actual(tr);
         end
     endtask : process_output_fifo
+
+    function string output_completion_key(
+        int unsigned job_id,
+        ita_stream_kind_e kind,
+        step_e step,
+        int unsigned head_id
+    );
+        return $sformatf("job%0d:%0d:%0d:h%0d", job_id, int'(kind), int'(step), head_id);
+    endfunction : output_completion_key
+
+    function string output_channel_key(
+        int unsigned job_id,
+        ita_stream_kind_e kind
+    );
+        return $sformatf("job%0d:%0d", job_id, int'(kind));
+    endfunction : output_channel_key
+
+    function bit output_completion_target(
+        ita_stream_item tr,
+        output int unsigned target_tile,
+        output int unsigned target_inner,
+        output int unsigned target_beat
+    );
+        ita_ctrl_item ctrl;
+
+        target_tile = 0;
+        target_inner = 0;
+        target_beat = M * M / N - 1;
+        if (!job_configs.exists(tr.job_id))
+            return 1'b0;
+
+        ctrl = job_configs[tr.job_id];
+        case (tr.kind)
+            ITA_STREAM_HEAD_OUTPUT: begin
+                case (tr.step)
+                    Q, K, V: begin
+                        if (ctrl.ctrl.tile_s == 0 || ctrl.ctrl.tile_p == 0 || ctrl.ctrl.tile_e == 0)
+                            return 1'b0;
+                        target_tile = ctrl.ctrl.tile_s * ctrl.ctrl.tile_p - 1;
+                        target_inner = ctrl.ctrl.tile_e - 1;
+                    end
+                    QK: begin
+                        if (ctrl.ctrl.tile_s == 0 || ctrl.ctrl.tile_p == 0)
+                            return 1'b0;
+                        target_tile = ctrl.ctrl.tile_s * ctrl.ctrl.tile_s - 1;
+                        target_inner = ctrl.ctrl.tile_p - 1;
+                    end
+                    AV: begin
+                        if (ctrl.ctrl.tile_s == 0 || ctrl.ctrl.tile_p == 0)
+                            return 1'b0;
+                        target_tile = ctrl.ctrl.tile_s * ctrl.ctrl.tile_p - 1;
+                        target_inner = ctrl.ctrl.tile_s - 1;
+                    end
+                    OW: begin
+                        if (ctrl.ctrl.tile_s == 0 || ctrl.ctrl.tile_e == 0 || ctrl.ctrl.tile_p == 0)
+                            return 1'b0;
+                        target_tile = ctrl.ctrl.tile_s * ctrl.ctrl.tile_e - 1;
+                        target_inner = ctrl.ctrl.tile_p - 1;
+                    end
+                    MatMul: begin
+                        if (ctrl.ctrl.tile_s == 0 || ctrl.ctrl.tile_p == 0 || ctrl.ctrl.tile_e == 0)
+                            return 1'b0;
+                        target_tile = ctrl.ctrl.tile_s * ctrl.ctrl.tile_p - 1;
+                        target_inner = ctrl.ctrl.tile_e - 1;
+                    end
+                    default: return 1'b0;
+                endcase
+            end
+
+            ITA_STREAM_SUM_OUTPUT: begin
+                if (tr.step != OW || ctrl.ctrl.tile_s == 0 || ctrl.ctrl.tile_e == 0 || ctrl.ctrl.tile_p == 0)
+                    return 1'b0;
+                target_tile = ctrl.ctrl.tile_s * ctrl.ctrl.tile_e - 1;
+                target_inner = ctrl.ctrl.tile_p - 1;
+            end
+
+            ITA_STREAM_FF_OUTPUT: begin
+                case (tr.step)
+                    F1: begin
+                        if (ctrl.ctrl.tile_s == 0 || ctrl.ctrl.tile_f == 0 || ctrl.ctrl.tile_e == 0)
+                            return 1'b0;
+                        target_tile = ctrl.ctrl.tile_s * ctrl.ctrl.tile_f - 1;
+                        target_inner = ctrl.ctrl.tile_e - 1;
+                    end
+                    F2: begin
+                        if (ctrl.ctrl.tile_s == 0 || ctrl.ctrl.tile_e == 0 || ctrl.ctrl.tile_f == 0)
+                            return 1'b0;
+                        target_tile = ctrl.ctrl.tile_s * ctrl.ctrl.tile_e - 1;
+                        target_inner = ctrl.ctrl.tile_f - 1;
+                    end
+                    default: return 1'b0;
+                endcase
+            end
+
+            default: return 1'b0;
+        endcase
+
+        return 1'b1;
+    endfunction : output_completion_target
+
+    function void record_output_completion(ita_stream_item tr);
+        string key;
+        string channel_key;
+        int unsigned target_tile;
+        int unsigned target_inner;
+        int unsigned target_beat;
+
+        key = output_completion_key(tr.job_id, tr.kind, tr.step, tr.head_id);
+        channel_key = output_channel_key(tr.job_id, tr.kind);
+        if (!output_completion_progress.exists(key))
+            output_completion_progress[key] = 0;
+        output_completion_progress[key]++;
+        if (!output_channel_progress.exists(channel_key))
+            output_channel_progress[channel_key] = 0;
+        output_channel_progress[channel_key]++;
+
+        if (output_completion_target(tr, target_tile, target_inner, target_beat) &&
+            tr.tile_id == target_tile &&
+            tr.inner_tile_id == target_inner &&
+            tr.beat_id == target_beat) begin
+            output_completion_seen[key] = 1'b1;
+        end
+    endfunction : record_output_completion
+
+    function int unsigned output_stage_progress(
+        int unsigned job_id,
+        ita_stream_kind_e kind,
+        step_e step
+    );
+        string key;
+        int unsigned progress;
+
+        progress = 0;
+        if (kind == ITA_STREAM_HEAD_OUTPUT) begin
+            for (int unsigned head_id = 0; head_id < 8; head_id++) begin
+                key = output_completion_key(job_id, kind, step, head_id);
+                if (output_completion_progress.exists(key))
+                    progress += output_completion_progress[key];
+            end
+        end else begin
+            key = output_completion_key(job_id, kind, step, 0);
+            if (output_completion_progress.exists(key))
+                progress = output_completion_progress[key];
+        end
+        return progress;
+    endfunction : output_stage_progress
+
+    function int unsigned output_stream_progress(
+        int unsigned job_id,
+        ita_stream_kind_e kind
+    );
+        string key;
+
+        key = output_channel_key(job_id, kind);
+        if (!output_channel_progress.exists(key))
+            return 0;
+        return output_channel_progress[key];
+    endfunction : output_stream_progress
+
+    function bit output_stage_complete(
+        int unsigned job_id,
+        ita_stream_kind_e kind,
+        step_e step
+    );
+        string key;
+
+        if (kind == ITA_STREAM_HEAD_OUTPUT) begin
+            for (int unsigned head_id = 0; head_id < 8; head_id++) begin
+                key = output_completion_key(job_id, kind, step, head_id);
+                if (!output_completion_seen.exists(key) || !output_completion_seen[key])
+                    return 1'b0;
+            end
+            return 1'b1;
+        end
+
+        key = output_completion_key(job_id, kind, step, 0);
+        return output_completion_seen.exists(key) && output_completion_seen[key];
+    endfunction : output_stage_complete
+
+    function bit output_job_aborted(int unsigned job_id);
+        string key;
+
+        key = $sformatf("job%0d", job_id);
+        return aborted_job.exists(key) && aborted_job[key];
+    endfunction : output_job_aborted
+
+    task wait_for_output_stage(
+        int unsigned job_id,
+        ita_stream_kind_e kind,
+        step_e step,
+        int unsigned max_idle_cycles,
+        output bit completed,
+        output bit timed_out,
+        output bit aborted,
+        output int unsigned progress
+    );
+        int unsigned idle_cycles;
+        int unsigned stream_progress;
+        int unsigned previous_stream_progress;
+
+        if (vif == null)
+            `uvm_fatal("ITA_SCB_VIF", "ita_mha8_if handle was not set for completion wait")
+
+        completed = 1'b0;
+        timed_out = 1'b0;
+        aborted = 1'b0;
+        idle_cycles = 0;
+        progress = output_stage_progress(job_id, kind, step);
+        stream_progress = output_stream_progress(job_id, kind);
+        previous_stream_progress = stream_progress;
+
+        forever begin
+            completed = output_stage_complete(job_id, kind, step);
+            aborted = output_job_aborted(job_id);
+            if (completed || aborted)
+                return;
+
+            @(posedge vif.clk_i);
+            progress = output_stage_progress(job_id, kind, step);
+            stream_progress = output_stream_progress(job_id, kind);
+            if (stream_progress != previous_stream_progress) begin
+                previous_stream_progress = stream_progress;
+                idle_cycles = 0;
+            end else begin
+                idle_cycles++;
+                if (idle_cycles > max_idle_cycles) begin
+                    timed_out = 1'b1;
+                    return;
+                end
+            end
+        end
+    endtask : wait_for_output_stage
 
     function string stream_kind_label(ita_stream_kind_e kind);
         case (kind)
