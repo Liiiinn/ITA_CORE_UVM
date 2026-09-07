@@ -17,8 +17,36 @@ class ita_ctrl_item extends uvm_sequence_item;
     requant_t             sum_add;
     // Stage 2: initialize head0 requant defaults first; keep the per-head shape for Stage 11.
 
+    int unsigned job_id;
+    // Testbench intent only; never drives DUT ports.
+    bit [9:0] expected_step_mask;
+
+    function void do_copy(uvm_object rhs);
+        ita_ctrl_item other;
+
+        super.do_copy(rhs);
+        if (!$cast(other, rhs)) begin
+            `uvm_fatal("ITA_COPY", "Wrong transaction type")
+        end
+
+        job_id             = other.job_id;
+        expected_step_mask = other.expected_step_mask;
+        ctrl               = other.ctrl;
+        head_eps_mult      = other.head_eps_mult;
+        head_right_shift   = other.head_right_shift;
+        head_add           = other.head_add;
+        ff_eps_mult        = other.ff_eps_mult;
+        ff_right_shift     = other.ff_right_shift;
+        ff_add             = other.ff_add;
+        sum_eps_mult       = other.sum_eps_mult;
+        sum_right_shift    = other.sum_right_shift;
+        sum_add            = other.sum_add;
+    endfunction : do_copy
+
     function new(string name = "ita_ctrl_item");
         super.new(name);
+        job_id = 0;
+        expected_step_mask = '0;
         ctrl = '0;
         // Stage 2: set ctrl.layer, ctrl.activation, tile_s/e/p/f, and ctrl.start in the sequence or item helper.
         ctrl.layer = Attention;

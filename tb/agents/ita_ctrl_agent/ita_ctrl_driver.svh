@@ -47,6 +47,7 @@ class ita_ctrl_driver extends uvm_driver #(ita_ctrl_item);
         @(posedge cfg.vif.clk_i);
         // Stage 2: drive cfg.vif.ctrl_i from tr.ctrl and generate a one-cycle start pulse.
         cfg.vif.ctrl_i <= tr.ctrl;
+        cfg.vif.expected_step_mask <= tr.expected_step_mask;
         cfg.vif.sum_eps_mult_i <= tr.sum_eps_mult;
         cfg.vif.sum_right_shift_i <= tr.sum_right_shift;
         cfg.vif.sum_add_i <= tr.sum_add;

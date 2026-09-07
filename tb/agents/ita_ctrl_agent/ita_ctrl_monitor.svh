@@ -28,7 +28,12 @@ class ita_ctrl_monitor extends uvm_monitor;
             if (cfg.vif.rst_ni && cfg.vif.ctrl_i.start) begin
                 // Stage 2: sample cfg.vif.ctrl_i when start is observed and publish it on ap.
                 tr = ita_ctrl_item::type_id::create("tr");
+                tr.job_id = cfg.vif.sample_job_id();
                 tr.ctrl = cfg.vif.ctrl_i;
+                tr.expected_step_mask = cfg.vif.expected_step_mask;
+                tr.ff_eps_mult = cfg.vif.ctrl_i.eps_mult;
+                tr.ff_right_shift = cfg.vif.ctrl_i.right_shift;
+                tr.ff_add = cfg.vif.ctrl_i.add;
                 tr.sum_eps_mult = cfg.vif.sum_eps_mult_i;
                 tr.sum_right_shift = cfg.vif.sum_right_shift_i;
                 tr.sum_add = cfg.vif.sum_add_i;

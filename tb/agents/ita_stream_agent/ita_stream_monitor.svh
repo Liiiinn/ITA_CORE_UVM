@@ -25,6 +25,8 @@ class ita_stream_monitor extends uvm_monitor;
     task run_phase(uvm_phase phase);
         forever begin
             @(posedge cfg.vif.clk_i);
+            // Control publication completes in Active; sample payload before NBA.
+            #0;
             if (!cfg.vif.rst_ni)
                 sample_count = 0;
             else if (is_handshake())
@@ -122,6 +124,7 @@ class ita_stream_monitor extends uvm_monitor;
         ita_stream_item tr;
 
         tr = ita_stream_item::type_id::create("tr");
+        tr.job_id = cfg.vif.sample_job_id();
         tr.kind = cfg.kind;
         tr.head_id = cfg.head_id;
         tr.beat_id = sample_count;

@@ -51,6 +51,8 @@ param(
     [string]$CoverageUcdb = "",
     [switch]$EnableCodeCoverage,
     [string]$CodeCoverageSpec = "sbceft",
+    [switch]$EnableOnlineRefModel,
+    [int]$OnlineRefTimeoutCycles = 100000,
     [switch]$NoCompile,
     [switch]$GenerateVectors,
     [switch]$NoGenerateVectors,
@@ -123,8 +125,18 @@ function Invoke-PythonStep {
 
 $IsLinearDirected = ($TestName -eq "ita_mha8_linear_directed_test")
 $IsQDirected = ($TestName -eq "ita_mha8_q_directed_test")
-$IsQkvDirected = ($TestName -eq "ita_mha8_qkv_directed_test")
-$IsAttnDirected = ($TestName -eq "ita_mha8_attn_directed_test")
+$IsQkvDirected = (
+    $TestName -in @(
+        "ita_mha8_qkv_directed_test",
+        "ita_mha8_online_qkv_test"
+    )
+)
+$IsAttnDirected = (
+    $TestName -in @(
+        "ita_mha8_attn_directed_test",
+        "ita_mha8_online_attnff_test"
+    )
+)
 $IsProtocolRandom = ($TestName -eq "ita_mha8_protocol_random_test")
 $IsCoverageTarget = ($TestName -eq "ita_mha8_coverage_target_test")
 $IsNativeVrNegative = ($TestName -eq "ita_mha8_native_vr_negative_test")
@@ -354,6 +366,15 @@ $vsimArgs = @(
     "+ITA_READY_HIGH_MAX=$ReadyHighMax"
 )
 
+if ($EnableOnlineRefModel) {
+    if ($OnlineRefTimeoutCycles -le 0) {
+        throw "-OnlineRefTimeoutCycles must be positive"
+    }
+    $vsimArgs += @(
+        "+ITA_ENABLE_ONLINE_REF_MODEL=1",
+        "+ITA_ONLINE_REF_TIMEOUT_CYCLES=$OnlineRefTimeoutCycles"
+    )
+}
 if ($CoverageEnabled) {
     $vsimArgs += "-coverage"
 }

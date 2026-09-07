@@ -76,7 +76,7 @@ Scoreboard 检查：
 
 SVA 负责 valid-ready、backpressure stability、ctrl/tile/reset 等 cycle-level 协议检查。
 
-Scoreboard 不重复实现完整 attention、softmax、GELU 和 quantization 数值模型；numerical correctness 由 PyITA/offline compare 负责。
+Scoreboard 可选启用纯 SystemVerilog online reference model。它覆盖 Q/K/V、OW、八头求和、F1/F2、requant 和 Identity/ReLU/GELU；QK、softmax、AV 仍由结构检查和 PyITA offline compare 覆盖。
 
 ## Regression Cases
 
@@ -179,6 +179,26 @@ python -m pip install -r ..\ITA\requirements.txt
   -NoCompare
 ```
 
+### Online reference model
+
+在线模型默认关闭。PyITA 向量定向测试可通过专用 test 开启：
+
+```powershell
+.\sim\scripts\smoke.ps1 `
+  -TestName ita_mha8_online_attnff_test `
+  -VectorSource pyita-q `
+  -Projection ATTNFF `
+  -PyitaDir ..\ITA\simvectors\<case>\standalone `
+  -GenerateVectors `
+  -NoCompare
+```
+
+也可在现有定向 test 上增加 `-EnableOnlineRefModel`，并用
+`-OnlineRefTimeoutCycles` 调整 drain 超时。SCB 使用
+`{job_id, kind, step, head_id, tile_id, inner_tile_id, beat_id}` 配对，允许
+actual/expected 任一方先到。日志中的 `ITA_SCB_NUM_SUMMARY` 会报告
+`PASS`、`PASS_WITH_UNCOVERED_STEPS`、`FAIL` 或 `CANCELED`；零比较不会报告为 PASS。
+
 ### 生成 cases
 
 ```powershell
@@ -264,7 +284,8 @@ sim/output/code_coverage_closure/<timestamp>/coverage/
 
 ## 验证边界
 
-- Numerical golden 依赖 PyITA/offline compare，当前没有可用的 online full numerical reference model。
+- Online numerical model 覆盖 Q/K/V、OW、sum、F1/F2；QK、softmax、AV 仍以 PyITA/offline compare 为数值权威。
+- Online model 保留 PyITA 的 WO 饱和语义；RTL accumulator 在 WO 溢出时回绕，因此相应差异会被如实报告。
 - Functional、assertion 和 code coverage 是不同指标；单一 coverage 数字不能证明完整 verification closure。
 - Legal protocol-random 遵循 DUT 当前的 source bundle 合约；非法 valid-ready 行为由 negative suite 单独验证。
 - 当前部分 base/coverage-target 路径仍有 direct-VIF 操作，尚未将所有 driven signal 完全收敛为 driver 唯一 owner。

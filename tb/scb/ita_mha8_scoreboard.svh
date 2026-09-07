@@ -64,6 +64,8 @@ class ita_mha8_scoreboard extends uvm_component;
 
     // TODO S13_STRUCT_PREDICTOR: avoid full QK/AV global output order checks unless DUT exposes enough softmax-loop debug metadata.
 
+    `include "ita_mha8_numeric_scoreboard.svh"
+
     function new(string name = "ita_mha8_scoreboard", uvm_component parent = null);
         super.new(name, parent);
 
@@ -79,6 +81,8 @@ class ita_mha8_scoreboard extends uvm_component;
         rule_error_count = 0;
         max_rule_errors = 128;
 
+        expected_export = new("expected_export", this);
+        expected_fifo = new("expected_fifo", this);
         ctrl_export = new("ctrl_export", this);
         source_export = new("source_export", this);
         output_export = new("output_export", this);
@@ -107,6 +111,7 @@ class ita_mha8_scoreboard extends uvm_component;
 
     function void connect_phase(uvm_phase phase);
         super.connect_phase(phase);
+        expected_export.connect(expected_fifo.analysis_export);
         ctrl_export.connect(ctrl_fifo.analysis_export);
         source_export.connect(source_fifo.analysis_export);
         output_export.connect(output_fifo.analysis_export);
@@ -114,6 +119,7 @@ class ita_mha8_scoreboard extends uvm_component;
 
     task run_phase(uvm_phase phase);
         fork
+            process_expected_fifo();
             process_ctrl_fifo();
             process_source_fifo();
             process_output_fifo();
@@ -129,8 +135,9 @@ class ita_mha8_scoreboard extends uvm_component;
 
         forever begin
             @(negedge vif.rst_ni);
+            cancel_numeric(vif.sampled_job_id);
             if (has_active_ctrl) begin
-                active_job = job_key();
+                active_job = $sformatf("job%0d", vif.sampled_job_id);
                 aborted_job[active_job] = 1'b1;
                 has_active_ctrl = 1'b0;
                 `uvm_info("ITA_SCB_RESET_ABORT",
@@ -147,7 +154,10 @@ class ita_mha8_scoreboard extends uvm_component;
         forever begin
             ctrl_fifo.get(tr);
             ctrl_count++;
-            current_job_id++;
+            current_job_id = tr.job_id;
+            job_configs[tr.job_id] =
+                ita_ctrl_item::type_id::create("scb_ctrl_snapshot");
+            job_configs[tr.job_id].copy(tr);
             has_active_ctrl = 1'b1;
             active_layer = tr.ctrl.layer;
             active_activation = tr.ctrl.activation;
@@ -170,6 +180,14 @@ class ita_mha8_scoreboard extends uvm_component;
 
         forever begin
             source_fifo.get(tr);
+            if (!job_configs.exists(tr.job_id)) begin
+                scb_rule_error(
+                    "ITA_SCB_NO_CTRL",
+                    $sformatf("Unknown sampled job %0d", tr.job_id)
+                );
+                continue;
+            end
+            select_job(tr.job_id);
 
             case(tr.kind)
                 ITA_STREAM_HEAD_INPUT: input_count++;
@@ -193,6 +211,15 @@ class ita_mha8_scoreboard extends uvm_component;
 
         forever begin
             output_fifo.get(tr);
+            if (!job_configs.exists(tr.job_id)) begin
+                scb_rule_error(
+                    "ITA_SCB_NO_CTRL",
+                    $sformatf("Unknown sampled job %0d", tr.job_id)
+                );
+                continue;
+            end
+            select_job(tr.job_id);
+            accept_numeric(tr, 1'b0);
             actual_count++;
             record_output_transaction(tr);
             sanity_check_actual(tr);
@@ -689,6 +716,24 @@ class ita_mha8_scoreboard extends uvm_component;
 
     function void report_phase(uvm_phase phase);
         super.report_phase(phase);
+        if (ref_model != null) begin
+            `uvm_info(
+                "ITA_SCB_NUM_SUMMARY",
+                $sformatf(
+                    {"status=%s matched=%0d failed=%0d model_errors=%0d ",
+                     "canceled_jobs=%0d uncovered_beats=%0d ",
+                     "(QK/softmax/AV have no numerical coverage)"},
+                    numerical_status(),
+                    numeric_matched,
+                    numeric_failed,
+                    ref_model.errors,
+                    numeric_canceled_jobs,
+                    numeric_uncovered
+                ),
+                UVM_LOW
+            )
+        end
+
         report_transaction_summary();
         check_missing_beat_rules();
         check_source_count_rules();

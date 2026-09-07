@@ -1,6 +1,8 @@
 package ita_mha8_test_pkg;
 
     import uvm_pkg::*;
+    import ita_mha8_scb_pkg::*;
+    import ita_mha8_pred_pkg::*;
     import ita_package::*;
     import ita_ctrl_agent_pkg::*;
     import ita_stream_agent_pkg::*;
@@ -19,5 +21,8 @@ package ita_mha8_test_pkg;
     `include "ita_mha8_protocol_random_test.svh"
     `include "ita_mha8_coverage_target_test.svh"
     `include "ita_mha8_native_vr_negative_test.svh"
+
+    `include "ita_mha8_online_directed_test.svh"
+    `include "ita_mha8_ref_unit_test.svh"
 
 endpackage : ita_mha8_test_pkg

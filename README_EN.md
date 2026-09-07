@@ -78,7 +78,7 @@ The scoreboard checks:
 
 SVA checks cycle-level behavior such as valid-ready handshakes, backpressure stability, control, tile configuration, and reset.
 
-The scoreboard does not duplicate the complete attention, softmax, GELU, or quantization numerical model. Numerical correctness remains the responsibility of PyITA and the offline comparison flow.
+The scoreboard can optionally enable a pure-SystemVerilog online reference model. It covers Q/K/V, OW, eight-head summation, F1/F2, requantization, and Identity/ReLU/GELU. QK, softmax, and AV remain covered by structural checks and the offline PyITA comparison.
 
 ## Regression Cases
 
@@ -181,6 +181,27 @@ Enable RTL code-coverage instrumentation:
   -NoCompare
 ```
 
+### Online Reference Model
+
+The online model is disabled by default. Enable it with a dedicated PyITA-vector test:
+
+```powershell
+.\sim\scripts\smoke.ps1 `
+  -TestName ita_mha8_online_attnff_test `
+  -VectorSource pyita-q `
+  -Projection ATTNFF `
+  -PyitaDir ..\ITA\simvectors\<case>\standalone `
+  -GenerateVectors `
+  -NoCompare
+```
+
+Existing directed tests also accept `-EnableOnlineRefModel`; use
+`-OnlineRefTimeoutCycles` to adjust the drain timeout. The scoreboard pairs
+transactions by `{job_id, kind, step, head_id, tile_id, inner_tile_id, beat_id}`
+and permits either actual or expected data to arrive first. `ITA_SCB_NUM_SUMMARY`
+reports `PASS`, `PASS_WITH_UNCOVERED_STEPS`, `FAIL`, or `CANCELED`; zero comparisons
+are never reported as a pass.
+
 ### Generate Cases
 
 ```powershell
@@ -266,7 +287,8 @@ This directory contains the merged UCDB, functional/code-coverage text and HTML 
 
 ## Verification Boundaries
 
-- Numerical golden data depends on PyITA and the offline comparison flow. A usable online full numerical reference model is not currently implemented.
+- The online numerical model covers Q/K/V, OW, sum, and F1/F2. PyITA/offline comparison remains the numerical authority for QK, softmax, and AV.
+- The online model preserves PyITA's WO saturation semantics. The RTL accumulator wraps on WO overflow, so such differences are reported without masking them.
 - Functional, assertion, and code coverage are separate metrics. A single coverage percentage cannot prove complete verification closure.
 - Legal protocol-random testing follows the DUT's current source-bundle contract. Illegal valid-ready behavior is tested separately in the negative suite.
 - Some base and coverage-target paths still drive the VIF directly; not all driven signals have been consolidated under a single driver owner.

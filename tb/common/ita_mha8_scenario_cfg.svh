@@ -4,6 +4,8 @@
 class ita_mha8_scenario_cfg extends uvm_object;
     `uvm_object_utils(ita_mha8_scenario_cfg)
 
+    bit enable_online_ref_model = 0;
+    int unsigned online_ref_timeout_cycles = 100000;
     string stream_path = "";
     string requant_path = "";
 
@@ -60,6 +62,14 @@ class ita_mha8_scenario_cfg extends uvm_object;
         string value;
         int unsigned tmp;
 
+        void'($value$plusargs(
+            "ITA_ENABLE_ONLINE_REF_MODEL=%d",
+            enable_online_ref_model
+        ));
+        void'($value$plusargs(
+            "ITA_ONLINE_REF_TIMEOUT_CYCLES=%d",
+            online_ref_timeout_cycles
+        ));
         void'($value$plusargs("ITA_STREAM_CSV=%s", stream_path));
         void'($value$plusargs("ITA_REQUANT_CSV=%s", requant_path));
         void'($value$plusargs("ITA_TILE_S=%d", tile_s));

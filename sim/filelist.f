@@ -58,3 +58,4 @@
 ../tb/vseq/ita_mha8_vseq_pkg.sv
 ../tb/tests/ita_mha8_test_pkg.sv
 ../tb/top/ita_mha8_tb_top.sv
+../tb/tests/ita_ref_overflow_tb.sv

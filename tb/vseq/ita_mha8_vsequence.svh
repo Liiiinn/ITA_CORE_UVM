@@ -736,6 +736,20 @@ class ita_mha8_vsequence extends uvm_sequence;
         ita_ctrl_item ctrl;
         ctrl = ita_ctrl_item::type_id::create("ctrl");
 
+        foreach (core.payload_schedule[i]) begin
+            step_e scheduled_step;
+
+            scheduled_step = core.payload_schedule[i].step;
+            if (((layer_value == Feedforward) &&
+                 (scheduled_step inside {F1, F2})) ||
+                ((layer_value == Attention) &&
+                 (scheduled_step inside {Q, K, V, QK, AV, OW})) ||
+                ((layer_value == SingleAttention) &&
+                 (scheduled_step inside {QK, AV})) ||
+                ((layer_value == Linear) && (scheduled_step == MatMul))) begin
+                ctrl.expected_step_mask[int'(scheduled_step)] = 1'b1;
+            end
+        end
         ctrl.ctrl.layer = layer_value;
         ctrl.ctrl.activation = activation_value;
         ctrl.ctrl.tile_s = core.tile_s;

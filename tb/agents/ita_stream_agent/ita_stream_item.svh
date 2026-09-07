@@ -16,8 +16,33 @@ class ita_stream_item extends uvm_sequence_item;
     requant_oup_t     oup;
     step_e            step;
 
+    int unsigned job_id;
+
+    function void do_copy(uvm_object rhs);
+        ita_stream_item other;
+
+        super.do_copy(rhs);
+        if (!$cast(other, rhs)) begin
+            `uvm_fatal("ITA_COPY", "Wrong transaction type")
+        end
+
+        job_id        = other.job_id;
+        kind          = other.kind;
+        head_id       = other.head_id;
+        tile_id       = other.tile_id;
+        inner_tile_id = other.inner_tile_id;
+        beat_id        = other.beat_id;
+        is_lockstep    = other.is_lockstep;
+        inp            = other.inp;
+        weight         = other.weight;
+        bias           = other.bias;
+        oup            = other.oup;
+        step           = other.step;
+    endfunction : do_copy
+
     function new(string name = "ita_stream_item");
         super.new(name);
+        job_id = 0;
         kind = ITA_STREAM_HEAD_INPUT;
         head_id = 0;
         tile_id = 0;
@@ -34,5 +59,3 @@ class ita_stream_item extends uvm_sequence_item;
 endclass : ita_stream_item
 
 `endif // ITA_STREAM_ITEM_SVH
-
-

@@ -4,6 +4,7 @@
 class ita_mha8_env_config extends uvm_object;
     `uvm_object_utils(ita_mha8_env_config)
 
+    bit enable_online_ref_model = 0;
     virtual ita_mha8_if vif;
 
     int unsigned tile_s = 1;
@@ -49,6 +50,7 @@ class ita_mha8_env_config extends uvm_object;
     endfunction : new
 
     function void apply_scenario(ita_mha8_scenario_cfg scenario);
+        enable_online_ref_model = scenario.enable_online_ref_model;
         tile_s = scenario.tile_s;
         tile_e = scenario.tile_e;
         tile_p = scenario.tile_p;

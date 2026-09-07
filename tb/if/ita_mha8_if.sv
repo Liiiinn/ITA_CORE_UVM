@@ -6,6 +6,13 @@ interface ita_mha8_if
     input logic clk_i
 );
 
+    // Shared monitor epoch. All calls in one sampling time return the same id.
+    int unsigned sampled_job_id = 0;
+    time sampled_start_time;
+    bit sampled_start_seen = 0;
+    bit online_ref_enabled = 0;
+    bit [9:0] expected_step_mask = 0;
+
     logic                    rst_ni;
     ctrl_t                   ctrl_i;
     // Stage 8: add ctrl_i.start X/Z and one-cycle pulse assertions after ctrl_driver implements the pulse.
@@ -243,4 +250,16 @@ interface ita_mha8_if
             );
     endproperty : driver_owned_idle_during_reset
 
+    function int unsigned sample_job_id();
+        if (rst_ni && ctrl_i.start &&
+            (!sampled_start_seen || (sampled_start_time != $time))) begin
+            if (online_ref_enabled && ((|per_head_busy_o) || ff_busy_o)) begin
+                $error("ITA_REF_OVERLAP: ctrl.start while previous hardware job is busy");
+            end
+            sampled_job_id++;
+            sampled_start_time = $time;
+            sampled_start_seen = 1'b1;
+        end
+        return sampled_job_id;
+    endfunction : sample_job_id
 endinterface : ita_mha8_if

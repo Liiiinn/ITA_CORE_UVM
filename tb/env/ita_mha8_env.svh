@@ -22,6 +22,7 @@ class ita_mha8_env extends uvm_env;
     ita_mha8_logger logger;
     ita_mha8_predictor pred;
     ita_mha8_scoreboard scb;
+    ita_mha8_ref_model ref_model;
     ita_mha8_cov cov;
     // Stage 11: create sum and feed-forward agents after full head-path coverage exists.
     // TODO S13_ONLINE_COV: add env_config knobs such as enable_online_cov and enable_structural_predictor.
@@ -79,6 +80,11 @@ class ita_mha8_env extends uvm_env;
         scb = ita_mha8_scoreboard::type_id::create("scb", this);
         scb.pred = pred;
         scb.vif = cfg.vif;
+        cfg.vif.online_ref_enabled = cfg.enable_online_ref_model;
+        if (cfg.enable_online_ref_model) begin
+            ref_model = ita_mha8_ref_model::type_id::create("ref_model", this);
+            scb.ref_model = ref_model;
+        end
 
         uvm_config_db#(int unsigned)::set(this, "cov", "tile_s", cfg.tile_s);
         uvm_config_db#(int unsigned)::set(this, "cov", "tile_e", cfg.tile_e);
@@ -94,6 +100,18 @@ class ita_mha8_env extends uvm_env;
 
         vsqr.vif = cfg.vif;
         vsqr.ctrl_sqr = ctrl_agt.sqr;
+        if (ref_model != null) begin
+            ctrl_agt.ap.connect(ref_model.ctrl_imp);
+            ref_model.expected_ap.connect(scb.expected_export);
+            for (int unsigned head = 0; head < 8; head++) begin
+                input_agt[head].ap.connect(ref_model.stream_imp);
+                weight_agt[head].ap.connect(ref_model.stream_imp);
+                bias_agt[head].ap.connect(ref_model.stream_imp);
+            end
+            ff_input_agt.ap.connect(ref_model.stream_imp);
+            ff_weight_agt.ap.connect(ref_model.stream_imp);
+            ff_bias_agt.ap.connect(ref_model.stream_imp);
+        end
         ctrl_agt.ap.connect(pred.ctrl_imp);
         ctrl_agt.ap.connect(scb.ctrl_export);
         ctrl_agt.ap.connect(cov.ctrl_imp);

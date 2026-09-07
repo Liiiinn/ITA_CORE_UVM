@@ -61,6 +61,10 @@ class ita_mha8_base_test extends uvm_test;
         vseq.start(env.vsqr);
 
         repeat (scenario.post_vseq_drain_cycles) @(posedge vif.clk_i);
+        if (cfg.enable_online_ref_model) begin
+            env.scb.notify_input_done();
+            env.scb.wait_for_drain(scenario.online_ref_timeout_cycles);
+        end
         phase.drop_objection(this);
     endtask : run_phase
 
